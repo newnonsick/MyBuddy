@@ -21,7 +21,7 @@ android {
         minSdkVersion 24
         targetSdkVersion 36
         ndk {
-            abiFilters 'armeabi-v7a', 'arm64-v8a'
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
         }
         versionCode 1
         versionName '0.1.0'
@@ -52,6 +52,9 @@ def getSdkDir() {
 }
 
 def BuildIl2Cpp(String workingDir, String configuration, String architecture, String abi, String[] staticLibraries) {
+    file(workingDir + "/src/main/jniLibs/" + abi).mkdirs()
+    file(workingDir + "/symbols/" + abi).mkdirs()
+
     def commandLineArgs = []
     commandLineArgs.add("--compile-cpp")
     commandLineArgs.add("--platform=Android")
@@ -82,29 +85,46 @@ def BuildIl2Cpp(String workingDir, String configuration, String architecture, St
         environment "ANDROID_SDK_ROOT", getSdkDir()
     }
     delete workingDir + "/src/main/jniLibs/" + abi + "/libil2cpp.sym.so"
-    ant.move(file: workingDir + "/src/main/jniLibs/" + abi + "/libil2cpp.dbg.so", tofile: workingDir + "/symbols/" + abi + "/libil2cpp.so")
+
+    def dbgSo = file(workingDir + "/src/main/jniLibs/" + abi + "/libil2cpp.dbg.so")
+    if (dbgSo.exists()) {
+        ant.move(file: dbgSo, tofile: workingDir + "/symbols/" + abi + "/libil2cpp.so")
+    }
 }
 
 android {
     afterEvaluate {
-        // By default, do NOT rebuild IL2CPP when building the Flutter host app.
-        // Enable explicitly with: -PunityRebuildIl2Cpp=true
-        def enableIl2CppBuild = project.hasProperty('unityRebuildIl2Cpp') &&
+        // If IL2CPP libs are missing, auto-generate them during the build.
+        // You can force this behavior with: -PunityRebuildIl2Cpp=true
+        def workingDir = projectDir.toString().replaceAll('\\\\', '/')
+        def requested = project.hasProperty('unityRebuildIl2Cpp') &&
                 project.property('unityRebuildIl2Cpp').toString().toBoolean()
+
+        def abis = ['armeabi-v7a': 'armv7', 'arm64-v8a': 'arm64', 'x86': 'x86', 'x86_64': 'x64']
+        def missingAny = abis.keySet().any { abi ->
+            !file(workingDir + "/src/main/jniLibs/" + abi + "/libil2cpp.so").exists()
+        }
+        def enableIl2CppBuild = requested || missingAny
         if (!enableIl2CppBuild) return
 
-        task BuildIl2CppTask {
-            doLast {
-                BuildIl2Cpp(projectDir.toString().replaceAll('\\\\', '/'), 'Release', 'armv7', 'armeabi-v7a', [  ] as String[]);
-                BuildIl2Cpp(projectDir.toString().replaceAll('\\\\', '/'), 'Release', 'arm64', 'arm64-v8a', [  ] as String[]);
+        def registerIl2CppTask = { String taskName, String configuration ->
+            tasks.register(taskName) {
+                doLast {
+                    abis.each { abi, arch ->
+                        BuildIl2Cpp(workingDir, configuration, arch, abi, [  ] as String[])
+                    }
+                }
             }
         }
 
+        registerIl2CppTask('BuildIl2CppDebug', 'Debug')
+        registerIl2CppTask('BuildIl2CppRelease', 'Release')
+
         if (project(':unityLibrary').tasks.findByName('mergeDebugJniLibFolders')) {
-            project(':unityLibrary').mergeDebugJniLibFolders.dependsOn BuildIl2CppTask
+            project(':unityLibrary').mergeDebugJniLibFolders.dependsOn tasks.named('BuildIl2CppDebug')
         }
         if (project(':unityLibrary').tasks.findByName('mergeReleaseJniLibFolders')) {
-            project(':unityLibrary').mergeReleaseJniLibFolders.dependsOn BuildIl2CppTask
+            project(':unityLibrary').mergeReleaseJniLibFolders.dependsOn tasks.named('BuildIl2CppRelease')
         }
     }
     sourceSets {
@@ -113,6 +133,5 @@ android {
         }
     }
 }
-
 
 
