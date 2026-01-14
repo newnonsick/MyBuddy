@@ -55,11 +55,11 @@ class LlmService {
     ),
     const Tool(
       name: 'character_clap',
-      description: "Makes the character clap their hands applauding.",
+      description: "Makes the character clap their hands applauding. especially congratulations for users or after receiving praise",
     ),
     const Tool(
       name: 'character_thankful',
-      description: "Makes the character perform a thankful gesture.",
+      description: "Makes the character perform a thankful gesture. especially after receiving help from the user.",
     ),
     const Tool(
       name: 'character_pushup',
@@ -78,7 +78,7 @@ class LlmService {
     ),
     const Tool(
       name: 'character_greet',
-      description: "Makes the character perform a greeting gesture.",
+      description: "Makes the character perform a greeting gesture. especially for greeting the users.",
     ),
     const Tool(
       name: 'character_dance',
@@ -86,7 +86,7 @@ class LlmService {
     ),
     const Tool(
       name: 'character_chicken_dance',
-      description: "Makes the character perform the chicken dance.",
+      description: "Makes the character perform the chicken dance. (special dance only perform when user request)",
     ),
   ];
 
@@ -234,7 +234,7 @@ class LlmService {
     if (s == _lastSystemText) return;
 
     final history = chat.fullHistory;
-    const maxReplayMessages = 16;
+    const maxReplayMessages = 10;
     final replayTail = _tailConversation(
       history,
       maxMessages: maxReplayMessages,
@@ -281,8 +281,6 @@ class LlmService {
     FunctionCallResponse functionCall,
     InferenceChat chat,
   ) async {
-    Map<String, dynamic> toolResponse;
-
     switch (functionCall.name) {
       case 'character_jump':
         final total = functionCall.args['total'] as int?;
@@ -292,34 +290,18 @@ class LlmService {
           await unityBridge.playAnimation(jumpAnimationIndex);
           await Future.delayed(const Duration(seconds: 3));
         }
-        toolResponse = {
-          'status': 'success',
-          'message': 'Character jumped $jumpCount time(s).',
-        };
         break;
       case 'character_spin/turn_around':
         final spinAnimationIndex = 1;
         await unityBridge.playAnimation(spinAnimationIndex);
-        toolResponse = {
-          'status': 'success',
-          'message': 'Character spin/turned around.',
-        };
         break;
       case 'character_clap':
         final clapAnimationIndex = 3;
         await unityBridge.playAnimation(clapAnimationIndex);
-        toolResponse = {
-          'status': 'success',
-          'message': 'Character clapped hands applauding.',
-        };
         break;
       case 'character_thankful':
         final thankfulAnimationIndex = 7;
         await unityBridge.playAnimation(thankfulAnimationIndex);
-        toolResponse = {
-          'status': 'success',
-          'message': 'Character performed a thankful gesture.',
-        };
         break;
       case 'character_pushup':
         final total = functionCall.args['total'] as int?;
@@ -335,45 +317,20 @@ class LlmService {
           await unityBridge.playAnimation(pushupAnimationIndex);
           await Future.delayed(const Duration(milliseconds: 700));
         }
-        toolResponse = {
-          'status': 'success',
-          'message': 'Character did $pushupCount push-up(s).',
-        };
         break;
       case 'character_greet':
         final greetAnimationIndex = 8;
         await unityBridge.playAnimation(greetAnimationIndex);
-        toolResponse = {
-          'status': 'success',
-          'message': 'Character performed a greeting gesture.',
-        };
         break;
       case 'character_dance':
         final danceAnimationIndex = Random().nextInt(3) + 9; // 9,10,11
         await unityBridge.playAnimation(danceAnimationIndex);
-        toolResponse = {
-          'status': 'success',
-          'message': 'Character performed a dance routine.',
-        };
         break;
       case 'character_chicken_dance':
         final chickenDanceAnimationIndex = 4;
         await unityBridge.playAnimation(chickenDanceAnimationIndex);
-        toolResponse = {
-          'status': 'success',
-          'message': 'Character performed the chicken dance.',
-        };
         break;
-
-      default:
-        toolResponse = {'error': 'Unknown function: ${functionCall.name}'};
     }
-
-    final toolMessage = Message.toolResponse(
-      toolName: functionCall.name,
-      response: toolResponse,
-    );
-    await chat.addQueryChunk(toolMessage);
   }
 
   String cleanLLMResponse(String text) {
