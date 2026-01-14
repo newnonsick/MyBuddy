@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:flutter/services.dart';
 import 'package:mybuddy/core/unity/unity_bridge.dart';
@@ -47,6 +49,45 @@ class LlmService {
         'required': ['total'],
       },
     ),
+    const Tool(
+      name: 'character_spin/turn_around',
+      description: "Makes the character spin or turn around.",
+    ),
+    const Tool(
+      name: 'character_clap',
+      description: "Makes the character clap their hands applauding.",
+    ),
+    const Tool(
+      name: 'character_thankful',
+      description: "Makes the character perform a thankful gesture.",
+    ),
+    const Tool(
+      name: 'character_pushup',
+      description:
+          "Makes the character do push-ups. The number of push-ups can be specified. Default is 1.",
+      parameters: {
+        'type': 'object',
+        'properties': {
+          'total': {
+            'type': 'int',
+            'description': 'The number of push-ups to perform',
+          },
+        },
+        'required': ['total'],
+      },
+    ),
+    const Tool(
+      name: 'character_greet',
+      description: "Makes the character perform a greeting gesture.",
+    ),
+    const Tool(
+      name: 'character_dance',
+      description: "Makes the character perform a dance routine.",
+    ),
+    const Tool(
+      name: 'character_chicken_dance',
+      description: "Makes the character perform the chicken dance.",
+    ),
   ];
 
   InferenceModel? _model;
@@ -93,8 +134,7 @@ class LlmService {
     if (model != null) {
       try {
         await model.close();
-      } catch (_) {
-      }
+      } catch (_) {}
     }
   }
 
@@ -120,7 +160,7 @@ class LlmService {
     this.isThinking = isThinking;
     this.supportsFunctionCalls = supportsFunctionCalls;
     this.modelFileType = modelFileType;
-    
+
     await _resetNativeState();
   }
 
@@ -247,14 +287,83 @@ class LlmService {
       case 'character_jump':
         final total = functionCall.args['total'] as int?;
         final jumpCount = (total != null && total > 0 ? total : 1).clamp(1, 10);
+        final jumpAnimationIndex = 0;
         for (int i = 0; i < jumpCount; i++) {
-          await unityBridge.playAnimation(1);
+          await unityBridge.playAnimation(jumpAnimationIndex);
           await Future.delayed(const Duration(seconds: 3));
         }
         toolResponse = {
           'status': 'success',
           'message': 'Character jumped $jumpCount time(s).',
         };
+        break;
+      case 'character_spin/turn_around':
+        final spinAnimationIndex = 1;
+        await unityBridge.playAnimation(spinAnimationIndex);
+        toolResponse = {
+          'status': 'success',
+          'message': 'Character spin/turned around.',
+        };
+        break;
+      case 'character_clap':
+        final clapAnimationIndex = 3;
+        await unityBridge.playAnimation(clapAnimationIndex);
+        toolResponse = {
+          'status': 'success',
+          'message': 'Character clapped hands applauding.',
+        };
+        break;
+      case 'character_thankful':
+        final thankfulAnimationIndex = 7;
+        await unityBridge.playAnimation(thankfulAnimationIndex);
+        toolResponse = {
+          'status': 'success',
+          'message': 'Character performed a thankful gesture.',
+        };
+        break;
+      case 'character_pushup':
+        final total = functionCall.args['total'] as int?;
+        final pushupCount = (total != null && total > 0 ? total : 1).clamp(
+          1,
+          10,
+        );
+        final startplankAnimationIndex = 5;
+        final pushupAnimationIndex = 6;
+        await unityBridge.playAnimation(startplankAnimationIndex);
+        await Future.delayed(const Duration(seconds: 4));
+        for (int i = 0; i < pushupCount; i++) {
+          await unityBridge.playAnimation(pushupAnimationIndex);
+          await Future.delayed(const Duration(milliseconds: 700));
+        }
+        toolResponse = {
+          'status': 'success',
+          'message': 'Character did $pushupCount push-up(s).',
+        };
+        break;
+      case 'character_greet':
+        final greetAnimationIndex = 8;
+        await unityBridge.playAnimation(greetAnimationIndex);
+        toolResponse = {
+          'status': 'success',
+          'message': 'Character performed a greeting gesture.',
+        };
+        break;
+      case 'character_dance':
+        final danceAnimationIndex = Random().nextInt(3) + 9; // 9,10,11
+        await unityBridge.playAnimation(danceAnimationIndex);
+        toolResponse = {
+          'status': 'success',
+          'message': 'Character performed a dance routine.',
+        };
+        break;
+      case 'character_chicken_dance':
+        final chickenDanceAnimationIndex = 4;
+        await unityBridge.playAnimation(chickenDanceAnimationIndex);
+        toolResponse = {
+          'status': 'success',
+          'message': 'Character performed the chicken dance.',
+        };
+        break;
 
       default:
         toolResponse = {'error': 'Unknown function: ${functionCall.name}'};
@@ -279,7 +388,6 @@ class LlmService {
     return cleaned;
   }
 
-
   Future<String> generateChat({
     String? systemText,
     required String userText,
@@ -293,6 +401,9 @@ class LlmService {
         await _ensureLatestSystemOnTop(chat, s);
 
         await chat.addQueryChunk(Message.text(text: userText, isUser: true));
+
+        // thinking animation index 2
+        await unityBridge.playAnimation(2);
 
         final buffer = StringBuffer();
         // Object? lastNonText;
