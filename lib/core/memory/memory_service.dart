@@ -55,8 +55,7 @@ class MemoryService {
         await saveMemory(next);
 
         await prefs.setInt(_processedCountKey, conversation.length);
-      } catch (_) {
-      }
+      } catch (_) {}
     });
 
     return _pending;
@@ -78,17 +77,18 @@ String _formatConversation(List<Map<String, String>> messages) {
 }
 
 String _buildSystemPrompt(String memory) {
-  return '''You are a helpful and friendly AI companion.
+  return '''This is a system instruction. You must follow it strictly.
 
-You can use:
-- The ongoing conversation in this chat for follow-up questions.
-- The persistent memory summary below (may be empty).
+You are a helpful and friendly AI companion.
+- Use the current conversation as the primary context.
+- Refer to persistent memory only for long-term user facts (if available).
+- Keep responses concise and relevant.
+- Actively express emotions and reactions through your avatar.
+- Freely call available avatar commands in accessed function at any time without asking for permission.
 
-[Current Memory]: ${memory.isEmpty ? '(none)' : memory}
-
-Instruction:
-Answer the user's input using both the conversation and the memory above.
-If the user tells you a fact during the conversation (e.g., their name), you may use it even if it is not yet in the memory summary.''';
+Current Memory:
+`${memory.isEmpty ? '(none)' : memory}`
+''';
 }
 
 String _buildReflectPrompt(Map<String, String> args) {

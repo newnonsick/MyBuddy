@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter_gemma/flutter_gemma.dart';
@@ -55,11 +56,13 @@ class LlmService {
     ),
     const Tool(
       name: 'character_clap',
-      description: "Makes the character clap their hands applauding. especially congratulations for users or after receiving praise",
+      description:
+          "Makes the character clap their hands applauding. especially congratulations for users or after receiving praise",
     ),
     const Tool(
       name: 'character_thankful',
-      description: "Makes the character perform a thankful gesture. especially after receiving help from the user.",
+      description:
+          "Makes the character perform a thankful gesture. especially after receiving help from the user.",
     ),
     const Tool(
       name: 'character_pushup',
@@ -78,7 +81,8 @@ class LlmService {
     ),
     const Tool(
       name: 'character_greet',
-      description: "Makes the character perform a greeting gesture. especially for greeting the users.",
+      description:
+          "Makes the character perform a greeting gesture. especially for greeting the users.",
     ),
     const Tool(
       name: 'character_dance',
@@ -86,13 +90,14 @@ class LlmService {
     ),
     const Tool(
       name: 'character_chicken_dance',
-      description: "Makes the character perform the chicken dance. (special dance only perform when user request)",
+      description:
+          "Makes the character perform the chicken dance. (special dance only perform when user request)",
     ),
   ];
 
   InferenceModel? _model;
   InferenceChat? _chat;
-  String? _lastSystemText;
+  // String? _lastSystemText;
 
   Future<void> _pending = Future<void>.value();
 
@@ -130,7 +135,7 @@ class LlmService {
     final model = _model;
     _chat = null;
     _model = null;
-    _lastSystemText = null;
+    // _lastSystemText = null;
     if (model != null) {
       try {
         await model.close();
@@ -212,8 +217,9 @@ class LlmService {
 
       if (!m.isUser) {
         final t = m.text.trimLeft();
-        if (t.startsWith('You are a helpful and friendly AI companion.') &&
-            t.contains('[Current Memory]:')) {
+        if (t.startsWith(
+          'This is a system instruction. You must follow it strictly.',
+        )) {
           return false;
         }
       }
@@ -231,10 +237,10 @@ class LlmService {
   ) async {
     final s = systemText.trim();
     if (s.isEmpty) return;
-    if (s == _lastSystemText) return;
+    // if (s == _lastSystemText) return;
 
     final history = chat.fullHistory;
-    const maxReplayMessages = 10;
+    const maxReplayMessages = 20;
     final replayTail = _tailConversation(
       history,
       maxMessages: maxReplayMessages,
@@ -246,7 +252,7 @@ class LlmService {
         Message.text(text: s, isUser: false),
       ],
     );
-    _lastSystemText = s;
+    // _lastSystemText = s;
   }
 
   Future<void> installFromLocalFile(String localPath) async {
@@ -293,15 +299,15 @@ class LlmService {
         break;
       case 'character_spin/turn_around':
         final spinAnimationIndex = 1;
-        await unityBridge.playAnimation(spinAnimationIndex);
+        unawaited(unityBridge.playAnimation(spinAnimationIndex));
         break;
       case 'character_clap':
         final clapAnimationIndex = 3;
-        await unityBridge.playAnimation(clapAnimationIndex);
+        unawaited(unityBridge.playAnimation(clapAnimationIndex));
         break;
       case 'character_thankful':
         final thankfulAnimationIndex = 7;
-        await unityBridge.playAnimation(thankfulAnimationIndex);
+        unawaited(unityBridge.playAnimation(thankfulAnimationIndex));
         break;
       case 'character_pushup':
         final total = functionCall.args['total'] as int?;
@@ -320,15 +326,15 @@ class LlmService {
         break;
       case 'character_greet':
         final greetAnimationIndex = 8;
-        await unityBridge.playAnimation(greetAnimationIndex);
+        unawaited(unityBridge.playAnimation(greetAnimationIndex));
         break;
       case 'character_dance':
         final danceAnimationIndex = Random().nextInt(3) + 9; // 9,10,11
-        await unityBridge.playAnimation(danceAnimationIndex);
+        unawaited(unityBridge.playAnimation(danceAnimationIndex));
         break;
       case 'character_chicken_dance':
         final chickenDanceAnimationIndex = 4;
-        await unityBridge.playAnimation(chickenDanceAnimationIndex);
+        unawaited(unityBridge.playAnimation(chickenDanceAnimationIndex));
         break;
     }
   }
@@ -387,7 +393,7 @@ class LlmService {
     final model = _model;
     _chat = null;
     _model = null;
-    _lastSystemText = null;
+    // _lastSystemText = null;
     if (model != null) {
       await model.close();
     }
