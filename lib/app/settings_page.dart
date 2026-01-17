@@ -221,7 +221,7 @@ class _SettingsPageState extends State<SettingsPage>
           ),
           const SizedBox(height: 12),
         ],
-        for (final m in items)
+        for (final m in items) ...[
           _CatalogModelTile(
             model: m,
             isInstalled: installedIds.contains(m.id),
@@ -248,6 +248,8 @@ class _SettingsPageState extends State<SettingsPage>
               }
             },
           ),
+          const SizedBox(height: 12),
+        ],
       ],
     );
   }
@@ -280,7 +282,7 @@ class _SettingsPageState extends State<SettingsPage>
             },
             child: Column(
               children: [
-                for (final m in installed)
+                for (final m in installed) ...[
                   RadioListTile<String>(
                     value: m.id,
                     title: Text(m.id),
@@ -291,6 +293,8 @@ class _SettingsPageState extends State<SettingsPage>
                       ),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                ],
               ],
             ),
           ),
