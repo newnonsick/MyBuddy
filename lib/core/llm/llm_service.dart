@@ -50,49 +50,65 @@ class LlmService {
         'required': ['total'],
       },
     ),
+    // const Tool(
+    //   name: 'character_pushup',
+    //   description:
+    //       "Makes the character do push-ups. The number of push-ups can be specified. Default is 1.",
+    //   parameters: {
+    //     'type': 'object',
+    //     'properties': {
+    //       'total': {
+    //         'type': 'int',
+    //         'description': 'The number of push-ups to perform',
+    //       },
+    //     },
+    //     'required': ['total'],
+    //   },
+    // ),
     const Tool(
-      name: 'character_spin/turn_around',
-      description: "Makes the character spin or turn around.",
-    ),
-    const Tool(
-      name: 'character_clap',
+      name: 'animate_character',
       description:
-          "Makes the character clap their hands applauding. especially congratulations for users or after receiving praise",
-    ),
-    const Tool(
-      name: 'character_thankful',
-      description:
-          "Makes the character perform a thankful gesture. especially after receiving help from the user.",
-    ),
-    const Tool(
-      name: 'character_pushup',
-      description:
-          "Makes the character do push-ups. The number of push-ups can be specified. Default is 1.",
+          "Makes the character perform a specified animation. The animation name should be one of the following: [spin,clap,thankful,greet,dance,chicken_dance, think]",
       parameters: {
         'type': 'object',
         'properties': {
-          'total': {
-            'type': 'int',
-            'description': 'The number of push-ups to perform',
+          'animation': {
+            'type': 'string',
+            'description':
+                'Animation to perform. Choose one of: spin, clap, thankful, greet, dance, chicken_dance, think.',
           },
         },
-        'required': ['total'],
+        'required': ['animation'],
       },
     ),
-    const Tool(
-      name: 'character_greet',
-      description:
-          "Makes the character perform a greeting gesture. especially for greeting the users.",
-    ),
-    const Tool(
-      name: 'character_dance',
-      description: "Makes the character perform a dance routine.",
-    ),
-    const Tool(
-      name: 'character_chicken_dance',
-      description:
-          "Makes the character perform the chicken dance. (special dance only perform when user request)",
-    ),
+    // const Tool(
+    //   name: 'character_spin/turn_around',
+    //   description: "Makes the character spin or turn around.",
+    // ),
+    // const Tool(
+    //   name: 'character_clap',
+    //   description:
+    //       "Makes the character clap their hands applauding. especially congratulations for users or after receiving praise",
+    // ),
+    // const Tool(
+    //   name: 'character_thankful',
+    //   description:
+    //       "Makes the character perform a thankful gesture. especially after receiving help from the user.",
+    // ),
+    // const Tool(
+    //   name: 'character_greet',
+    //   description:
+    //       "Makes the character perform a greeting gesture. especially for greeting the users.",
+    // ),
+    // const Tool(
+    //   name: 'character_dance',
+    //   description: "Makes the character perform a dance routine.",
+    // ),
+    // const Tool(
+    //   name: 'character_chicken_dance',
+    //   description:
+    //       "Makes the character perform the chicken dance. (special dance only perform when user request)",
+    // ),
   ];
 
   InferenceModel? _model;
@@ -248,8 +264,8 @@ class LlmService {
 
     await chat.clearHistory(
       replayHistory: <Message>[
-        ...replayTail,
         Message.text(text: s, isUser: false),
+        ...replayTail,
       ],
     );
     // _lastSystemText = s;
@@ -260,6 +276,7 @@ class LlmService {
       modelType: modelType,
       fileType: modelFileType,
     ).fromFile(localPath).install();
+    await _ensureModel();
   }
 
   Future<String> generateText(String prompt) async {
@@ -297,18 +314,6 @@ class LlmService {
           await Future.delayed(const Duration(seconds: 3));
         }
         break;
-      case 'character_spin/turn_around':
-        final spinAnimationIndex = 1;
-        unawaited(unityBridge.playAnimation(spinAnimationIndex));
-        break;
-      case 'character_clap':
-        final clapAnimationIndex = 3;
-        unawaited(unityBridge.playAnimation(clapAnimationIndex));
-        break;
-      case 'character_thankful':
-        final thankfulAnimationIndex = 7;
-        unawaited(unityBridge.playAnimation(thankfulAnimationIndex));
-        break;
       case 'character_pushup':
         final total = functionCall.args['total'] as int?;
         final pushupCount = (total != null && total > 0 ? total : 1).clamp(
@@ -324,18 +329,66 @@ class LlmService {
           await Future.delayed(const Duration(milliseconds: 700));
         }
         break;
-      case 'character_greet':
-        final greetAnimationIndex = 8;
-        unawaited(unityBridge.playAnimation(greetAnimationIndex));
-        break;
-      case 'character_dance':
-        final danceAnimationIndex = Random().nextInt(3) + 9; // 9,10,11
-        unawaited(unityBridge.playAnimation(danceAnimationIndex));
-        break;
-      case 'character_chicken_dance':
-        final chickenDanceAnimationIndex = 4;
-        unawaited(unityBridge.playAnimation(chickenDanceAnimationIndex));
-        break;
+      case 'animate_character':
+        final animation = functionCall.args['animation'] as String?;
+        switch (animation) {
+          case 'spin':
+            final spinAnimationIndex = 1;
+            await unityBridge.playAnimation(spinAnimationIndex);
+            break;
+          case 'clap':
+            final clapAnimationIndex = 3;
+            await unityBridge.playAnimation(clapAnimationIndex);
+            break;
+          case 'thankful':
+            final thankfulAnimationIndex = 7;
+            await unityBridge.playAnimation(thankfulAnimationIndex);
+            break;
+          case 'greet':
+            final greetAnimationIndex = 8;
+            await unityBridge.playAnimation(greetAnimationIndex);
+            break;
+          case 'dance':
+            final danceAnimationIndex = Random().nextInt(3) + 9; // 9,10,11
+            await unityBridge.playAnimation(danceAnimationIndex);
+            break;
+          case 'chicken_dance':
+            final chickenDanceAnimationIndex = 4;
+            await unityBridge.playAnimation(chickenDanceAnimationIndex);
+            break;
+          case 'think':
+            final thinkAnimationIndex = 2;
+            await unityBridge.playAnimation(thinkAnimationIndex);
+            break;
+          default:
+            final thankfulAnimationIndex = 7;
+            await unityBridge.playAnimation(thankfulAnimationIndex);
+            break;
+        }
+      // case 'character_spin/turn_around':
+      //   final spinAnimationIndex = 1;
+      //   unawaited(unityBridge.playAnimation(spinAnimationIndex));
+      //   break;
+      // case 'character_clap':
+      //   final clapAnimationIndex = 3;
+      //   unawaited(unityBridge.playAnimation(clapAnimationIndex));
+      //   break;
+      // case 'character_thankful':
+      //   final thankfulAnimationIndex = 7;
+      //   unawaited(unityBridge.playAnimation(thankfulAnimationIndex));
+      //   break;
+      // case 'character_greet':
+      //   final greetAnimationIndex = 8;
+      //   unawaited(unityBridge.playAnimation(greetAnimationIndex));
+      //   break;
+      // case 'character_dance':
+      //   final danceAnimationIndex = Random().nextInt(3) + 9; // 9,10,11
+      //   unawaited(unityBridge.playAnimation(danceAnimationIndex));
+      //   break;
+      // case 'character_chicken_dance':
+      //   final chickenDanceAnimationIndex = 4;
+      //   unawaited(unityBridge.playAnimation(chickenDanceAnimationIndex));
+      //   break;
     }
   }
 
@@ -364,9 +417,6 @@ class LlmService {
         await _ensureLatestSystemOnTop(chat, s);
 
         await chat.addQueryChunk(Message.text(text: userText, isUser: true));
-
-        // thinking animation index 2
-        await unityBridge.playAnimation(2);
 
         final buffer = StringBuffer();
         // Object? lastNonText;
