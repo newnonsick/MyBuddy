@@ -26,12 +26,29 @@ class MyApp extends StatelessWidget {
       title: 'MyBuddy',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0A84FF),
+        colorScheme: const ColorScheme(
           brightness: Brightness.dark,
+          primary: Color(0xFF0A84FF),
+          onPrimary: Colors.white,
+          secondary: Color(0xFFC7B17B),
+          onSecondary: Color(0xFF111217),
+          surface: Color(0xFF111217),
+          onSurface: Colors.white,
+          error: Color(0xFFFF5E5E),
+          onError: Colors.white,
         ),
         useMaterial3: true,
         scaffoldBackgroundColor: Colors.transparent,
+        splashFactory: InkSparkle.splashFactory,
+        appBarTheme: const AppBarTheme(
+          centerTitle: true,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+        ),
+        textTheme: ThemeData.dark().textTheme.apply(
+          bodyColor: Colors.white,
+          displayColor: Colors.white,
+        ),
       ),
       home: const BuddyHomePage(),
     );
@@ -141,7 +158,7 @@ class _BuddyHomePageState extends State<BuddyHomePage> {
               Positioned(
                 left: 12,
                 right: 12,
-                top: 58,
+                top: 74,
                 bottom: 96,
                 child: _buildTranscript(),
               ),
@@ -160,6 +177,10 @@ class _BuddyHomePageState extends State<BuddyHomePage> {
 
   Widget _buildTranscript() {
     if (_controller.installingLlm) {
+      return const SizedBox.shrink();
+    }
+
+    if (_controller.hideChatLog) {
       return const SizedBox.shrink();
     }
 
@@ -192,6 +213,7 @@ class _BuddyHomePageState extends State<BuddyHomePage> {
         itemCount: _chat.length,
         itemBuilder: (context, index) {
           final line = _chat[index];
+          final hideBubbles = _controller.hideChatLog;
           final bubbleColor = line.isUser
               ? Colors.white.withValues(alpha: 0.14)
               : Colors.white.withValues(alpha: 0.10);
@@ -203,13 +225,28 @@ class _BuddyHomePageState extends State<BuddyHomePage> {
                   : Alignment.centerLeft,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 520),
-                child: _GlassPill(
-                  tint: bubbleColor,
-                  child: Text(
-                    line.text,
-                    style: const TextStyle(fontSize: 14, height: 1.35),
-                  ),
-                ),
+                child: hideBubbles
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        child: Text(
+                          line.text,
+                          style: TextStyle(
+                            fontSize: 14,
+                            height: 1.4,
+                            color: Colors.white.withValues(alpha: 0.9),
+                          ),
+                        ),
+                      )
+                    : _GlassPill(
+                        tint: bubbleColor,
+                        child: Text(
+                          line.text,
+                          style: const TextStyle(fontSize: 14, height: 1.35),
+                        ),
+                      ),
               ),
             ),
           );
@@ -358,16 +395,24 @@ class _GlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tone = Theme.of(context).colorScheme.surface;
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.10),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withValues(alpha: 0.12),
+                tone.withValues(alpha: 0.08),
+              ],
+            ),
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.14),
+              color: Colors.white.withValues(alpha: 0.16),
               width: 1,
             ),
           ),
@@ -386,16 +431,24 @@ class _GlassPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tone = Theme.of(context).colorScheme.surface;
     return ClipRRect(
       borderRadius: BorderRadius.circular(999),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: (tint ?? Colors.white.withValues(alpha: 0.10)),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                (tint ?? Colors.white.withValues(alpha: 0.12)),
+                tone.withValues(alpha: 0.08),
+              ],
+            ),
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.14),
+              color: Colors.white.withValues(alpha: 0.16),
               width: 1,
             ),
           ),

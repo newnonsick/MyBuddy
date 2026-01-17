@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/llm/llm_service.dart';
 import '../core/memory/memory_service.dart';
@@ -28,7 +29,30 @@ class AppController extends ChangeNotifier {
   String? _llmError;
   String? get llmError => _llmError;
 
+  static const String _prefHideChatLog = 'hideChatLog';
+
+  bool _hideChatLog = false;
+  bool get hideChatLog => _hideChatLog;
+
+  Future<void> loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    _hideChatLog =
+        prefs.getBool(_prefHideChatLog) ??
+        false;
+    notifyListeners();
+  }
+
+  Future<void> setHideChatLog(bool value) async {
+    if (value == _hideChatLog) return;
+    _hideChatLog = value;
+    notifyListeners();
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefHideChatLog, value);
+  }
+
   Future<void> startup() async {
+    await loadPreferences();
     await llm.initialize();
     await models.loadLocalState();
 
