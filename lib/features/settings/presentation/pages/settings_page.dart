@@ -1,11 +1,11 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
-import '../core/model/model_descriptor.dart';
-import '../core/utils/format_bytes.dart';
-import 'app_controller.dart';
-import 'model_controller.dart';
+import 'package:mybuddy/app/app_controller.dart';
+import 'package:mybuddy/app/model_controller.dart';
+import 'package:mybuddy/core/utils/format_bytes.dart';
+import 'package:mybuddy/shared/widgets/glass/glass.dart';
+
+import '../widgets/catalog_model_tile.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key, required this.models, required this.app});
@@ -51,7 +51,7 @@ class _SettingsPageState extends State<SettingsPage>
               padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
               child: Row(
                 children: [
-                  _GlassIconButton(
+                  GlassIconButton.panel(
                     tooltip: 'Back',
                     icon: Icons.chevron_left,
                     onPressed: () => Navigator.of(context).maybePop(),
@@ -83,7 +83,7 @@ class _SettingsPageState extends State<SettingsPage>
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-              child: _GlassPanel(
+              child: GlassPanel(
                 padding: const EdgeInsets.all(6),
                 child: TabBar(
                   controller: _tabs,
@@ -143,7 +143,7 @@ class _SettingsPageState extends State<SettingsPage>
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: _GlassPanel(
+          child: GlassPanel(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -172,7 +172,7 @@ class _SettingsPageState extends State<SettingsPage>
       padding: const EdgeInsets.all(12),
       children: [
         if (downloading && progress != null) ...[
-          _GlassPanel(
+          GlassPanel(
             padding: const EdgeInsets.all(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -212,7 +212,7 @@ class _SettingsPageState extends State<SettingsPage>
           const SizedBox(height: 12),
         ],
         if (!downloading && err != null) ...[
-          _GlassPanel(
+          GlassPanel(
             padding: const EdgeInsets.all(12),
             child: Text(
               err,
@@ -222,7 +222,7 @@ class _SettingsPageState extends State<SettingsPage>
           const SizedBox(height: 12),
         ],
         for (final m in items) ...[
-          _CatalogModelTile(
+          CatalogModelTile(
             model: m,
             isInstalled: installedIds.contains(m.id),
             disabled: downloading,
@@ -272,7 +272,7 @@ class _SettingsPageState extends State<SettingsPage>
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
-        _GlassPanel(
+        GlassPanel(
           padding: const EdgeInsets.all(6),
           child: RadioGroup<String>(
             groupValue: pendingId,
@@ -301,7 +301,7 @@ class _SettingsPageState extends State<SettingsPage>
         ),
         const SizedBox(height: 12),
         if (widget.app.llmError != null) ...[
-          _GlassPanel(
+          GlassPanel(
             padding: const EdgeInsets.all(12),
             child: Text(
               widget.app.llmError!,
@@ -317,7 +317,6 @@ class _SettingsPageState extends State<SettingsPage>
                   final navigator = Navigator.of(context);
                   await widget.models.commitSelection();
                   await widget.app.activateSelectedModel();
-
                   if (!mounted) return;
                   if (widget.app.llmInstalled) {
                     navigator.pop();
@@ -348,7 +347,7 @@ class _SettingsPageState extends State<SettingsPage>
       children: [
         Text('Appearance', style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
-        _GlassPanel(
+        GlassPanel(
           padding: EdgeInsets.zero,
           child: SwitchListTile(
             value: widget.app.hideChatLog,
@@ -358,120 +357,6 @@ class _SettingsPageState extends State<SettingsPage>
           ),
         ),
       ],
-    );
-  }
-}
-
-class _GlassPanel extends StatelessWidget {
-  const _GlassPanel({
-    required this.child,
-    this.padding = const EdgeInsets.all(14),
-  });
-
-  final Widget child;
-  final EdgeInsets padding;
-
-  @override
-  Widget build(BuildContext context) {
-    final tone = Theme.of(context).colorScheme.surface;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white.withValues(alpha: 0.12),
-                tone.withValues(alpha: 0.08),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.16),
-              width: 1,
-            ),
-          ),
-          child: Padding(padding: padding, child: child),
-        ),
-      ),
-    );
-  }
-}
-
-class _GlassIconButton extends StatelessWidget {
-  const _GlassIconButton({
-    required this.icon,
-    required this.onPressed,
-    required this.tooltip,
-  });
-
-  final IconData icon;
-  final VoidCallback? onPressed;
-  final String tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    return _GlassPanel(
-      padding: EdgeInsets.zero,
-      child: IconButton(
-        tooltip: tooltip,
-        onPressed: onPressed,
-        icon: Icon(icon, size: 22),
-        visualDensity: VisualDensity.compact,
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-      ),
-    );
-  }
-}
-
-class _CatalogModelTile extends StatelessWidget {
-  const _CatalogModelTile({
-    required this.model,
-    required this.isInstalled,
-    required this.disabled,
-    required this.onDownload,
-  });
-
-  final RemoteModelDescriptor model;
-  final bool isInstalled;
-  final bool disabled;
-  final Future<void> Function() onDownload;
-
-  @override
-  Widget build(BuildContext context) {
-    return _GlassPanel(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        title: Text(model.id),
-        subtitle: Text(
-          '${model.config.type} · ${model.fileName}'
-          '${model.approximateSize == null || model.approximateSize!.trim().isEmpty ? '' : '\nApprox: ${model.approximateSize}'}'
-          '\nMin size: ${model.expectedMinBytes == null ? 'n/a' : formatBytes(model.expectedMinBytes!)}',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Colors.white.withValues(alpha: 0.70),
-            height: 1.25,
-          ),
-        ),
-        isThreeLine: true,
-        trailing: isInstalled
-            ? const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.check),
-                  SizedBox(width: 6),
-                  Text('Downloaded'),
-                ],
-              )
-            : FilledButton(
-                onPressed: disabled ? null : () => onDownload(),
-                child: const Text('Download'),
-              ),
-      ),
     );
   }
 }
