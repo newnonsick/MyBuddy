@@ -182,7 +182,24 @@ class _BuddyHomePageState extends State<BuddyHomePage> {
       speaking: _speaking,
       isModelReady: _controller.llmInstalled,
       onSend: _onSend,
+      onStopSpeaking: _onStopSpeaking,
     );
+  }
+
+  Future<void> _onStopSpeaking() async {
+    _speakGeneration++;
+    try {
+      await _tts.stop();
+      await _unity.stopSpeak();
+    } catch (e) {
+      // Ignore errors
+    } finally {
+      if (mounted) {
+        setState(() {
+          _speaking = false;
+        });
+      }
+    }
   }
 
   Future<void> _onSend() async {

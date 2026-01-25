@@ -11,6 +11,7 @@ class ChatComposer extends StatelessWidget {
     required this.speaking,
     required this.isModelReady,
     required this.onSend,
+    required this.onStopSpeaking,
   });
 
   final TextEditingController textController;
@@ -19,6 +20,7 @@ class ChatComposer extends StatelessWidget {
   final bool speaking;
   final bool isModelReady;
   final VoidCallback onSend;
+  final VoidCallback onStopSpeaking;
 
   @override
   Widget build(BuildContext context) {
@@ -49,11 +51,13 @@ class ChatComposer extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           GlassIconButton.pill(
-            tooltip: speaking ? 'Speaking…' : 'Send',
+            tooltip: sending
+                ? 'Sending…'
+                : (speaking ? 'Stop speaking' : 'Send'),
             icon: sending
                 ? Icons.more_horiz
-                : (speaking ? Icons.volume_up : Icons.arrow_upward),
-            onPressed: canSend ? onSend : null,
+                : (speaking ? Icons.stop_rounded : Icons.arrow_upward),
+            onPressed: speaking ? onStopSpeaking : (canSend ? onSend : null),
           ),
         ],
       ),

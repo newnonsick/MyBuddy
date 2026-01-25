@@ -178,16 +178,19 @@ class _SettingsPageState extends State<SettingsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ...installed.map(
-            (m) => _buildModelOption(
+          ...installed.map((m) {
+            final isActive = m.id == widget.models.selectedModelId;
+            final isSelected = m.id == pendingId;
+            return _buildModelOption(
               context,
               model: m,
-              isSelected: m.id == pendingId,
-              onTap: installing
+              isSelected: isSelected,
+              isActive: isActive,
+              onTap: installing || isActive
                   ? null
                   : () => widget.models.setPendingSelection(m.id),
-            ),
-          ),
+            );
+          }),
 
           if (widget.app.llmError != null) ...[
             const SizedBox(height: 12),
@@ -223,39 +226,49 @@ class _SettingsPageState extends State<SettingsPage> {
 
           const SizedBox(height: 16),
 
-          SizedBox(
-            height: 48,
-            child: FilledButton(
-              onPressed: installing
-                  ? null
-                  : () async {
-                      final navigator = Navigator.of(context);
-                      await widget.models.commitSelection();
-                      await widget.app.activateSelectedModel();
-                      if (!mounted) return;
-                      if (widget.app.llmInstalled) {
-                        navigator.pop();
-                      }
-                    },
-              style: FilledButton.styleFrom(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              child: installing
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text(
-                      'Apply & Start Chat',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                      ),
+          Builder(
+            builder: (context) {
+              final isAlreadyActive =
+                  pendingId == widget.models.selectedModelId &&
+                  widget.app.llmInstalled;
+
+              return SizedBox(
+                height: 48,
+                child: FilledButton(
+                  onPressed: installing || isAlreadyActive
+                      ? null
+                      : () async {
+                          final navigator = Navigator.of(context);
+                          await widget.models.commitSelection();
+                          await widget.app.activateSelectedModel();
+                          if (!mounted) return;
+                          if (widget.app.llmInstalled) {
+                            navigator.pop();
+                          }
+                        },
+                  style: FilledButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
                     ),
-            ),
+                  ),
+                  child: installing
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          isAlreadyActive
+                              ? 'Model Already Active'
+                              : 'Apply & Start Chat',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                          ),
+                        ),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -266,14 +279,19 @@ class _SettingsPageState extends State<SettingsPage> {
     BuildContext context, {
     required dynamic model,
     required bool isSelected,
+    required bool isActive,
     required VoidCallback? onTap,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
-        color: isSelected
-            ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
-            : Colors.white.withValues(alpha: 0.05),
+        color: isActive
+            ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.2)
+            : (isSelected
+                  ? Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.15)
+                  : Colors.white.withValues(alpha: 0.05)),
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: onTap,
@@ -288,36 +306,79 @@ class _SettingsPageState extends State<SettingsPage> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: isSelected
+                      color: isActive
                           ? Theme.of(context).colorScheme.primary
-                          : Colors.white.withValues(alpha: 0.3),
+                          : (isSelected
+                                ? Theme.of(context).colorScheme.primary
+                                : Colors.white.withValues(alpha: 0.3)),
                       width: 2,
                     ),
+                    color: isActive
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.transparent,
                   ),
-                  child: isSelected
-                      ? Center(
-                          child: Container(
-                            width: 12,
-                            height: 12,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
+                  child: isActive
+                      ? const Center(
+                          child: Icon(
+                            Icons.check_rounded,
+                            size: 14,
+                            color: Colors.white,
                           ),
                         )
-                      : null,
+                      : (isSelected
+                            ? Center(
+                                child: Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                  ),
+                                ),
+                              )
+                            : null),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        model.id,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15,
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            model.id,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                            ),
+                          ),
+                          if (isActive) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.primary.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                'ACTIVE',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Theme.of(context).colorScheme.primary,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 2),
                       Text(
