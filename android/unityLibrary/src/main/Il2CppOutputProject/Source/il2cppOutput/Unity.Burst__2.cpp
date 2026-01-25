@@ -12,14 +12,26 @@
 
 
 struct CharU5BU5D_t799905CF001DD5F13F7DBB310181FC4D8B7D0AAB;
+struct DelegateU5BU5D_tC5AB7E8F745616680F337909D3A8E6C722CDF771;
 struct UInt32U5BU5D_t02FBD658AD156A17574ECE6106CF1FBFCC9807FA;
 struct AssumeRangeAttribute_t06ACC8EEDB5AB2CE78FDE39A4F36B674A1CE06CA;
+struct AsyncCallback_t7FEF460CBDCFB9C5FA2EF776984778B9A4145F4C;
 struct Attribute_tFDA8EFEFB0711976D22474794576DAF28F7440AA;
+struct Delegate_t;
+struct DelegateData_t9B286B493293CD2D23A5B2B5EF0E5B1324C2B77E;
+struct IAsyncResult_t7B9B5A0ECB35DCEC31B8A8122C37D687369253B5;
 struct IgnoreWarningAttribute_t76B2348F881718AA549586D6B796CBD66DF77C14;
+struct MethodInfo_t;
 struct SkipLocalsInitAttribute_t0BFA1401AAC4A4C1394E9A230202C7B9E55FAD45;
 struct String_t;
 struct Void_t4861ACF8F4594C3437BB48B6E56783494B843915;
+struct DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_t65954E7C9A419F4F2E46237ACE3C9C47B60AD497;
+struct DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_t4725F3264E5F3B857345196A2CB67B499B5C1B6D;
 
+IL2CPP_EXTERN_C RuntimeClass* BurstCompiler_t2715484E1FF256726FC4D4D8E17C35A4C8DFA2B8_il2cpp_TypeInfo_var;
+IL2CPP_EXTERN_C RuntimeClass* DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_il2cpp_TypeInfo_var;
+IL2CPP_EXTERN_C RuntimeClass* DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_il2cpp_TypeInfo_var;
+IL2CPP_EXTERN_C RuntimeClass* Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var;
 IL2CPP_EXTERN_C RuntimeClass* Math_tEB65DE7CA8B083C412C969C92981C030865486CE_il2cpp_TypeInfo_var;
 IL2CPP_EXTERN_C RuntimeClass* Sse4_2_t40477411E6B6B2D01F3B0EA9D1B0A6281833C37C_il2cpp_TypeInfo_var;
 IL2CPP_EXTERN_C RuntimeClass* UInt32U5BU5D_t02FBD658AD156A17574ECE6106CF1FBFCC9807FA_il2cpp_TypeInfo_var;
@@ -46,7 +58,16 @@ IL2CPP_EXTERN_C const RuntimeMethod* Sse4_2_cmpistrm_emulation_TisByte_t94D9231A
 IL2CPP_EXTERN_C const RuntimeMethod* Sse4_2_cmpistrm_emulation_TisInt16_tB8EF286A9C33492FA6E6D6E67320BE93E794A175_m31A82E20D7EB7CDFCDF7EEA3E75BA4F38F8501D4_RuntimeMethod_var;
 IL2CPP_EXTERN_C const RuntimeMethod* Sse4_2_cmpistrm_emulation_TisSByte_tFEFFEF5D2FEBF5207950AE6FAC150FC53B668DB5_mEA9E446133608807E4CF1C806055621BECFD93CF_RuntimeMethod_var;
 IL2CPP_EXTERN_C const RuntimeMethod* Sse4_2_cmpistrm_emulation_TisUInt16_tF4C148C876015C212FD72652D0B6ED8CC247A455_m084B5A607615E44BC1926F6FF9CF11754A074B06_RuntimeMethod_var;
+IL2CPP_EXTERN_C const RuntimeMethod* X86_DoGetCSRTrampolineU24BurstManaged_m22BBFDD66A5A14872A57F99439F422092E6DA9E8_RuntimeMethod_var;
+IL2CPP_EXTERN_C const RuntimeMethod* X86_DoGetCSRTrampoline_mFFBFD9D1618E08CBB4E263D811ED0782B31FA299_RuntimeMethod_var;
+IL2CPP_EXTERN_C const RuntimeMethod* X86_DoSetCSRTrampolineU24BurstManaged_mE815FBA01984E0ED5DD9430A954F5D9E831F6FF6_RuntimeMethod_var;
+IL2CPP_EXTERN_C const RuntimeMethod* X86_DoSetCSRTrampoline_mAD4DB2BFB00E514CED43990AD8CC823B3EBF666C_RuntimeMethod_var;
+IL2CPP_EXTERN_C const RuntimeType* DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_t65954E7C9A419F4F2E46237ACE3C9C47B60AD497_0_0_0_var;
+IL2CPP_EXTERN_C const RuntimeType* DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_t4725F3264E5F3B857345196A2CB67B499B5C1B6D_0_0_0_var;
+struct Delegate_t_marshaled_com;
+struct Delegate_t_marshaled_pinvoke;
 
+struct DelegateU5BU5D_tC5AB7E8F745616680F337909D3A8E6C722CDF771;
 struct UInt32U5BU5D_t02FBD658AD156A17574ECE6106CF1FBFCC9807FA;
 
 IL2CPP_EXTERN_C_BEGIN
@@ -57,6 +78,9 @@ IL2CPP_EXTERN_C_END
 #pragma clang diagnostic ignored "-Winvalid-offsetof"
 #pragma clang diagnostic ignored "-Wunused-variable"
 #endif
+struct U24BurstDirectCallInitializer_tBF85005092EAC8FEAAD6A5CA89F4DFF3C7948E34  : public RuntimeObject
+{
+};
 struct U3CPrivateImplementationDetailsU3E_t2CADAF0D55AC9D0785A6F7B80D4772CF1220C48F  : public RuntimeObject
 {
 };
@@ -79,6 +103,15 @@ struct ValueType_t6D9B272BD21782F0A9A14F2E41F85A50E97A986F_marshaled_pinvoke
 {
 };
 struct ValueType_t6D9B272BD21782F0A9A14F2E41F85A50E97A986F_marshaled_com
+{
+};
+struct X86_tD56146C8451281BCAFDC46416641110725542EE2  : public RuntimeObject
+{
+};
+struct DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E  : public RuntimeObject
+{
+};
+struct DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9  : public RuntimeObject
 {
 };
 struct Sse2_t7D2C1FEA4C8F078FDAE4AFF2DC6276B49F2466CF  : public RuntimeObject
@@ -670,7 +703,63 @@ struct U3CBitsU3Ee__FixedBuffer_tFED81968B5AEB075B5560B55A16A31C5F01A83BD
 		uint8_t U3CBitsU3Ee__FixedBuffer_tFED81968B5AEB075B5560B55A16A31C5F01A83BD__padding[32];
 	};
 };
+struct Delegate_t  : public RuntimeObject
+{
+	intptr_t ___method_ptr;
+	intptr_t ___invoke_impl;
+	RuntimeObject* ___m_target;
+	intptr_t ___method;
+	intptr_t ___delegate_trampoline;
+	intptr_t ___extra_arg;
+	intptr_t ___method_code;
+	intptr_t ___interp_method;
+	intptr_t ___interp_invoke_impl;
+	MethodInfo_t* ___method_info;
+	MethodInfo_t* ___original_method_info;
+	DelegateData_t9B286B493293CD2D23A5B2B5EF0E5B1324C2B77E* ___data;
+	bool ___method_is_virtual;
+};
+struct Delegate_t_marshaled_pinvoke
+{
+	intptr_t ___method_ptr;
+	intptr_t ___invoke_impl;
+	Il2CppIUnknown* ___m_target;
+	intptr_t ___method;
+	intptr_t ___delegate_trampoline;
+	intptr_t ___extra_arg;
+	intptr_t ___method_code;
+	intptr_t ___interp_method;
+	intptr_t ___interp_invoke_impl;
+	MethodInfo_t* ___method_info;
+	MethodInfo_t* ___original_method_info;
+	DelegateData_t9B286B493293CD2D23A5B2B5EF0E5B1324C2B77E* ___data;
+	int32_t ___method_is_virtual;
+};
+struct Delegate_t_marshaled_com
+{
+	intptr_t ___method_ptr;
+	intptr_t ___invoke_impl;
+	Il2CppIUnknown* ___m_target;
+	intptr_t ___method;
+	intptr_t ___delegate_trampoline;
+	intptr_t ___extra_arg;
+	intptr_t ___method_code;
+	intptr_t ___interp_method;
+	intptr_t ___interp_invoke_impl;
+	MethodInfo_t* ___method_info;
+	MethodInfo_t* ___original_method_info;
+	DelegateData_t9B286B493293CD2D23A5B2B5EF0E5B1324C2B77E* ___data;
+	int32_t ___method_is_virtual;
+};
 struct RuntimeFieldHandle_t6E4C45B6D2EA12FC99185805A7E77527899B25C5 
+{
+	intptr_t ___value;
+};
+struct RuntimeMethodHandle_tB35B96E97214DCBE20B0B02B1E687884B34680B2 
+{
+	intptr_t ___value;
+};
+struct RuntimeTypeHandle_t332A452B8B6179E4469B69525D0FE82A88030F7B 
 {
 	intptr_t ___value;
 };
@@ -1486,17 +1575,48 @@ struct StrBoolArray_tCA66E1F688A4BC6FA749195F867F59E523508DD6
 {
 	U3CBitsU3Ee__FixedBuffer_tFED81968B5AEB075B5560B55A16A31C5F01A83BD ___Bits;
 };
+struct MulticastDelegate_t  : public Delegate_t
+{
+	DelegateU5BU5D_tC5AB7E8F745616680F337909D3A8E6C722CDF771* ___delegates;
+};
+struct MulticastDelegate_t_marshaled_pinvoke : public Delegate_t_marshaled_pinvoke
+{
+	Delegate_t_marshaled_pinvoke** ___delegates;
+};
+struct MulticastDelegate_t_marshaled_com : public Delegate_t_marshaled_com
+{
+	Delegate_t_marshaled_com** ___delegates;
+};
+struct AsyncCallback_t7FEF460CBDCFB9C5FA2EF776984778B9A4145F4C  : public MulticastDelegate_t
+{
+};
+struct DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_t65954E7C9A419F4F2E46237ACE3C9C47B60AD497  : public MulticastDelegate_t
+{
+};
+struct DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_t4725F3264E5F3B857345196A2CB67B499B5C1B6D  : public MulticastDelegate_t
+{
+};
 struct U3CPrivateImplementationDetailsU3E_t2CADAF0D55AC9D0785A6F7B80D4772CF1220C48F_StaticFields
 {
 	__StaticArrayInitTypeSizeU3D256_tFFE4CE163BD2DCEAA09662C2BCC33B3C37AB0D22 ___07DB995E8ED2CFB0AB71EBA69F3A3EC07D5C6AC10C0C64F33E94ED2949B348AA;
 	__StaticArrayInitTypeSizeU3D3068_t7A2AD6E7A715E3465C4F71F4D24089CBCDD2D97B ___18DEC2780C55CB9A28CFC322874C570E2EAF1C4618EAB8DFA0FC662098626154;
+	__StaticArrayInitTypeSizeU3D3580_t2432CDAE356C2C94AB1FFEB907A7BDEB8DAC4404 ___407BDE3BC77EC0988469C1A80753AA2B18FD13A68F6A1A34EEAA8695DD4FF0D4;
 	__StaticArrayInitTypeSizeU3D1024_tF7D86A590314DC7B01BB492137ABC5940F263469 ___6AC12597E10FFB084DEE014EEBFD52580EB845FD6B5CCA643AEAC527F7B02F2A;
 	__StaticArrayInitTypeSizeU3D1024_tF7D86A590314DC7B01BB492137ABC5940F263469 ___80E69247CBC7E738ECDB10A5DCF3EF62BB27B3AB61C6ECF146B2C57CEFFB212F;
 	__StaticArrayInitTypeSizeU3D512_t85E24EB18ABD7C2D79C6AF46F140D4EA5FBD1475 ___A199F717FBA4D1378A33D65E9660E45ADC176876A3450BACF2A80DA985FBDF14;
-	__StaticArrayInitTypeSizeU3D3580_t2432CDAE356C2C94AB1FFEB907A7BDEB8DAC4404 ___B6EEE9EB277AC8DB2549A0E3B7076938FD9BD5E0DA706181BE7DC82CC7D88B4D;
 	__StaticArrayInitTypeSizeU3D32_tF5E240ACF4B30B5A5F8C77E9E49CC2F8559D76D9 ___C69994AC61B52FBCEA582D6CCCD595C12E00BDB18F0C6F593FB6B393CAEDB08C;
 	int64_t ___D0067CAD9A63E0813759A2BB841051CA73570C0DA2E08E840A8EB45DB6A7A010;
 	__StaticArrayInitTypeSizeU3D3_t2857C07F0A23FB025DA0D81FCD2BE07B4ADCC026 ___D5B592C05DC25B5032553F1B27F4139BE95E881F73DB33B02B05AB20C3F9981E;
+};
+struct DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_StaticFields
+{
+	intptr_t ___Pointer;
+	intptr_t ___DeferredCompilation;
+};
+struct DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_StaticFields
+{
+	intptr_t ___Pointer;
+	intptr_t ___DeferredCompilation;
 };
 struct Sse4_2_t40477411E6B6B2D01F3B0EA9D1B0A6281833C37C_StaticFields
 {
@@ -1506,6 +1626,10 @@ struct Boolean_t09A6377A54BE2F9E6985A8149F19234FD7DDFE22_StaticFields
 {
 	String_t* ___TrueString;
 	String_t* ___FalseString;
+};
+struct IntPtr_t_StaticFields
+{
+	intptr_t ___Zero;
 };
 #ifdef __clang__
 #pragma clang diagnostic pop
@@ -1540,6 +1664,40 @@ struct UInt32U5BU5D_t02FBD658AD156A17574ECE6106CF1FBFCC9807FA  : public RuntimeA
 	inline void SetAtUnchecked(il2cpp_array_size_t index, uint32_t value)
 	{
 		m_Items[index] = value;
+	}
+};
+struct DelegateU5BU5D_tC5AB7E8F745616680F337909D3A8E6C722CDF771  : public RuntimeArray
+{
+	ALIGN_FIELD (8) Delegate_t* m_Items[1];
+
+	inline Delegate_t* GetAt(il2cpp_array_size_t index) const
+	{
+		IL2CPP_ARRAY_BOUNDS_CHECK(index, (uint32_t)(this)->max_length);
+		return m_Items[index];
+	}
+	inline Delegate_t** GetAddressAt(il2cpp_array_size_t index)
+	{
+		IL2CPP_ARRAY_BOUNDS_CHECK(index, (uint32_t)(this)->max_length);
+		return m_Items + index;
+	}
+	inline void SetAt(il2cpp_array_size_t index, Delegate_t* value)
+	{
+		IL2CPP_ARRAY_BOUNDS_CHECK(index, (uint32_t)(this)->max_length);
+		m_Items[index] = value;
+		Il2CppCodeGenWriteBarrier((void**)m_Items + index, (void*)value);
+	}
+	inline Delegate_t* GetAtUnchecked(il2cpp_array_size_t index) const
+	{
+		return m_Items[index];
+	}
+	inline Delegate_t** GetAddressAtUnchecked(il2cpp_array_size_t index)
+	{
+		return m_Items + index;
+	}
+	inline void SetAtUnchecked(il2cpp_array_size_t index, Delegate_t* value)
+	{
+		m_Items[index] = value;
+		Il2CppCodeGenWriteBarrier((void**)m_Items + index, (void*)value);
 	}
 };
 
@@ -1714,7 +1872,24 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR uint64_t Sse4_2_crc32_u64_mA702B2B68C2F4D4C64
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void RuntimeHelpers_InitializeArray_m751372AA3F24FBF6DA9B9D687CBFA2DE436CAB9B (RuntimeArray* ___0_array, RuntimeFieldHandle_t6E4C45B6D2EA12FC99185805A7E77527899B25C5 ___1_fldHandle, const RuntimeMethod* method) ;
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void StrBoolArray_SetBit_m212C6D1A8A4C422AF979D6B3BC7CD5B9BD0F3F01 (StrBoolArray_tCA66E1F688A4BC6FA749195F867F59E523508DD6* __this, int32_t ___0_aindex, int32_t ___1_bindex, bool ___2_val, const RuntimeMethod* method) ;
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool StrBoolArray_GetBit_mCA50A9F3A3FA5C552305C9B762264A6058F33E78 (StrBoolArray_tCA66E1F688A4BC6FA749195F867F59E523508DD6* __this, int32_t ___0_aindex, int32_t ___1_bindex, const RuntimeMethod* method) ;
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void* BurstCompiler_GetILPPMethodFunctionPointer2_m8C671F61D031A10FC46911AC94B57C1E58D1F567 (intptr_t ___0_ilppMethod, RuntimeMethodHandle_tB35B96E97214DCBE20B0B02B1E687884B34680B2 ___1_managedMethodHandle, RuntimeTypeHandle_t332A452B8B6179E4469B69525D0FE82A88030F7B ___2_delegateTypeHandle, const RuntimeMethod* method) ;
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void DoSetCSRTrampoline_00000129U24BurstDirectCall_GetFunctionPointerDiscard_m1CA723D7A0AF9643877A26B704F1FC62C416CF9D (intptr_t* ___0_p, const RuntimeMethod* method) ;
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR intptr_t BurstCompiler_CompileILPPMethod2_m545A8FC57B460871C1715F32DD601F2C1CA9C7FA (RuntimeMethodHandle_tB35B96E97214DCBE20B0B02B1E687884B34680B2 ___0_burstMethodHandle, const RuntimeMethod* method) ;
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void DoSetCSRTrampoline_00000129U24BurstDirectCall_Constructor_m3D5287DDC5DCF5D4B5E518C54686BAE40810AAA9 (const RuntimeMethod* method) ;
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool BurstCompiler_get_IsEnabled_m55FDBCB2279A83AC8926260034F870E3A11116C7 (const RuntimeMethod* method) ;
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR intptr_t DoSetCSRTrampoline_00000129U24BurstDirectCall_GetFunctionPointer_m35695F08BD1BBFD52C66DF6E550640A6FE8B24D3 (const RuntimeMethod* method) ;
+IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR void X86_DoSetCSRTrampolineU24BurstManaged_mE815FBA01984E0ED5DD9430A954F5D9E831F6FF6_inline (int32_t ___0_bits, const RuntimeMethod* method) ;
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void DoGetCSRTrampoline_0000012AU24BurstDirectCall_GetFunctionPointerDiscard_m26984A00D91D0C99D3509DEA73EB163EC2F4CC8A (intptr_t* ___0_p, const RuntimeMethod* method) ;
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void DoGetCSRTrampoline_0000012AU24BurstDirectCall_Constructor_m3CFDD4B1C5D09CA875C129FB78A35FDBA52D2A1C (const RuntimeMethod* method) ;
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR intptr_t DoGetCSRTrampoline_0000012AU24BurstDirectCall_GetFunctionPointer_m362582712481AA5F41819616FF1C8B3004FF511F (const RuntimeMethod* method) ;
+IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR int32_t X86_DoGetCSRTrampolineU24BurstManaged_m22BBFDD66A5A14872A57F99439F422092E6DA9E8_inline (const RuntimeMethod* method) ;
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void Attribute__ctor_m79ED1BF1EE36D1E417BA89A0D9F91F8AAD8D19E2 (Attribute_tFDA8EFEFB0711976D22474794576DAF28F7440AA* __this, const RuntimeMethod* method) ;
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void BurstCompiler_InitializeU24BurstCompilerHelper_IsBurstEnabled_00000145U24BurstDirectCall_m23188B4F0194C7041DA4BB705FE90916C897C01D (const RuntimeMethod* method) ;
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void DoSetCSRTrampoline_00000129U24BurstDirectCall_Initialize_mD6F693B7DE3040869CB07BA208A4CC255A5892D3 (const RuntimeMethod* method) ;
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void DoGetCSRTrampoline_0000012AU24BurstDirectCall_Initialize_m800D11747CE36C705224BFB46759C91806FE6E41 (const RuntimeMethod* method) ;
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool Sse_get_IsSseSupported_mDBF9442802946279B27A747DBE1D9739B8D860EA (const RuntimeMethod* method) ;
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void X86_BurstIntrinsicSetCSRFromManaged_mA2AB67AC6C4DF6E0D7B45D020365225F10516134 (int32_t ___0__, const RuntimeMethod* method) ;
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR int32_t X86_BurstIntrinsicGetCSRFromManaged_m60DD950BFC2FC5E1F640BB75D0F00D82C4DA37FB (const RuntimeMethod* method) ;
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Winvalid-offsetof"
@@ -13993,6 +14168,460 @@ IL_0071:
 #pragma clang diagnostic ignored "-Winvalid-offsetof"
 #pragma clang diagnostic ignored "-Wunused-variable"
 #endif
+void DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_Invoke_mABFC1994145442CF920F9486358D24F59ECBC21A_Multicast(DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_t4725F3264E5F3B857345196A2CB67B499B5C1B6D* __this, int32_t ___0_bits, const RuntimeMethod* method)
+{
+	il2cpp_array_size_t length = __this->___delegates->max_length;
+	Delegate_t** delegatesToInvoke = reinterpret_cast<Delegate_t**>(__this->___delegates->GetAddressAtUnchecked(0));
+	for (il2cpp_array_size_t i = 0; i < length; i++)
+	{
+		DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_t4725F3264E5F3B857345196A2CB67B499B5C1B6D* currentDelegate = reinterpret_cast<DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_t4725F3264E5F3B857345196A2CB67B499B5C1B6D*>(delegatesToInvoke[i]);
+		typedef void (*FunctionPointerType) (RuntimeObject*, int32_t, const RuntimeMethod*);
+		((FunctionPointerType)currentDelegate->___invoke_impl)((Il2CppObject*)currentDelegate->___method_code, ___0_bits, reinterpret_cast<RuntimeMethod*>(currentDelegate->___method));
+	}
+}
+void DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_Invoke_mABFC1994145442CF920F9486358D24F59ECBC21A_OpenInst(DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_t4725F3264E5F3B857345196A2CB67B499B5C1B6D* __this, int32_t ___0_bits, const RuntimeMethod* method)
+{
+	typedef void (*FunctionPointerType) (int32_t, const RuntimeMethod*);
+	((FunctionPointerType)__this->___method_ptr)(___0_bits, method);
+}
+void DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_Invoke_mABFC1994145442CF920F9486358D24F59ECBC21A_OpenStatic(DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_t4725F3264E5F3B857345196A2CB67B499B5C1B6D* __this, int32_t ___0_bits, const RuntimeMethod* method)
+{
+	typedef void (*FunctionPointerType) (int32_t, const RuntimeMethod*);
+	((FunctionPointerType)__this->___method_ptr)(___0_bits, method);
+}
+IL2CPP_EXTERN_C  void DelegatePInvokeWrapper_DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_t4725F3264E5F3B857345196A2CB67B499B5C1B6D (DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_t4725F3264E5F3B857345196A2CB67B499B5C1B6D* __this, int32_t ___0_bits, const RuntimeMethod* method)
+{
+	typedef void (DEFAULT_CALL *PInvokeFunc)(int32_t);
+	PInvokeFunc il2cppPInvokeFunc = reinterpret_cast<PInvokeFunc>(il2cpp_codegen_get_reverse_pinvoke_function_ptr(__this));
+	il2cppPInvokeFunc(___0_bits);
+
+}
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void DoSetCSRTrampoline_00000129U24PostfixBurstDelegate__ctor_mB2E362BB9D4BB2A7449381E746C2EB65A2ED22E5 (DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_t4725F3264E5F3B857345196A2CB67B499B5C1B6D* __this, RuntimeObject* ___0_p, intptr_t ___1_p, const RuntimeMethod* method) 
+{
+	__this->___method_ptr = (intptr_t)il2cpp_codegen_get_method_pointer((RuntimeMethod*)___1_p);
+	__this->___method = ___1_p;
+	__this->___m_target = ___0_p;
+	Il2CppCodeGenWriteBarrier((void**)(&__this->___m_target), (void*)___0_p);
+	int parameterCount = il2cpp_codegen_method_parameter_count((RuntimeMethod*)___1_p);
+	__this->___method_code = (intptr_t)__this;
+	if (MethodIsStatic((RuntimeMethod*)___1_p))
+	{
+		bool isOpen = parameterCount == 1;
+		if (isOpen)
+			__this->___invoke_impl = (intptr_t)&DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_Invoke_mABFC1994145442CF920F9486358D24F59ECBC21A_OpenStatic;
+		else
+			{
+				__this->___invoke_impl = __this->___method_ptr;
+				__this->___method_code = (intptr_t)__this->___m_target;
+			}
+	}
+	else
+	{
+		if (___0_p == NULL)
+			il2cpp_codegen_raise_exception(il2cpp_codegen_get_argument_exception(NULL, "Delegate to an instance method cannot have null 'this'."), NULL);
+		__this->___invoke_impl = __this->___method_ptr;
+		__this->___method_code = (intptr_t)__this->___m_target;
+	}
+	__this->___extra_arg = (intptr_t)&DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_Invoke_mABFC1994145442CF920F9486358D24F59ECBC21A_Multicast;
+}
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_Invoke_mABFC1994145442CF920F9486358D24F59ECBC21A (DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_t4725F3264E5F3B857345196A2CB67B499B5C1B6D* __this, int32_t ___0_bits, const RuntimeMethod* method) 
+{
+	typedef void (*FunctionPointerType) (RuntimeObject*, int32_t, const RuntimeMethod*);
+	((FunctionPointerType)__this->___invoke_impl)((Il2CppObject*)__this->___method_code, ___0_bits, reinterpret_cast<RuntimeMethod*>(__this->___method));
+}
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR RuntimeObject* DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_BeginInvoke_m3B7C153B9650A09385BD3178EC061934F3E71755 (DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_t4725F3264E5F3B857345196A2CB67B499B5C1B6D* __this, int32_t ___0_bits, AsyncCallback_t7FEF460CBDCFB9C5FA2EF776984778B9A4145F4C* ___1_p, RuntimeObject* ___2_p, const RuntimeMethod* method) 
+{
+	static bool s_Il2CppMethodInitialized;
+	if (!s_Il2CppMethodInitialized)
+	{
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var);
+		s_Il2CppMethodInitialized = true;
+	}
+	void *__d_args[2] = {0};
+	__d_args[0] = Box(Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var, &___0_bits);
+	return (RuntimeObject*)il2cpp_codegen_delegate_begin_invoke((RuntimeDelegate*)__this, __d_args, (RuntimeDelegate*)___1_p, (RuntimeObject*)___2_p);
+}
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_EndInvoke_mE0DD96672DD7BD241A5CAC6D2B798F2135659A7B (DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_t4725F3264E5F3B857345196A2CB67B499B5C1B6D* __this, RuntimeObject* ___0_p, const RuntimeMethod* method) 
+{
+	il2cpp_codegen_delegate_end_invoke((Il2CppAsyncResult*) ___0_p, 0);
+}
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Winvalid-offsetof"
+#pragma clang diagnostic ignored "-Wunused-variable"
+#endif
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void DoSetCSRTrampoline_00000129U24BurstDirectCall_GetFunctionPointerDiscard_m1CA723D7A0AF9643877A26B704F1FC62C416CF9D (intptr_t* ___0_p, const RuntimeMethod* method) 
+{
+	static bool s_Il2CppMethodInitialized;
+	if (!s_Il2CppMethodInitialized)
+	{
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&BurstCompiler_t2715484E1FF256726FC4D4D8E17C35A4C8DFA2B8_il2cpp_TypeInfo_var);
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_il2cpp_TypeInfo_var);
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_t4725F3264E5F3B857345196A2CB67B499B5C1B6D_0_0_0_var);
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&X86_DoSetCSRTrampolineU24BurstManaged_mE815FBA01984E0ED5DD9430A954F5D9E831F6FF6_RuntimeMethod_var);
+		s_Il2CppMethodInitialized = true;
+	}
+	{
+		il2cpp_codegen_runtime_class_init_inline(DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_il2cpp_TypeInfo_var);
+		intptr_t L_0 = ((DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_StaticFields*)il2cpp_codegen_static_fields_for(DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_il2cpp_TypeInfo_var))->___Pointer;
+		if (L_0)
+		{
+			goto IL_0023;
+		}
+	}
+	{
+		il2cpp_codegen_runtime_class_init_inline(DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_il2cpp_TypeInfo_var);
+		intptr_t L_1 = ((DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_StaticFields*)il2cpp_codegen_static_fields_for(DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_il2cpp_TypeInfo_var))->___DeferredCompilation;
+		RuntimeMethodHandle_tB35B96E97214DCBE20B0B02B1E687884B34680B2 L_2 = { reinterpret_cast<intptr_t> (X86_DoSetCSRTrampolineU24BurstManaged_mE815FBA01984E0ED5DD9430A954F5D9E831F6FF6_RuntimeMethod_var) };
+		RuntimeTypeHandle_t332A452B8B6179E4469B69525D0FE82A88030F7B L_3 = { reinterpret_cast<intptr_t> (DoSetCSRTrampoline_00000129U24PostfixBurstDelegate_t4725F3264E5F3B857345196A2CB67B499B5C1B6D_0_0_0_var) };
+		il2cpp_codegen_runtime_class_init_inline(BurstCompiler_t2715484E1FF256726FC4D4D8E17C35A4C8DFA2B8_il2cpp_TypeInfo_var);
+		void* L_4;
+		L_4 = BurstCompiler_GetILPPMethodFunctionPointer2_m8C671F61D031A10FC46911AC94B57C1E58D1F567(L_1, L_2, L_3, NULL);
+		((DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_StaticFields*)il2cpp_codegen_static_fields_for(DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_il2cpp_TypeInfo_var))->___Pointer = (intptr_t)L_4;
+	}
+
+IL_0023:
+	{
+		intptr_t* L_5 = ___0_p;
+		il2cpp_codegen_runtime_class_init_inline(DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_il2cpp_TypeInfo_var);
+		intptr_t L_6 = ((DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_StaticFields*)il2cpp_codegen_static_fields_for(DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_il2cpp_TypeInfo_var))->___Pointer;
+		*((intptr_t*)L_5) = (intptr_t)L_6;
+		return;
+	}
+}
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR intptr_t DoSetCSRTrampoline_00000129U24BurstDirectCall_GetFunctionPointer_m35695F08BD1BBFD52C66DF6E550640A6FE8B24D3 (const RuntimeMethod* method) 
+{
+	static bool s_Il2CppMethodInitialized;
+	if (!s_Il2CppMethodInitialized)
+	{
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_il2cpp_TypeInfo_var);
+		s_Il2CppMethodInitialized = true;
+	}
+	intptr_t V_0;
+	memset((&V_0), 0, sizeof(V_0));
+	{
+		V_0 = ((intptr_t)0);
+		il2cpp_codegen_runtime_class_init_inline(DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_il2cpp_TypeInfo_var);
+		DoSetCSRTrampoline_00000129U24BurstDirectCall_GetFunctionPointerDiscard_m1CA723D7A0AF9643877A26B704F1FC62C416CF9D((&V_0), NULL);
+		intptr_t L_0 = V_0;
+		return L_0;
+	}
+}
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void DoSetCSRTrampoline_00000129U24BurstDirectCall_Constructor_m3D5287DDC5DCF5D4B5E518C54686BAE40810AAA9 (const RuntimeMethod* method) 
+{
+	static bool s_Il2CppMethodInitialized;
+	if (!s_Il2CppMethodInitialized)
+	{
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&BurstCompiler_t2715484E1FF256726FC4D4D8E17C35A4C8DFA2B8_il2cpp_TypeInfo_var);
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_il2cpp_TypeInfo_var);
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&X86_DoSetCSRTrampoline_mAD4DB2BFB00E514CED43990AD8CC823B3EBF666C_RuntimeMethod_var);
+		s_Il2CppMethodInitialized = true;
+	}
+	{
+		RuntimeMethodHandle_tB35B96E97214DCBE20B0B02B1E687884B34680B2 L_0 = { reinterpret_cast<intptr_t> (X86_DoSetCSRTrampoline_mAD4DB2BFB00E514CED43990AD8CC823B3EBF666C_RuntimeMethod_var) };
+		il2cpp_codegen_runtime_class_init_inline(BurstCompiler_t2715484E1FF256726FC4D4D8E17C35A4C8DFA2B8_il2cpp_TypeInfo_var);
+		intptr_t L_1;
+		L_1 = BurstCompiler_CompileILPPMethod2_m545A8FC57B460871C1715F32DD601F2C1CA9C7FA(L_0, NULL);
+		il2cpp_codegen_runtime_class_init_inline(DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_il2cpp_TypeInfo_var);
+		((DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_StaticFields*)il2cpp_codegen_static_fields_for(DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_il2cpp_TypeInfo_var))->___DeferredCompilation = L_1;
+		return;
+	}
+}
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void DoSetCSRTrampoline_00000129U24BurstDirectCall_Initialize_mD6F693B7DE3040869CB07BA208A4CC255A5892D3 (const RuntimeMethod* method) 
+{
+	{
+		return;
+	}
+}
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void DoSetCSRTrampoline_00000129U24BurstDirectCall__cctor_m9216FC686ED596D2ED54452FB3868EE2B3C28470 (const RuntimeMethod* method) 
+{
+	{
+		DoSetCSRTrampoline_00000129U24BurstDirectCall_Constructor_m3D5287DDC5DCF5D4B5E518C54686BAE40810AAA9(NULL);
+		return;
+	}
+}
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void DoSetCSRTrampoline_00000129U24BurstDirectCall_Invoke_mE4A8D66F26591A2B6925781182A3950F2D9929F7 (int32_t ___0_bits, const RuntimeMethod* method) 
+{
+	static bool s_Il2CppMethodInitialized;
+	if (!s_Il2CppMethodInitialized)
+	{
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&BurstCompiler_t2715484E1FF256726FC4D4D8E17C35A4C8DFA2B8_il2cpp_TypeInfo_var);
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_il2cpp_TypeInfo_var);
+		s_Il2CppMethodInitialized = true;
+	}
+	intptr_t V_0;
+	memset((&V_0), 0, sizeof(V_0));
+	{
+		il2cpp_codegen_runtime_class_init_inline(BurstCompiler_t2715484E1FF256726FC4D4D8E17C35A4C8DFA2B8_il2cpp_TypeInfo_var);
+		bool L_0;
+		L_0 = BurstCompiler_get_IsEnabled_m55FDBCB2279A83AC8926260034F870E3A11116C7(NULL);
+		if (!L_0)
+		{
+			goto IL_001e;
+		}
+	}
+	{
+		il2cpp_codegen_runtime_class_init_inline(DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_il2cpp_TypeInfo_var);
+		intptr_t L_1;
+		L_1 = DoSetCSRTrampoline_00000129U24BurstDirectCall_GetFunctionPointer_m35695F08BD1BBFD52C66DF6E550640A6FE8B24D3(NULL);
+		V_0 = L_1;
+		intptr_t L_2 = V_0;
+		if (!L_2)
+		{
+			goto IL_001e;
+		}
+	}
+	{
+		int32_t L_3 = ___0_bits;
+		intptr_t L_4 = V_0;
+		typedef void (CDECL *func_L_5)(int32_t);
+		((func_L_5)L_4)(L_3);
+		return;
+	}
+
+IL_001e:
+	{
+		int32_t L_6 = ___0_bits;
+		X86_DoSetCSRTrampolineU24BurstManaged_mE815FBA01984E0ED5DD9430A954F5D9E831F6FF6_inline(L_6, NULL);
+		return;
+	}
+}
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Winvalid-offsetof"
+#pragma clang diagnostic ignored "-Wunused-variable"
+#endif
+int32_t DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_Invoke_m029066847B481A4D4A1506274D08E53673879725_Multicast(DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_t65954E7C9A419F4F2E46237ACE3C9C47B60AD497* __this, const RuntimeMethod* method)
+{
+	il2cpp_array_size_t length = __this->___delegates->max_length;
+	Delegate_t** delegatesToInvoke = reinterpret_cast<Delegate_t**>(__this->___delegates->GetAddressAtUnchecked(0));
+	int32_t retVal = 0;
+	for (il2cpp_array_size_t i = 0; i < length; i++)
+	{
+		DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_t65954E7C9A419F4F2E46237ACE3C9C47B60AD497* currentDelegate = reinterpret_cast<DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_t65954E7C9A419F4F2E46237ACE3C9C47B60AD497*>(delegatesToInvoke[i]);
+		typedef int32_t (*FunctionPointerType) (RuntimeObject*, const RuntimeMethod*);
+		retVal = ((FunctionPointerType)currentDelegate->___invoke_impl)((Il2CppObject*)currentDelegate->___method_code, reinterpret_cast<RuntimeMethod*>(currentDelegate->___method));
+	}
+	return retVal;
+}
+int32_t DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_Invoke_m029066847B481A4D4A1506274D08E53673879725_OpenInst(DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_t65954E7C9A419F4F2E46237ACE3C9C47B60AD497* __this, const RuntimeMethod* method)
+{
+	typedef int32_t (*FunctionPointerType) (const RuntimeMethod*);
+	return ((FunctionPointerType)__this->___method_ptr)(method);
+}
+int32_t DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_Invoke_m029066847B481A4D4A1506274D08E53673879725_OpenStatic(DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_t65954E7C9A419F4F2E46237ACE3C9C47B60AD497* __this, const RuntimeMethod* method)
+{
+	typedef int32_t (*FunctionPointerType) (const RuntimeMethod*);
+	return ((FunctionPointerType)__this->___method_ptr)(method);
+}
+IL2CPP_EXTERN_C  int32_t DelegatePInvokeWrapper_DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_t65954E7C9A419F4F2E46237ACE3C9C47B60AD497 (DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_t65954E7C9A419F4F2E46237ACE3C9C47B60AD497* __this, const RuntimeMethod* method)
+{
+	typedef int32_t (DEFAULT_CALL *PInvokeFunc)();
+	PInvokeFunc il2cppPInvokeFunc = reinterpret_cast<PInvokeFunc>(il2cpp_codegen_get_reverse_pinvoke_function_ptr(__this));
+	int32_t returnValue = il2cppPInvokeFunc();
+
+	return returnValue;
+}
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate__ctor_mAF4E8E52E9B328353F1FD1C782B7E5F231C1EAB2 (DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_t65954E7C9A419F4F2E46237ACE3C9C47B60AD497* __this, RuntimeObject* ___0_p, intptr_t ___1_p, const RuntimeMethod* method) 
+{
+	__this->___method_ptr = (intptr_t)il2cpp_codegen_get_method_pointer((RuntimeMethod*)___1_p);
+	__this->___method = ___1_p;
+	__this->___m_target = ___0_p;
+	Il2CppCodeGenWriteBarrier((void**)(&__this->___m_target), (void*)___0_p);
+	int parameterCount = il2cpp_codegen_method_parameter_count((RuntimeMethod*)___1_p);
+	__this->___method_code = (intptr_t)__this;
+	if (MethodIsStatic((RuntimeMethod*)___1_p))
+	{
+		bool isOpen = parameterCount == 0;
+		if (isOpen)
+			__this->___invoke_impl = (intptr_t)&DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_Invoke_m029066847B481A4D4A1506274D08E53673879725_OpenStatic;
+		else
+			{
+				__this->___invoke_impl = __this->___method_ptr;
+				__this->___method_code = (intptr_t)__this->___m_target;
+			}
+	}
+	else
+	{
+		if (___0_p == NULL)
+			il2cpp_codegen_raise_exception(il2cpp_codegen_get_argument_exception(NULL, "Delegate to an instance method cannot have null 'this'."), NULL);
+		__this->___invoke_impl = __this->___method_ptr;
+		__this->___method_code = (intptr_t)__this->___m_target;
+	}
+	__this->___extra_arg = (intptr_t)&DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_Invoke_m029066847B481A4D4A1506274D08E53673879725_Multicast;
+}
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR int32_t DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_Invoke_m029066847B481A4D4A1506274D08E53673879725 (DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_t65954E7C9A419F4F2E46237ACE3C9C47B60AD497* __this, const RuntimeMethod* method) 
+{
+	typedef int32_t (*FunctionPointerType) (RuntimeObject*, const RuntimeMethod*);
+	return ((FunctionPointerType)__this->___invoke_impl)((Il2CppObject*)__this->___method_code, reinterpret_cast<RuntimeMethod*>(__this->___method));
+}
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR RuntimeObject* DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_BeginInvoke_m2A385F39E93A08D0ADA497309E6452CE60A1D7F4 (DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_t65954E7C9A419F4F2E46237ACE3C9C47B60AD497* __this, AsyncCallback_t7FEF460CBDCFB9C5FA2EF776984778B9A4145F4C* ___0_p, RuntimeObject* ___1_p, const RuntimeMethod* method) 
+{
+	void *__d_args[1] = {0};
+	return (RuntimeObject*)il2cpp_codegen_delegate_begin_invoke((RuntimeDelegate*)__this, __d_args, (RuntimeDelegate*)___0_p, (RuntimeObject*)___1_p);
+}
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR int32_t DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_EndInvoke_m3855DB6B985889BD923444AD98F7F4D04579F702 (DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_t65954E7C9A419F4F2E46237ACE3C9C47B60AD497* __this, RuntimeObject* ___0_p, const RuntimeMethod* method) 
+{
+	RuntimeObject *__result = il2cpp_codegen_delegate_end_invoke((Il2CppAsyncResult*) ___0_p, 0);
+	return *(int32_t*)UnBox ((RuntimeObject*)__result);
+}
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Winvalid-offsetof"
+#pragma clang diagnostic ignored "-Wunused-variable"
+#endif
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void DoGetCSRTrampoline_0000012AU24BurstDirectCall_GetFunctionPointerDiscard_m26984A00D91D0C99D3509DEA73EB163EC2F4CC8A (intptr_t* ___0_p, const RuntimeMethod* method) 
+{
+	static bool s_Il2CppMethodInitialized;
+	if (!s_Il2CppMethodInitialized)
+	{
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&BurstCompiler_t2715484E1FF256726FC4D4D8E17C35A4C8DFA2B8_il2cpp_TypeInfo_var);
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_il2cpp_TypeInfo_var);
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_t65954E7C9A419F4F2E46237ACE3C9C47B60AD497_0_0_0_var);
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&X86_DoGetCSRTrampolineU24BurstManaged_m22BBFDD66A5A14872A57F99439F422092E6DA9E8_RuntimeMethod_var);
+		s_Il2CppMethodInitialized = true;
+	}
+	{
+		il2cpp_codegen_runtime_class_init_inline(DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_il2cpp_TypeInfo_var);
+		intptr_t L_0 = ((DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_StaticFields*)il2cpp_codegen_static_fields_for(DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_il2cpp_TypeInfo_var))->___Pointer;
+		if (L_0)
+		{
+			goto IL_0023;
+		}
+	}
+	{
+		il2cpp_codegen_runtime_class_init_inline(DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_il2cpp_TypeInfo_var);
+		intptr_t L_1 = ((DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_StaticFields*)il2cpp_codegen_static_fields_for(DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_il2cpp_TypeInfo_var))->___DeferredCompilation;
+		RuntimeMethodHandle_tB35B96E97214DCBE20B0B02B1E687884B34680B2 L_2 = { reinterpret_cast<intptr_t> (X86_DoGetCSRTrampolineU24BurstManaged_m22BBFDD66A5A14872A57F99439F422092E6DA9E8_RuntimeMethod_var) };
+		RuntimeTypeHandle_t332A452B8B6179E4469B69525D0FE82A88030F7B L_3 = { reinterpret_cast<intptr_t> (DoGetCSRTrampoline_0000012AU24PostfixBurstDelegate_t65954E7C9A419F4F2E46237ACE3C9C47B60AD497_0_0_0_var) };
+		il2cpp_codegen_runtime_class_init_inline(BurstCompiler_t2715484E1FF256726FC4D4D8E17C35A4C8DFA2B8_il2cpp_TypeInfo_var);
+		void* L_4;
+		L_4 = BurstCompiler_GetILPPMethodFunctionPointer2_m8C671F61D031A10FC46911AC94B57C1E58D1F567(L_1, L_2, L_3, NULL);
+		((DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_StaticFields*)il2cpp_codegen_static_fields_for(DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_il2cpp_TypeInfo_var))->___Pointer = (intptr_t)L_4;
+	}
+
+IL_0023:
+	{
+		intptr_t* L_5 = ___0_p;
+		il2cpp_codegen_runtime_class_init_inline(DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_il2cpp_TypeInfo_var);
+		intptr_t L_6 = ((DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_StaticFields*)il2cpp_codegen_static_fields_for(DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_il2cpp_TypeInfo_var))->___Pointer;
+		*((intptr_t*)L_5) = (intptr_t)L_6;
+		return;
+	}
+}
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR intptr_t DoGetCSRTrampoline_0000012AU24BurstDirectCall_GetFunctionPointer_m362582712481AA5F41819616FF1C8B3004FF511F (const RuntimeMethod* method) 
+{
+	static bool s_Il2CppMethodInitialized;
+	if (!s_Il2CppMethodInitialized)
+	{
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_il2cpp_TypeInfo_var);
+		s_Il2CppMethodInitialized = true;
+	}
+	intptr_t V_0;
+	memset((&V_0), 0, sizeof(V_0));
+	{
+		V_0 = ((intptr_t)0);
+		il2cpp_codegen_runtime_class_init_inline(DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_il2cpp_TypeInfo_var);
+		DoGetCSRTrampoline_0000012AU24BurstDirectCall_GetFunctionPointerDiscard_m26984A00D91D0C99D3509DEA73EB163EC2F4CC8A((&V_0), NULL);
+		intptr_t L_0 = V_0;
+		return L_0;
+	}
+}
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void DoGetCSRTrampoline_0000012AU24BurstDirectCall_Constructor_m3CFDD4B1C5D09CA875C129FB78A35FDBA52D2A1C (const RuntimeMethod* method) 
+{
+	static bool s_Il2CppMethodInitialized;
+	if (!s_Il2CppMethodInitialized)
+	{
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&BurstCompiler_t2715484E1FF256726FC4D4D8E17C35A4C8DFA2B8_il2cpp_TypeInfo_var);
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_il2cpp_TypeInfo_var);
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&X86_DoGetCSRTrampoline_mFFBFD9D1618E08CBB4E263D811ED0782B31FA299_RuntimeMethod_var);
+		s_Il2CppMethodInitialized = true;
+	}
+	{
+		RuntimeMethodHandle_tB35B96E97214DCBE20B0B02B1E687884B34680B2 L_0 = { reinterpret_cast<intptr_t> (X86_DoGetCSRTrampoline_mFFBFD9D1618E08CBB4E263D811ED0782B31FA299_RuntimeMethod_var) };
+		il2cpp_codegen_runtime_class_init_inline(BurstCompiler_t2715484E1FF256726FC4D4D8E17C35A4C8DFA2B8_il2cpp_TypeInfo_var);
+		intptr_t L_1;
+		L_1 = BurstCompiler_CompileILPPMethod2_m545A8FC57B460871C1715F32DD601F2C1CA9C7FA(L_0, NULL);
+		il2cpp_codegen_runtime_class_init_inline(DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_il2cpp_TypeInfo_var);
+		((DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_StaticFields*)il2cpp_codegen_static_fields_for(DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_il2cpp_TypeInfo_var))->___DeferredCompilation = L_1;
+		return;
+	}
+}
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void DoGetCSRTrampoline_0000012AU24BurstDirectCall_Initialize_m800D11747CE36C705224BFB46759C91806FE6E41 (const RuntimeMethod* method) 
+{
+	{
+		return;
+	}
+}
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void DoGetCSRTrampoline_0000012AU24BurstDirectCall__cctor_m17BAE3A024CCA4BDDDD688B603BFF53C6E462B22 (const RuntimeMethod* method) 
+{
+	{
+		DoGetCSRTrampoline_0000012AU24BurstDirectCall_Constructor_m3CFDD4B1C5D09CA875C129FB78A35FDBA52D2A1C(NULL);
+		return;
+	}
+}
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR int32_t DoGetCSRTrampoline_0000012AU24BurstDirectCall_Invoke_m48CABAE1329004E775B5B266641B153E213C67FD (const RuntimeMethod* method) 
+{
+	static bool s_Il2CppMethodInitialized;
+	if (!s_Il2CppMethodInitialized)
+	{
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&BurstCompiler_t2715484E1FF256726FC4D4D8E17C35A4C8DFA2B8_il2cpp_TypeInfo_var);
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_il2cpp_TypeInfo_var);
+		s_Il2CppMethodInitialized = true;
+	}
+	intptr_t V_0;
+	memset((&V_0), 0, sizeof(V_0));
+	{
+		il2cpp_codegen_runtime_class_init_inline(BurstCompiler_t2715484E1FF256726FC4D4D8E17C35A4C8DFA2B8_il2cpp_TypeInfo_var);
+		bool L_0;
+		L_0 = BurstCompiler_get_IsEnabled_m55FDBCB2279A83AC8926260034F870E3A11116C7(NULL);
+		if (!L_0)
+		{
+			goto IL_001d;
+		}
+	}
+	{
+		il2cpp_codegen_runtime_class_init_inline(DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_il2cpp_TypeInfo_var);
+		intptr_t L_1;
+		L_1 = DoGetCSRTrampoline_0000012AU24BurstDirectCall_GetFunctionPointer_m362582712481AA5F41819616FF1C8B3004FF511F(NULL);
+		V_0 = L_1;
+		intptr_t L_2 = V_0;
+		if (!L_2)
+		{
+			goto IL_001d;
+		}
+	}
+	{
+		intptr_t L_3 = V_0;
+		typedef int32_t (CDECL *func_L_4)();
+		int32_t L_5 = ((func_L_4)L_3)();
+		return L_5;
+	}
+
+IL_001d:
+	{
+		int32_t L_6;
+		L_6 = X86_DoGetCSRTrampolineU24BurstManaged_m22BBFDD66A5A14872A57F99439F422092E6DA9E8_inline(NULL);
+		return L_6;
+	}
+}
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Winvalid-offsetof"
+#pragma clang diagnostic ignored "-Wunused-variable"
+#endif
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void Aliasing_ExpectAliased_m34203CCD734EFC08D4EDF6B084E5C83B9998D9EB (void* ___0_a, void* ___1_b, const RuntimeMethod* method) 
 {
 	{
@@ -14166,3 +14795,72 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void SkipLocalsInitAttribute__ctor_m375F500C4
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Winvalid-offsetof"
+#pragma clang diagnostic ignored "-Wunused-variable"
+#endif
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void U24BurstDirectCallInitializer_Initialize_mCC68AB6B2B87E7512FA2E3497B3261AF18D4DA67 (const RuntimeMethod* method) 
+{
+	static bool s_Il2CppMethodInitialized;
+	if (!s_Il2CppMethodInitialized)
+	{
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&BurstCompiler_t2715484E1FF256726FC4D4D8E17C35A4C8DFA2B8_il2cpp_TypeInfo_var);
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_il2cpp_TypeInfo_var);
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_il2cpp_TypeInfo_var);
+		s_Il2CppMethodInitialized = true;
+	}
+	{
+		il2cpp_codegen_runtime_class_init_inline(BurstCompiler_t2715484E1FF256726FC4D4D8E17C35A4C8DFA2B8_il2cpp_TypeInfo_var);
+		BurstCompiler_InitializeU24BurstCompilerHelper_IsBurstEnabled_00000145U24BurstDirectCall_m23188B4F0194C7041DA4BB705FE90916C897C01D(NULL);
+		il2cpp_codegen_runtime_class_init_inline(DoSetCSRTrampoline_00000129U24BurstDirectCall_t15D5BF6CB1EB34FF580D1923F1F91B3B8D39E2E9_il2cpp_TypeInfo_var);
+		DoSetCSRTrampoline_00000129U24BurstDirectCall_Initialize_mD6F693B7DE3040869CB07BA208A4CC255A5892D3(NULL);
+		il2cpp_codegen_runtime_class_init_inline(DoGetCSRTrampoline_0000012AU24BurstDirectCall_t72EE5561392E08D17AC0EAFD7A44620F445A144E_il2cpp_TypeInfo_var);
+		DoGetCSRTrampoline_0000012AU24BurstDirectCall_Initialize_m800D11747CE36C705224BFB46759C91806FE6E41(NULL);
+		return;
+	}
+}
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR void X86_DoSetCSRTrampolineU24BurstManaged_mE815FBA01984E0ED5DD9430A954F5D9E831F6FF6_inline (int32_t ___0_bits, const RuntimeMethod* method) 
+{
+	{
+		bool L_0;
+		L_0 = Sse_get_IsSseSupported_mDBF9442802946279B27A747DBE1D9739B8D860EA(NULL);
+		if (!L_0)
+		{
+			goto IL_000d;
+		}
+	}
+	{
+		int32_t L_1 = ___0_bits;
+		X86_BurstIntrinsicSetCSRFromManaged_mA2AB67AC6C4DF6E0D7B45D020365225F10516134(L_1, NULL);
+	}
+
+IL_000d:
+	{
+		return;
+	}
+}
+IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR int32_t X86_DoGetCSRTrampolineU24BurstManaged_m22BBFDD66A5A14872A57F99439F422092E6DA9E8_inline (const RuntimeMethod* method) 
+{
+	{
+		bool L_0;
+		L_0 = Sse_get_IsSseSupported_mDBF9442802946279B27A747DBE1D9739B8D860EA(NULL);
+		if (!L_0)
+		{
+			goto IL_000d;
+		}
+	}
+	{
+		int32_t L_1;
+		L_1 = X86_BurstIntrinsicGetCSRFromManaged_m60DD950BFC2FC5E1F640BB75D0F00D82C4DA37FB(NULL);
+		return L_1;
+	}
+
+IL_000d:
+	{
+		return 0;
+	}
+}

@@ -943,8 +943,8 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void IdleRandomBehaviour_OnStateExit_m2698D25
 	float V_1 = 0.0f;
 	{
 		int32_t L_0;
-		L_0 = Random_Range_m6763D9767F033357F88B6637F048F4ACA4123B68(1, ((int32_t)21), NULL);
-		if ((!(((float)((float)L_0)) == ((float)(20.0f)))))
+		L_0 = Random_Range_m6763D9767F033357F88B6637F048F4ACA4123B68(1, ((int32_t)34), NULL);
+		if ((!(((float)((float)L_0)) == ((float)(33.0f)))))
 		{
 			goto IL_004f;
 		}
