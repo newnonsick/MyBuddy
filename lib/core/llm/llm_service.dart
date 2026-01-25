@@ -243,8 +243,9 @@ class LlmService {
       return true;
     }).toList();
 
-    if (turns.length <= maxMessages) return turns;
-    return turns.sublist(turns.length - maxMessages);
+    // if (turns.length <= maxMessages) return turns;
+    // return turns.sublist(turns.length - maxMessages);
+    return turns;
   }
 
   Future<void> _ensureLatestSystemOnTop(
@@ -264,8 +265,8 @@ class LlmService {
 
     await chat.clearHistory(
       replayHistory: <Message>[
-        Message.text(text: s, isUser: false),
         ...replayTail,
+        Message.text(text: s, isUser: false),
       ],
     );
     // _lastSystemText = s;
