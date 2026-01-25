@@ -36,20 +36,46 @@ class LlmService {
 
   final List<Tool> _tools = [
     const Tool(
-      name: 'character_jump',
+      name: 'animate_character',
       description:
-          "Makes the character jump. The number of the jump can be specified. Default is 1.",
+          "Makes the character perform a specified animation. The animation name should be one of the following: jump, spin, clap, thankful, greet, dance, chicken_dance, think.",
       parameters: {
         'type': 'object',
         'properties': {
-          'total': {
-            'type': 'int',
-            'description': 'The number of jumps to perform',
+          'animation': {
+            'type': 'string',
+            'description':
+                'Animation to perform. Choose one of: jump, spin, clap, thankful, greet, dance, chicken_dance, think.',
           },
+          'animate_count': {
+            'type': 'int',
+            'description':
+                'Number of times to perform the animation (only for certain animations). Default is 1.',
+          },
+          'response_text': {
+            'type': 'string',
+            'description':
+                "Text response that responds to the user's input with empathy and relevance",
+          },
+          'required': ['animation', 'animate_count', 'response_text'],
         },
-        'required': ['total'],
       },
     ),
+    // const Tool(
+    //   name: 'character_jump',
+    //   description:
+    //       "Makes the character jump. The number of the jump can be specified. Default is 1.",
+    //   parameters: {
+    //     'type': 'object',
+    //     'properties': {
+    //       'total': {
+    //         'type': 'int',
+    //         'description': 'The number of jumps to perform',
+    //       },
+    //     },
+    //     'required': ['total'],
+    //   },
+    // ),
     // const Tool(
     //   name: 'character_pushup',
     //   description:
@@ -65,22 +91,6 @@ class LlmService {
     //     'required': ['total'],
     //   },
     // ),
-    const Tool(
-      name: 'animate_character',
-      description:
-          "Makes the character perform a specified animation. The animation name should be one of the following: [spin,clap,thankful,greet,dance,chicken_dance, think]",
-      parameters: {
-        'type': 'object',
-        'properties': {
-          'animation': {
-            'type': 'string',
-            'description':
-                'Animation to perform. Choose one of: spin, clap, thankful, greet, dance, chicken_dance, think.',
-          },
-        },
-        'required': ['animation'],
-      },
-    ),
     // const Tool(
     //   name: 'character_spin/turn_around',
     //   description: "Makes the character spin or turn around.",
@@ -301,38 +311,50 @@ class LlmService {
     });
   }
 
-  Future<void> _handleFunctionCall(
+  Future<String> _handleFunctionCall(
     FunctionCallResponse functionCall,
     InferenceChat chat,
   ) async {
     switch (functionCall.name) {
-      case 'character_jump':
-        final total = functionCall.args['total'] as int?;
-        final jumpCount = (total != null && total > 0 ? total : 1).clamp(1, 10);
-        final jumpAnimationIndex = 0;
-        for (int i = 0; i < jumpCount; i++) {
-          await unityBridge.playAnimation(jumpAnimationIndex);
-          await Future.delayed(const Duration(seconds: 3));
-        }
-        break;
-      case 'character_pushup':
-        final total = functionCall.args['total'] as int?;
-        final pushupCount = (total != null && total > 0 ? total : 1).clamp(
-          1,
-          10,
-        );
-        final startplankAnimationIndex = 5;
-        final pushupAnimationIndex = 6;
-        await unityBridge.playAnimation(startplankAnimationIndex);
-        await Future.delayed(const Duration(seconds: 4));
-        for (int i = 0; i < pushupCount; i++) {
-          await unityBridge.playAnimation(pushupAnimationIndex);
-          await Future.delayed(const Duration(milliseconds: 700));
-        }
-        break;
+      // case 'character_jump':
+      //   final total = functionCall.args['total'] as int?;
+      //   final jumpCount = (total != null && total > 0 ? total : 1).clamp(1, 10);
+      //   final jumpAnimationIndex = 0;
+      //   for (int i = 0; i < jumpCount; i++) {
+      //     await unityBridge.playAnimation(jumpAnimationIndex);
+      //     await Future.delayed(const Duration(seconds: 3));
+      //   }
+      //   break;
+      // case 'character_pushup':
+      //   final total = functionCall.args['total'] as int?;
+      //   final pushupCount = (total != null && total > 0 ? total : 1).clamp(
+      //     1,
+      //     10,
+      //   );
+      //   final startplankAnimationIndex = 5;
+      //   final pushupAnimationIndex = 6;
+      //   await unityBridge.playAnimation(startplankAnimationIndex);
+      //   await Future.delayed(const Duration(seconds: 4));
+      //   for (int i = 0; i < pushupCount; i++) {
+      //     await unityBridge.playAnimation(pushupAnimationIndex);
+      //     await Future.delayed(const Duration(milliseconds: 700));
+      //   }
+      //   break;
       case 'animate_character':
         final animation = functionCall.args['animation'] as String?;
+        final animateCount = functionCall.args['animate_count'] as int?;
+        final responseText = functionCall.args['response_text'] as String?;
         switch (animation) {
+          case 'jump':
+            final jumpCount =
+                (animateCount != null && animateCount > 0 ? animateCount : 1)
+                    .clamp(1, 10);
+            final jumpAnimationIndex = 0;
+            for (int i = 0; i < jumpCount; i++) {
+              unawaited(unityBridge.playAnimation(jumpAnimationIndex));
+              await Future.delayed(const Duration(seconds: 3));
+            }
+            break;
           case 'spin':
             final spinAnimationIndex = 1;
             unawaited(unityBridge.playAnimation(spinAnimationIndex));
@@ -366,6 +388,9 @@ class LlmService {
             unawaited(unityBridge.playAnimation(thankfulAnimationIndex));
             break;
         }
+        return responseText ?? functionCall.toString();
+      default:
+        return functionCall.toString();
       // case 'character_spin/turn_around':
       //   final spinAnimationIndex = 1;
       //   unawaited(unityBridge.playAnimation(spinAnimationIndex));
@@ -427,7 +452,8 @@ class LlmService {
           if (r is TextResponse) {
             buffer.write(r.token);
           } else if (r is FunctionCallResponse) {
-            await _handleFunctionCall(r, chat);
+            String textResponse = await _handleFunctionCall(r, chat);
+            buffer.write(textResponse);
           } else {
             continue;
           }
@@ -436,7 +462,20 @@ class LlmService {
         String text = buffer.toString();
         // if (lastNonText != null && text.isEmpty) text = lastNonText.toString();
         final cleanedResponse = cleanLLMResponse(text);
-        return cleanedResponse;
+        try{
+          final cleanedResponsFuncCall = FunctionCallParser.parse(
+            cleanedResponse,
+            modelType: modelType,
+          );
+          if (cleanedResponsFuncCall == null) {
+            return cleanedResponse;
+          }
+          String textResponse = await _handleFunctionCall(
+            cleanedResponsFuncCall, chat);
+          return textResponse;
+        } catch(e){
+          return cleanedResponse;
+        }
       });
     });
   }

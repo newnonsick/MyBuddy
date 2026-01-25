@@ -345,7 +345,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 4,
                         children: [
                           Text(
                             model.id,
@@ -354,8 +357,7 @@ class _SettingsPageState extends State<SettingsPage> {
                               fontSize: 15,
                             ),
                           ),
-                          if (isActive) ...[
-                            const SizedBox(width: 8),
+                          if (isActive)
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 8,
@@ -377,7 +379,6 @@ class _SettingsPageState extends State<SettingsPage> {
                                 ),
                               ),
                             ),
-                          ],
                         ],
                       ),
                       const SizedBox(height: 2),
