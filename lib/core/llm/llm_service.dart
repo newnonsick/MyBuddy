@@ -335,35 +335,35 @@ class LlmService {
         switch (animation) {
           case 'spin':
             final spinAnimationIndex = 1;
-            await unityBridge.playAnimation(spinAnimationIndex);
+            unawaited(unityBridge.playAnimation(spinAnimationIndex));
             break;
           case 'clap':
             final clapAnimationIndex = 3;
-            await unityBridge.playAnimation(clapAnimationIndex);
+            unawaited(unityBridge.playAnimation(clapAnimationIndex));
             break;
           case 'thankful':
             final thankfulAnimationIndex = 7;
-            await unityBridge.playAnimation(thankfulAnimationIndex);
+            unawaited(unityBridge.playAnimation(thankfulAnimationIndex));
             break;
           case 'greet':
             final greetAnimationIndex = 8;
-            await unityBridge.playAnimation(greetAnimationIndex);
+            unawaited(unityBridge.playAnimation(greetAnimationIndex));
             break;
           case 'dance':
             final danceAnimationIndex = Random().nextInt(3) + 9; // 9,10,11
-            await unityBridge.playAnimation(danceAnimationIndex);
+            unawaited(unityBridge.playAnimation(danceAnimationIndex));
             break;
           case 'chicken_dance':
             final chickenDanceAnimationIndex = 4;
-            await unityBridge.playAnimation(chickenDanceAnimationIndex);
+            unawaited(unityBridge.playAnimation(chickenDanceAnimationIndex));
             break;
           case 'think':
             final thinkAnimationIndex = 2;
-            await unityBridge.playAnimation(thinkAnimationIndex);
+            unawaited(unityBridge.playAnimation(thinkAnimationIndex));
             break;
           default:
             final thankfulAnimationIndex = 7;
-            await unityBridge.playAnimation(thankfulAnimationIndex);
+            unawaited(unityBridge.playAnimation(thankfulAnimationIndex));
             break;
         }
       // case 'character_spin/turn_around':
@@ -401,6 +401,7 @@ class LlmService {
     cleaned = cleaned.replaceAll(thinkingRegex, '').trim();
     cleaned = cleaned.replaceAll(RegExp(r'<end_of_turn>\s*$'), '').trim();
     cleaned = cleaned.replaceAll(RegExp(r'<\|im_end\|>\s*$'), '').trim();
+    cleaned = cleaned.replaceAll(r'\n', '\n').trim();
 
     return cleaned;
   }
