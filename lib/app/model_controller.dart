@@ -95,8 +95,7 @@ class ModelController extends ChangeNotifier {
       if (!hasFile) continue;
       try {
         await _store.ensureRegistered(remote);
-      } catch (_) {
-      }
+      } catch (_) {}
     }
     await refreshInstalled();
   }
@@ -153,7 +152,7 @@ class ModelController extends ChangeNotifier {
     _pendingSelectionId = id;
     notifyListeners();
   }
-  
+
   Future<void> commitSelection() async {
     final id = _pendingSelectionId;
     await _selection.saveSelectedModelId(id);
@@ -166,5 +165,17 @@ class ModelController extends ChangeNotifier {
     await _selection.saveLastUsedModelId(id);
     _lastUsedModelId = id;
     notifyListeners();
+  }
+
+  Future<void> deleteModel(InstalledModel model) async {
+    await _store.delete(model);
+    if (_selectedModelId == model.id) {
+      _selectedModelId = null;
+      await _selection.saveSelectedModelId(null);
+    }
+    if (_pendingSelectionId == model.id) {
+      _pendingSelectionId = null;
+    }
+    await refreshInstalled();
   }
 }

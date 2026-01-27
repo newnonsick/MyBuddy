@@ -391,12 +391,51 @@ class _SettingsPageState extends State<SettingsPage> {
                     ],
                   ),
                 ),
+                if (!isActive)
+                  IconButton(
+                    icon: Icon(
+                      Icons.delete_rounded,
+                      size: 20,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.error.withValues(alpha: 0.6),
+                    ),
+                    onPressed: () => _confirmDelete(context, model),
+                  ),
               ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDelete(BuildContext context, dynamic model) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: const Text('Delete Model'),
+        content: Text('Are you sure you want to delete ${model.id}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      await widget.models.deleteModel(model);
+    }
   }
 
   Widget _buildModelLibrary(BuildContext context) {

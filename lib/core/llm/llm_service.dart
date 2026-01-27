@@ -61,64 +61,6 @@ class LlmService {
         },
       },
     ),
-    // const Tool(
-    //   name: 'character_jump',
-    //   description:
-    //       "Makes the character jump. The number of the jump can be specified. Default is 1.",
-    //   parameters: {
-    //     'type': 'object',
-    //     'properties': {
-    //       'total': {
-    //         'type': 'int',
-    //         'description': 'The number of jumps to perform',
-    //       },
-    //     },
-    //     'required': ['total'],
-    //   },
-    // ),
-    // const Tool(
-    //   name: 'character_pushup',
-    //   description:
-    //       "Makes the character do push-ups. The number of push-ups can be specified. Default is 1.",
-    //   parameters: {
-    //     'type': 'object',
-    //     'properties': {
-    //       'total': {
-    //         'type': 'int',
-    //         'description': 'The number of push-ups to perform',
-    //       },
-    //     },
-    //     'required': ['total'],
-    //   },
-    // ),
-    // const Tool(
-    //   name: 'character_spin/turn_around',
-    //   description: "Makes the character spin or turn around.",
-    // ),
-    // const Tool(
-    //   name: 'character_clap',
-    //   description:
-    //       "Makes the character clap their hands applauding. especially congratulations for users or after receiving praise",
-    // ),
-    // const Tool(
-    //   name: 'character_thankful',
-    //   description:
-    //       "Makes the character perform a thankful gesture. especially after receiving help from the user.",
-    // ),
-    // const Tool(
-    //   name: 'character_greet',
-    //   description:
-    //       "Makes the character perform a greeting gesture. especially for greeting the users.",
-    // ),
-    // const Tool(
-    //   name: 'character_dance',
-    //   description: "Makes the character perform a dance routine.",
-    // ),
-    // const Tool(
-    //   name: 'character_chicken_dance',
-    //   description:
-    //       "Makes the character perform the chicken dance. (special dance only perform when user request)",
-    // ),
   ];
 
   InferenceModel? _model;
@@ -311,49 +253,28 @@ class LlmService {
     });
   }
 
+  Future<void> _animateCharacterJump(int jumpCount) async {
+    jumpCount = jumpCount.clamp(1, 10);
+    final jumpAnimationIndex = 0;
+    for (int i = 0; i < jumpCount; i++) {
+      unawaited(unityBridge.playAnimation(jumpAnimationIndex));
+      await Future.delayed(const Duration(seconds: 3));
+    }
+  }
+
   Future<String> _handleFunctionCall(
     FunctionCallResponse functionCall,
     InferenceChat chat,
   ) async {
     switch (functionCall.name) {
-      // case 'character_jump':
-      //   final total = functionCall.args['total'] as int?;
-      //   final jumpCount = (total != null && total > 0 ? total : 1).clamp(1, 10);
-      //   final jumpAnimationIndex = 0;
-      //   for (int i = 0; i < jumpCount; i++) {
-      //     await unityBridge.playAnimation(jumpAnimationIndex);
-      //     await Future.delayed(const Duration(seconds: 3));
-      //   }
-      //   break;
-      // case 'character_pushup':
-      //   final total = functionCall.args['total'] as int?;
-      //   final pushupCount = (total != null && total > 0 ? total : 1).clamp(
-      //     1,
-      //     10,
-      //   );
-      //   final startplankAnimationIndex = 5;
-      //   final pushupAnimationIndex = 6;
-      //   await unityBridge.playAnimation(startplankAnimationIndex);
-      //   await Future.delayed(const Duration(seconds: 4));
-      //   for (int i = 0; i < pushupCount; i++) {
-      //     await unityBridge.playAnimation(pushupAnimationIndex);
-      //     await Future.delayed(const Duration(milliseconds: 700));
-      //   }
-      //   break;
       case 'animate_character':
         final animation = functionCall.args['animation'] as String?;
         final animateCount = functionCall.args['animate_count'] as int?;
         final responseText = functionCall.args['response_text'] as String?;
         switch (animation) {
           case 'jump':
-            final jumpCount =
-                (animateCount != null && animateCount > 0 ? animateCount : 1)
-                    .clamp(1, 10);
-            final jumpAnimationIndex = 0;
-            for (int i = 0; i < jumpCount; i++) {
-              unawaited(unityBridge.playAnimation(jumpAnimationIndex));
-              await Future.delayed(const Duration(seconds: 3));
-            }
+            final jumpCount = animateCount ?? 1;
+            unawaited(_animateCharacterJump(jumpCount));
             break;
           case 'spin':
             final spinAnimationIndex = 1;
@@ -391,30 +312,6 @@ class LlmService {
         return responseText ?? functionCall.toString();
       default:
         return functionCall.toString();
-      // case 'character_spin/turn_around':
-      //   final spinAnimationIndex = 1;
-      //   unawaited(unityBridge.playAnimation(spinAnimationIndex));
-      //   break;
-      // case 'character_clap':
-      //   final clapAnimationIndex = 3;
-      //   unawaited(unityBridge.playAnimation(clapAnimationIndex));
-      //   break;
-      // case 'character_thankful':
-      //   final thankfulAnimationIndex = 7;
-      //   unawaited(unityBridge.playAnimation(thankfulAnimationIndex));
-      //   break;
-      // case 'character_greet':
-      //   final greetAnimationIndex = 8;
-      //   unawaited(unityBridge.playAnimation(greetAnimationIndex));
-      //   break;
-      // case 'character_dance':
-      //   final danceAnimationIndex = Random().nextInt(3) + 9; // 9,10,11
-      //   unawaited(unityBridge.playAnimation(danceAnimationIndex));
-      //   break;
-      // case 'character_chicken_dance':
-      //   final chickenDanceAnimationIndex = 4;
-      //   unawaited(unityBridge.playAnimation(chickenDanceAnimationIndex));
-      //   break;
     }
   }
 
@@ -462,7 +359,7 @@ class LlmService {
         String text = buffer.toString();
         // if (lastNonText != null && text.isEmpty) text = lastNonText.toString();
         final cleanedResponse = cleanLLMResponse(text);
-        try{
+        try {
           final cleanedResponsFuncCall = FunctionCallParser.parse(
             cleanedResponse,
             modelType: modelType,
@@ -471,9 +368,11 @@ class LlmService {
             return cleanedResponse;
           }
           String textResponse = await _handleFunctionCall(
-            cleanedResponsFuncCall, chat);
+            cleanedResponsFuncCall,
+            chat,
+          );
           return textResponse;
-        } catch(e){
+        } catch (e) {
           return cleanedResponse;
         }
       });

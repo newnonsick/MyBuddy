@@ -231,4 +231,19 @@ class ModelStore {
       await safeDelete(tempFile);
     }
   }
+
+  Future<void> delete(InstalledModel model) async {
+    final file = File(model.localPath);
+    try {
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (_) {
+      // ignore
+    }
+    
+    final current = await listInstalled();
+    final updated = current.where((m) => m.id != model.id).toList();
+    await _writeInstalled(updated);
+  }
 }
