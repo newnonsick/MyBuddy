@@ -2,33 +2,29 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mybuddy/app/app_controller.dart';
-import 'package:mybuddy/app/model_controller.dart';
+import 'package:mybuddy/app/providers.dart';
 import 'package:mybuddy/features/chat/domain/chat_line.dart';
 import 'package:mybuddy/features/chat/presentation/widgets/chat_composer.dart';
 import 'package:mybuddy/features/chat/presentation/widgets/chat_transcript.dart';
 import 'package:mybuddy/features/settings/presentation/pages/settings_page.dart';
-import 'package:mybuddy/core/llm/llm_service.dart';
-import 'package:mybuddy/core/memory/memory_service.dart';
 import 'package:mybuddy/core/tts/tts_service.dart';
 import 'package:mybuddy/core/unity/unity_bridge.dart';
 import 'package:mybuddy/shared/widgets/glass/glass.dart';
 
-class BuddyHomePage extends StatefulWidget {
+class BuddyHomePage extends ConsumerStatefulWidget {
   const BuddyHomePage({super.key});
 
   @override
-  State<BuddyHomePage> createState() => _BuddyHomePageState();
+  ConsumerState<BuddyHomePage> createState() => _BuddyHomePageState();
 }
 
-class _BuddyHomePageState extends State<BuddyHomePage> {
+class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
   static const MethodChannel _unityChannel = MethodChannel('unity_bridge');
   final UnityBridge _unity = UnityBridge(channel: _unityChannel);
   final TtsService _tts = TtsService();
-
-  late final AppController _controller;
-  late final ModelController _models;
 
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
@@ -43,36 +39,20 @@ class _BuddyHomePageState extends State<BuddyHomePage> {
   void initState() {
     super.initState();
 
-    _models = ModelController();
-    _controller = AppController(
-      models: _models,
-      llm: LlmService(unityBridge: _unity),
-      memory: MemoryService(),
-    );
-
-    _controller.addListener(_onControllerChanged);
-
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _controller.startup();
+      final controller = ref.read(appControllerProvider);
+      await controller.startup();
     });
   }
 
-  void _onControllerChanged() {
-    if (mounted) setState(() {});
-  }
-
   Future<void> _openSettings() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => SettingsPage(models: _models, app: _controller),
-      ),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const SettingsPage()));
   }
 
   @override
   void dispose() {
-    _controller.removeListener(_onControllerChanged);
-    _controller.dispose();
     _tts.dispose();
     _textController.dispose();
     _scrollController.dispose();
@@ -81,6 +61,8 @@ class _BuddyHomePageState extends State<BuddyHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final controller = ref.watch(appControllerProvider);
+
     return PopScope(
       canPop: true,
       child: Scaffold(
@@ -102,9 +84,9 @@ class _BuddyHomePageState extends State<BuddyHomePage> {
                 left: 12,
                 child: GlassPill(
                   child: Text(
-                    _controller.installingLlm
+                    controller.installingLlm
                         ? 'Preparing model…'
-                        : (_controller.llmInstalled
+                        : (controller.llmInstalled
                               ? 'MyBuddy'
                               : 'Select a model in Settings'),
                     style: const TextStyle(
@@ -120,13 +102,13 @@ class _BuddyHomePageState extends State<BuddyHomePage> {
                 right: 12,
                 top: 74,
                 bottom: 96,
-                child: _buildTranscript(context),
+                child: _buildTranscript(context, controller),
               ),
               Positioned(
                 left: 12,
                 right: 12,
                 bottom: 12,
-                child: _buildComposer(),
+                child: _buildComposer(controller),
               ),
             ],
           ),
@@ -135,23 +117,23 @@ class _BuddyHomePageState extends State<BuddyHomePage> {
     );
   }
 
-  Widget _buildTranscript(BuildContext context) {
-    if (_controller.installingLlm) {
+  Widget _buildTranscript(BuildContext context, AppController controller) {
+    if (controller.installingLlm) {
       return const SizedBox.shrink();
     }
 
-    if (_controller.hideChatLog) {
+    if (controller.hideChatLog) {
       return const SizedBox.shrink();
     }
 
-    if (!_controller.llmInstalled) {
+    if (!controller.llmInstalled) {
       return Center(
         child: GlassCard(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                _controller.llmError ?? 'No model selected.',
+                controller.llmError ?? 'No model selected.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
@@ -169,18 +151,18 @@ class _BuddyHomePageState extends State<BuddyHomePage> {
       chat: _chat,
       scrollController: _scrollController,
       sending: _sending,
-      hideChatLog: _controller.hideChatLog,
+      hideChatLog: controller.hideChatLog,
     );
   }
 
-  Widget _buildComposer() {
-    final canSend = _controller.llmInstalled && !_sending;
+  Widget _buildComposer(AppController controller) {
+    final canSend = controller.llmInstalled && !_sending;
     return ChatComposer(
       textController: _textController,
       canSend: canSend,
       sending: _sending,
       speaking: _speaking,
-      isModelReady: _controller.llmInstalled,
+      isModelReady: controller.llmInstalled,
       onSend: _onSend,
       onStopSpeaking: _onStopSpeaking,
     );
@@ -213,7 +195,8 @@ class _BuddyHomePageState extends State<BuddyHomePage> {
     });
 
     try {
-      final reply = await _controller.chatOnce(text);
+      final controller = ref.read(appControllerProvider);
+      final reply = await controller.chatOnce(text);
       if (!mounted) return;
       if (reply.trim().isEmpty) return;
       setState(() {
@@ -264,12 +247,13 @@ class _BuddyHomePageState extends State<BuddyHomePage> {
         context,
       ).showSnackBar(SnackBar(content: Text('TTS/Unity failed: $e')));
     } finally {
-      if (!mounted) return;
-      setState(() {
-        if (generation == _speakGeneration) {
-          _speaking = false;
-        }
-      });
+      if (mounted) {
+        setState(() {
+          if (generation == _speakGeneration) {
+            _speaking = false;
+          }
+        });
+      }
     }
   }
 

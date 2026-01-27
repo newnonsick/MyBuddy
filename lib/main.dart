@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mybuddy/app/my_app.dart';
 import 'package:mybuddy/core/notification/notification_service.dart';
@@ -17,5 +18,5 @@ Future<void> main() async {
   );
   lifecycleObserver.initialize();
 
-  runApp(const MyApp());
+  runApp(const ProviderScope(child: MyApp()));
 }

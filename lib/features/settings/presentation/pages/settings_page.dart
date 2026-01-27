@@ -1,45 +1,46 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mybuddy/app/app_controller.dart';
 import 'package:mybuddy/app/model_controller.dart';
+import 'package:mybuddy/app/providers.dart';
+import 'package:mybuddy/core/model/model_descriptor.dart';
+import 'package:mybuddy/core/model/model_store.dart';
 import 'package:mybuddy/core/notification/notification_service.dart';
 import 'package:mybuddy/core/utils/format_bytes.dart';
 import 'package:mybuddy/shared/widgets/glass/glass.dart';
 
-class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key, required this.models, required this.app});
-
-  final ModelController models;
-  final AppController app;
+class SettingsPage extends ConsumerStatefulWidget {
+  const SettingsPage({super.key});
 
   @override
-  State<SettingsPage> createState() => _SettingsPageState();
+  ConsumerState<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> {
+class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _notificationService = NotificationService();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await widget.models.loadLocalState();
-      await widget.models.refreshInstalled();
-      await widget.models.refreshCatalog();
+      final models = ref.read(modelControllerProvider);
+      await models.loadLocalState();
+      await models.refreshInstalled();
+      await models.refreshCatalog();
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final models = ref.watch(modelControllerProvider);
+    final app = ref.watch(appControllerProvider);
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
-        child: AnimatedBuilder(
-          animation: Listenable.merge([
-            widget.models,
-            widget.app,
-            _notificationService,
-          ]),
+        child: ListenableBuilder(
+          listenable: _notificationService,
           builder: (context, _) {
             return CustomScrollView(
               slivers: [
@@ -49,7 +50,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     context,
                     icon: Icons.memory_rounded,
                     title: 'Active Model',
-                    children: [_buildActiveModelCard(context)],
+                    children: [_buildActiveModelCard(context, models, app)],
                   ),
                 ),
                 SliverToBoxAdapter(
@@ -57,7 +58,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     context,
                     icon: Icons.download_rounded,
                     title: 'Model Library',
-                    children: [_buildModelLibrary(context)],
+                    children: [_buildModelLibrary(context, models)],
                   ),
                 ),
                 SliverToBoxAdapter(
@@ -65,7 +66,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     context,
                     icon: Icons.tune_rounded,
                     title: 'Preferences',
-                    children: [_buildPreferencesCard(context)],
+                    children: [_buildPreferencesCard(context, app)],
                   ),
                 ),
                 const SliverToBoxAdapter(child: SizedBox(height: 32)),
@@ -138,10 +139,14 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _buildActiveModelCard(BuildContext context) {
-    final installed = widget.models.installedModels;
-    final pendingId = widget.models.pendingSelectionId;
-    final installing = widget.app.installingLlm;
+  Widget _buildActiveModelCard(
+    BuildContext context,
+    ModelController models,
+    AppController app,
+  ) {
+    final installed = models.installedModels;
+    final pendingId = models.pendingSelectionId;
+    final installing = app.installingLlm;
 
     if (installed.isEmpty) {
       return GlassPanel(
@@ -179,20 +184,21 @@ class _SettingsPageState extends State<SettingsPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           ...installed.map((m) {
-            final isActive = m.id == widget.models.selectedModelId;
+            final isActive = m.id == models.selectedModelId;
             final isSelected = m.id == pendingId;
             return _buildModelOption(
               context,
               model: m,
               isSelected: isSelected,
               isActive: isActive,
+              models: models,
               onTap: installing || isActive
                   ? null
-                  : () => widget.models.setPendingSelection(m.id),
+                  : () => models.setPendingSelection(m.id),
             );
           }),
 
-          if (widget.app.llmError != null) ...[
+          if (app.llmError != null) ...[
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
@@ -212,7 +218,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      widget.app.llmError!,
+                      app.llmError!,
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.error,
                         fontSize: 13,
@@ -229,8 +235,7 @@ class _SettingsPageState extends State<SettingsPage> {
           Builder(
             builder: (context) {
               final isAlreadyActive =
-                  pendingId == widget.models.selectedModelId &&
-                  widget.app.llmInstalled;
+                  pendingId == models.selectedModelId && app.llmInstalled;
 
               return SizedBox(
                 height: 48,
@@ -239,10 +244,10 @@ class _SettingsPageState extends State<SettingsPage> {
                       ? null
                       : () async {
                           final navigator = Navigator.of(context);
-                          await widget.models.commitSelection();
-                          await widget.app.activateSelectedModel();
+                          await models.commitSelection();
+                          await app.activateSelectedModel();
                           if (!mounted) return;
-                          if (widget.app.llmInstalled) {
+                          if (app.llmInstalled) {
                             navigator.pop();
                           }
                         },
@@ -277,9 +282,10 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _buildModelOption(
     BuildContext context, {
-    required dynamic model,
+    required InstalledModel model,
     required bool isSelected,
     required bool isActive,
+    required ModelController models,
     required VoidCallback? onTap,
   }) {
     return Padding(
@@ -410,7 +416,10 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context, dynamic model) async {
+  Future<void> _confirmDelete(
+    BuildContext context,
+    InstalledModel model,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -434,15 +443,16 @@ class _SettingsPageState extends State<SettingsPage> {
     );
 
     if (confirmed == true && mounted) {
-      await widget.models.deleteModel(model);
+      final models = ref.read(modelControllerProvider);
+      await models.deleteModel(model);
     }
   }
 
-  Widget _buildModelLibrary(BuildContext context) {
-    final state = widget.models.catalogState;
-    final downloading = widget.models.downloading;
-    final progress = widget.models.downloadProgress;
-    final err = widget.models.downloadError;
+  Widget _buildModelLibrary(BuildContext context, ModelController models) {
+    final state = models.catalogState;
+    final downloading = models.downloading;
+    final progress = models.downloadProgress;
+    final err = models.downloadError;
 
     if (state == CatalogState.loading || state == CatalogState.idle) {
       return GlassPanel(
@@ -480,13 +490,13 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const SizedBox(height: 12),
             Text(
-              widget.models.catalogError ?? 'Failed to load models',
+              models.catalogError ?? 'Failed to load models',
               textAlign: TextAlign.center,
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
             const SizedBox(height: 12),
             TextButton.icon(
-              onPressed: () => widget.models.refreshCatalog(),
+              onPressed: () => models.refreshCatalog(),
               icon: const Icon(Icons.refresh_rounded, size: 18),
               label: const Text('Retry'),
             ),
@@ -495,8 +505,8 @@ class _SettingsPageState extends State<SettingsPage> {
       );
     }
 
-    final items = widget.models.catalogItems;
-    final installedIds = widget.models.installedModels.map((m) => m.id).toSet();
+    final items = models.catalogItems;
+    final installedIds = models.installedModels.map((m) => m.id).toSet();
 
     return GlassPanel(
       padding: const EdgeInsets.all(12),
@@ -504,7 +514,7 @@ class _SettingsPageState extends State<SettingsPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (downloading && progress != null) ...[
-            _buildDownloadProgress(context, progress),
+            _buildDownloadProgress(context, progress, models),
             const SizedBox(height: 12),
             const Divider(height: 1, color: Colors.white12),
             const SizedBox(height: 12),
@@ -557,7 +567,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     isInstalled: isInstalled,
                     isDisabled: downloading,
                     onDownload: () =>
-                        _handleDownload(context, model, isInstalled),
+                        _handleDownload(context, model, isInstalled, models),
                   ),
                 ],
               );
@@ -567,7 +577,11 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _buildDownloadProgress(BuildContext context, dynamic progress) {
+  Widget _buildDownloadProgress(
+    BuildContext context,
+    ModelDownloadProgress progress,
+    ModelController models,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -588,7 +602,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
             TextButton(
-              onPressed: () => widget.models.cancelDownload(),
+              onPressed: () => models.cancelDownload(),
               style: TextButton.styleFrom(
                 foregroundColor: Theme.of(context).colorScheme.error,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -638,7 +652,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _buildModelTile(
     BuildContext context, {
-    required dynamic model,
+    required RemoteModelDescriptor model,
     required bool isInstalled,
     required bool isDisabled,
     required VoidCallback onDownload,
@@ -739,8 +753,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _handleDownload(
     BuildContext context,
-    dynamic model,
+    RemoteModelDescriptor model,
     bool isInstalled,
+    ModelController models,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
 
@@ -754,11 +769,11 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
 
-    await widget.models.startDownload(model);
+    await models.startDownload(model);
     if (!mounted) return;
-    await widget.models.refreshInstalled();
+    await models.refreshInstalled();
 
-    final err = widget.models.downloadError;
+    final err = models.downloadError;
     if (err == null) {
       messenger.showSnackBar(
         const SnackBar(
@@ -769,7 +784,7 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Widget _buildPreferencesCard(BuildContext context) {
+  Widget _buildPreferencesCard(BuildContext context, AppController app) {
     return GlassPanel(
       padding: EdgeInsets.zero,
       child: Column(
@@ -783,8 +798,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 icon: Icons.visibility_off_rounded,
                 title: 'Hide Chat Log',
                 subtitle: 'Hide messages from the screen',
-                value: widget.app.hideChatLog,
-                onChanged: widget.app.setHideChatLog,
+                value: app.hideChatLog,
+                onChanged: app.setHideChatLog,
               ),
             ],
           ),
