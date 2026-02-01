@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
 
 import 'google_auth_service.dart';
@@ -37,8 +38,10 @@ class CalendarEvent {
       startTime = start!.date!;
       endTime = end?.date ?? startTime.add(const Duration(days: 1));
     } else {
-      startTime = start?.dateTime ?? DateTime.now();
-      endTime = end?.dateTime ?? startTime.add(const Duration(hours: 1));
+      final utcStart = start?.dateTime ?? DateTime.now();
+      final utcEnd = end?.dateTime ?? utcStart.add(const Duration(hours: 1));
+      startTime = utcStart.toLocal();
+      endTime = utcEnd.toLocal();
     }
 
     return CalendarEvent(
@@ -53,18 +56,27 @@ class CalendarEvent {
     );
   }
 
-  calendar.Event toGoogleEvent() {
+  Future<calendar.Event> toGoogleEvent() async {
     final event = calendar.Event();
     event.summary = title;
     event.description = description;
     event.location = location;
 
+    final timeZoneInfo = await FlutterTimezone.getLocalTimezone();
+    final timeZoneName = timeZoneInfo.identifier;
+
     if (isAllDay) {
       event.start = calendar.EventDateTime(date: startTime);
       event.end = calendar.EventDateTime(date: endTime);
     } else {
-      event.start = calendar.EventDateTime(dateTime: startTime);
-      event.end = calendar.EventDateTime(dateTime: endTime);
+      event.start = calendar.EventDateTime(
+        dateTime: startTime,
+        timeZone: timeZoneName,
+      );
+      event.end = calendar.EventDateTime(
+        dateTime: endTime,
+        timeZone: timeZoneName,
+      );
     }
 
     return event;
@@ -238,7 +250,7 @@ class GoogleCalendarService extends ChangeNotifier {
         location: location,
       );
 
-      final googleEvent = event.toGoogleEvent();
+      final googleEvent = await event.toGoogleEvent();
       final createdEvent = await _calendarApi!.events.insert(
         googleEvent,
         'primary',
