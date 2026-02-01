@@ -7,18 +7,24 @@ class GlassCard extends StatelessWidget {
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(14),
+    this.tint,
   });
 
   final Widget child;
   final EdgeInsets padding;
+  final Color? tint;
 
   @override
   Widget build(BuildContext context) {
     return GlassSurface(
       borderRadius: BorderRadius.circular(24),
-      blurSigma: 18,
+      blurSigma: 14,
       padding: padding,
-      startColor: Colors.white.withValues(alpha: 0.12),
+      startColor: GlassSurface.blackTintFrom(tint, baseAlpha: 0.30),
+      elevation: 14,
+      borderOpacity: 0.22,
+      highlightOpacity: 0.18,
+      noiseOpacity: 0.014,
       child: child,
     );
   }

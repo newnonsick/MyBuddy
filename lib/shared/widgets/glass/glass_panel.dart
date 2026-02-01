@@ -7,18 +7,24 @@ class GlassPanel extends StatelessWidget {
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(14),
+    this.tint,
   });
 
   final Widget child;
   final EdgeInsets padding;
+  final Color? tint;
 
   @override
   Widget build(BuildContext context) {
     return GlassSurface(
       borderRadius: BorderRadius.circular(20),
-      blurSigma: 18,
+      blurSigma: 12,
       padding: padding,
-      startColor: Colors.white.withValues(alpha: 0.12),
+      startColor: GlassSurface.blackTintFrom(tint, baseAlpha: 0.28),
+      elevation: 12,
+      borderOpacity: 0.22,
+      highlightOpacity: 0.17,
+      noiseOpacity: 0.014,
       child: child,
     );
   }

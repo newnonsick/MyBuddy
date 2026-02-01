@@ -20,8 +20,8 @@ class GlassChatBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     return GlassSurface(
       borderRadius: borderRadius,
-      blurSigma: 25,
-      startColor: Colors.white.withValues(alpha: 0.12),
+      blurSigma: 14,
+      startColor: GlassSurface.blackTintFrom(tint, baseAlpha: 0.26),
       padding: padding,
       child: child,
     );

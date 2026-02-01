@@ -25,16 +25,19 @@ class GlassIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final iconColor = Theme.of(
+      context,
+    ).colorScheme.onSurface.withValues(alpha: 0.92);
     switch (_variant) {
       case _GlassIconButtonVariant.pill:
         return GlassPill(
           child: IconButton(
             tooltip: tooltip,
             onPressed: onPressed,
-            icon: Icon(icon, size: 18),
+            icon: Icon(icon, size: 20, color: iconColor),
             visualDensity: VisualDensity.compact,
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
           ),
         );
       case _GlassIconButtonVariant.panel:
@@ -43,10 +46,10 @@ class GlassIconButton extends StatelessWidget {
           child: IconButton(
             tooltip: tooltip,
             onPressed: onPressed,
-            icon: Icon(icon, size: 22),
+            icon: Icon(icon, size: 22, color: iconColor),
             visualDensity: VisualDensity.compact,
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
           ),
         );
     }

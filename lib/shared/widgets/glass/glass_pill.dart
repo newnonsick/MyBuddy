@@ -18,9 +18,13 @@ class GlassPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return GlassSurface(
       borderRadius: BorderRadius.circular(999),
-      blurSigma: 16,
+      blurSigma: 10,
       padding: padding,
-      startColor: (tint ?? Colors.white.withValues(alpha: 0.12)),
+      startColor: GlassSurface.blackTintFrom(tint, baseAlpha: 0.26),
+      elevation: 10,
+      borderOpacity: 0.24,
+      highlightOpacity: 0.16,
+      noiseOpacity: 0.012,
       child: child,
     );
   }

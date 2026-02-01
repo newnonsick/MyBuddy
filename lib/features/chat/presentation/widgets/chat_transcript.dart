@@ -34,8 +34,8 @@ class ChatTranscript extends StatelessWidget {
           final line = chat[index];
           final hideBubbles = hideChatLog;
           final bubbleColor = line.isUser
-              ? Colors.white.withValues(alpha: 0.14)
-              : Colors.white.withValues(alpha: 0.10);
+              ? Colors.white.withValues(alpha: 0.18)
+              : Colors.white.withValues(alpha: 0.14);
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Align(
