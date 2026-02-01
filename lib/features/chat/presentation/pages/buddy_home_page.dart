@@ -9,6 +9,7 @@ import 'package:mybuddy/app/providers.dart';
 import 'package:mybuddy/features/chat/domain/chat_line.dart';
 import 'package:mybuddy/features/chat/presentation/widgets/chat_composer.dart';
 import 'package:mybuddy/features/chat/presentation/widgets/chat_transcript.dart';
+import 'package:mybuddy/features/google_calendar/presentation/pages/google_calendar_page.dart';
 import 'package:mybuddy/features/settings/presentation/pages/settings_page.dart';
 import 'package:mybuddy/core/tts/tts_service.dart';
 import 'package:mybuddy/core/unity/unity_bridge.dart';
@@ -51,6 +52,43 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
     ).push(MaterialPageRoute<void>(builder: (_) => const SettingsPage()));
   }
 
+  Future<void> _openCalendar() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const GoogleCalendarPage()));
+  }
+
+  Widget _buildCalendarButton() {
+    final authService = ref.watch(googleAuthServiceProvider);
+    final isSignedIn = authService.isSignedIn;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        GlassIconButton.pill(
+          tooltip: 'Calendar',
+          icon: Icons.calendar_month_rounded,
+          onPressed: _openCalendar,
+        ),
+        Positioned(
+          top: -2,
+          right: -2,
+          child: Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: isSignedIn
+                  ? const Color(0xFF34C759)
+                  : const Color(0xFFFF3B30),
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFF111217), width: 1.5),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   void dispose() {
     _tts.dispose();
@@ -73,10 +111,17 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
               Positioned(
                 top: 10,
                 right: 12,
-                child: GlassIconButton.pill(
-                  tooltip: 'Settings',
-                  icon: Icons.settings,
-                  onPressed: _openSettings,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildCalendarButton(),
+                    const SizedBox(width: 8),
+                    GlassIconButton.pill(
+                      tooltip: 'Settings',
+                      icon: Icons.settings,
+                      onPressed: _openSettings,
+                    ),
+                  ],
                 ),
               ),
               Positioned(

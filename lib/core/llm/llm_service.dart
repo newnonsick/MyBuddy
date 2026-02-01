@@ -3,6 +3,8 @@ import 'dart:math';
 
 import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:flutter/services.dart';
+import 'package:mybuddy/core/google/google_auth_service.dart';
+import 'package:mybuddy/core/google/google_calendar_service.dart';
 import 'package:mybuddy/core/unity/unity_bridge.dart';
 
 class LlmService {
@@ -19,6 +21,8 @@ class LlmService {
     this.supportsFunctionCalls = false,
     this.modelFileType = ModelFileType.task,
     required this.unityBridge,
+    this.googleAuthService,
+    this.googleCalendarService,
   });
 
   ModelType modelType;
@@ -33,35 +37,89 @@ class LlmService {
   bool supportsFunctionCalls;
   ModelFileType modelFileType;
   UnityBridge unityBridge;
+  GoogleAuthService? googleAuthService;
+  GoogleCalendarService? googleCalendarService;
 
-  final List<Tool> _tools = [
-    const Tool(
-      name: 'animate_character',
-      description:
-          "Makes the character perform a specified animation. The animation name should be one of the following: jump, spin, clap, thankful, greet, dance, chicken_dance, think.",
-      parameters: {
-        'type': 'object',
-        'properties': {
-          'animation': {
-            'type': 'string',
-            'description':
-                'Animation to perform. Choose one of: jump, spin, clap, thankful, greet, dance, chicken_dance, think.',
-          },
-          'animate_count': {
-            'type': 'int',
-            'description':
-                'Number of times to perform the animation (only for certain animations). Default is 1.',
-          },
-          'response_text': {
-            'type': 'string',
-            'description':
-                "Text response that responds to the user's input with empathy and relevance",
-          },
-          'required': ['animation', 'animate_count', 'response_text'],
+  static const Tool _animateCharacterTool = Tool(
+    name: 'animate_character',
+    description:
+        "Makes the character perform a specified animation. The animation name should be one of the following: jump, spin, clap, thankful, greet, dance, chicken_dance, think.",
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'animation': {
+          'type': 'string',
+          'description':
+              'Animation to perform. Choose one of: jump, spin, clap, thankful, greet, dance, chicken_dance, think.',
+        },
+        'animate_count': {
+          'type': 'int',
+          'description':
+              'Number of times to perform the animation (only for certain animations). Default is 1.',
+        },
+        'response_text': {
+          'type': 'string',
+          'description':
+              "Text response that responds to the user's input with empathy and relevance",
+        },
+        'required': ['animation', 'animate_count', 'response_text'],
+      },
+    },
+  );
+
+  static const Tool _createCalendarEventTool = Tool(
+    name: 'create_calendar_event',
+    description:
+        'Creates a new event on the user\'s Google Calendar. Use this when the user wants to schedule an appointment, reminder, meeting, or any calendar event. Parse natural language dates/times from the user\'s request.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'title': {
+          'type': 'string',
+          'description': 'The title or name of the event.',
+        },
+        'description': {
+          'type': 'string',
+          'description': 'Optional description or notes for the event.',
+        },
+        'start_date': {
+          'type': 'string',
+          'description':
+              'The start date and time in ISO 8601 format (e.g., "2026-02-15T14:00:00"). For all-day events, use date only (e.g., "2026-02-15").',
+        },
+        'end_date': {
+          'type': 'string',
+          'description':
+              'The end date and time in ISO 8601 format. For all-day events, use date only. If not specified, defaults to 1 hour after start.',
+        },
+        'is_all_day': {
+          'type': 'boolean',
+          'description': 'Whether this is an all-day event. Default is false.',
+        },
+        'location': {
+          'type': 'string',
+          'description': 'Optional location for the event.',
+        },
+        'response_text': {
+          'type': 'string',
+          'description':
+              'A friendly confirmation message to tell the user about the created event.',
         },
       },
-    ),
-  ];
+      'required': ['title', 'start_date', 'response_text'],
+    },
+  );
+
+  List<Tool> get _tools {
+    final tools = <Tool>[_animateCharacterTool];
+
+    if (googleAuthService?.isSignedIn == true &&
+        googleCalendarService != null) {
+      tools.add(_createCalendarEventTool);
+    }
+
+    return tools;
+  }
 
   InferenceModel? _model;
   InferenceChat? _chat;
@@ -310,8 +368,76 @@ class LlmService {
             break;
         }
         return responseText ?? functionCall.toString();
+
+      case 'create_calendar_event':
+        return await _handleCreateCalendarEvent(functionCall);
+
       default:
         return functionCall.toString();
+    }
+  }
+
+  Future<String> _handleCreateCalendarEvent(
+    FunctionCallResponse functionCall,
+  ) async {
+    final calendarService = googleCalendarService;
+    final authService = googleAuthService;
+
+    if (calendarService == null ||
+        authService == null ||
+        !authService.isSignedIn) {
+      return functionCall.args['response_text'] as String? ??
+          'Sorry, I couldn\'t create the event. Please sign in to Google Calendar first.';
+    }
+
+    try {
+      final title = functionCall.args['title'] as String?;
+      final description = functionCall.args['description'] as String?;
+      final startDateStr = functionCall.args['start_date'] as String?;
+      final endDateStr = functionCall.args['end_date'] as String?;
+      final isAllDay = functionCall.args['is_all_day'] as bool? ?? false;
+      final location = functionCall.args['location'] as String?;
+      final responseText = functionCall.args['response_text'] as String?;
+
+      if (title == null || startDateStr == null) {
+        return responseText ??
+            'Sorry, I need at least a title and date to create an event.';
+      }
+
+      final startTime = DateTime.tryParse(startDateStr);
+      if (startTime == null) {
+        return responseText ?? 'Sorry, I couldn\'t understand the date format.';
+      }
+
+      DateTime endTime;
+      if (endDateStr != null) {
+        endTime =
+            DateTime.tryParse(endDateStr) ??
+            startTime.add(const Duration(hours: 1));
+      } else {
+        endTime = isAllDay
+            ? startTime.add(const Duration(days: 1))
+            : startTime.add(const Duration(hours: 1));
+      }
+
+      final result = await calendarService.createEvent(
+        title: title,
+        description: description,
+        startTime: startTime,
+        endTime: endTime,
+        isAllDay: isAllDay,
+        location: location,
+      );
+
+      if (result.isSuccess) {
+        return responseText ?? 'I\'ve added "$title" to your calendar.';
+      } else {
+        return responseText ??
+            'Sorry, I couldn\'t create the event: ${result.error}';
+      }
+    } catch (e) {
+      return functionCall.args['response_text'] as String? ??
+          'Sorry, something went wrong while creating the event.';
     }
   }
 

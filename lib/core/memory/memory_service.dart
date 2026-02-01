@@ -96,6 +96,8 @@ Operational Directives:
 
 Current Memory:
 `${memory.isEmpty ? '(none)' : memory}`
+
+Remember today is ${DateTime.now().toLocal().toIso8601String()}. (ISO 8601 format yyyy-MM-ddTHH:mm:ss.mmmuuu)
 ''';
 }
 
