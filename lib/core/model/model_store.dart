@@ -157,6 +157,125 @@ class ModelStore {
     return next;
   }
 
+  bool _isGoogleDriveUrl(String url) {
+    return url.contains('drive.google.com') ||
+        url.contains('docs.google.com') ||
+        url.contains('drive.usercontent.google.com');
+  }
+
+  String? _extractGoogleDriveFileId(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri != null && uri.queryParameters.containsKey('id')) {
+      return uri.queryParameters['id'];
+    }
+    final regExp = RegExp(r'/d/([a-zA-Z0-9_-]+)');
+    final match = regExp.firstMatch(url);
+    return match?.group(1);
+  }
+
+  Map<String, String>? _parseGoogleDriveForm(String htmlContent) {
+    final actionRegex = RegExp(r'<form[^>]*action="([^"]+)"');
+    final actionMatch = actionRegex.firstMatch(htmlContent);
+    if (actionMatch == null) return null;
+
+    final result = <String, String>{'action': actionMatch.group(1)!};
+
+    final inputRegex = RegExp(
+      r'<input[^>]*type="hidden"[^>]*name="([^"]+)"[^>]*value="([^"]*)"',
+    );
+    for (final match in inputRegex.allMatches(htmlContent)) {
+      final name = match.group(1);
+      final value = match.group(2);
+      if (name != null && value != null) {
+        result[name] = value;
+      }
+    }
+
+    final altInputRegex = RegExp(
+      r'<input[^>]*value="([^"]*)"[^>]*name="([^"]+)"',
+    );
+    for (final match in altInputRegex.allMatches(htmlContent)) {
+      final value = match.group(1);
+      final name = match.group(2);
+      if (name != null && value != null && !result.containsKey(name)) {
+        result[name] = value;
+      }
+    }
+
+    return result;
+  }
+
+  String? _buildGoogleDriveDownloadUrl(Map<String, String> formParams) {
+    final action = formParams['action'];
+    if (action == null) return null;
+
+    final queryParams = <String, String>{};
+
+    for (final entry in formParams.entries) {
+      if (entry.key != 'action' && entry.value.isNotEmpty) {
+        queryParams[entry.key] = entry.value;
+      }
+    }
+
+    if (queryParams.isEmpty) return null;
+
+    final uri = Uri.parse(action).replace(queryParameters: queryParams);
+    return uri.toString();
+  }
+
+  Future<String> _resolveGoogleDriveUrl(
+    String originalUrl,
+    CancelToken cancelToken,
+  ) async {
+    final fileId = _extractGoogleDriveFileId(originalUrl);
+    if (fileId == null) {
+      return originalUrl;
+    }
+
+    final baseUrl = 'https://drive.usercontent.google.com/uc?export=download&id=$fileId';
+
+    final response = await _dio.get<dynamic>(
+      baseUrl,
+      cancelToken: cancelToken,
+      options: Options(
+        followRedirects: true,
+        validateStatus: (status) => status != null && status < 400,
+        responseType: ResponseType.plain,
+      ),
+    );
+
+    if (response.data is String) {
+      final htmlContent = response.data as String;
+      final formParams = _parseGoogleDriveForm(htmlContent);
+
+      if (formParams != null) {
+        formParams['id'] ??= fileId;
+
+        final downloadUrl = _buildGoogleDriveDownloadUrl(formParams);
+        if (downloadUrl != null) {
+          return downloadUrl;
+        }
+      }
+    }
+
+    final cookies = response.headers['set-cookie'];
+    if (cookies != null) {
+      for (final cookie in cookies) {
+        if (cookie.contains('download_warning')) {
+          final tokenMatch = RegExp(
+            r'download_warning[^=]*=([^;]+)',
+          ).firstMatch(cookie);
+          if (tokenMatch != null) {
+            final confirmToken = tokenMatch.group(1);
+            return '$baseUrl&confirm=$confirmToken';
+          }
+        }
+      }
+    }
+
+    return 'https://drive.usercontent.google.com/download?id=$fileId&export=download&confirm=t';
+  }
+
   Future<InstalledModel> download({
     required RemoteModelDescriptor remote,
     required void Function(ModelDownloadProgress progress) onProgress,
@@ -192,11 +311,20 @@ class ModelStore {
     int lastMs = 0;
 
     try {
+      String downloadUrl = remote.downloadUrl;
+      if (_isGoogleDriveUrl(downloadUrl)) {
+        downloadUrl = await _resolveGoogleDriveUrl(downloadUrl, cancelToken);
+      }
+
       await _dio.download(
-        remote.downloadUrl,
+        downloadUrl,
         tempPath,
         cancelToken: cancelToken,
         deleteOnError: true,
+        options: Options(
+          followRedirects: true,
+          validateStatus: (status) => status != null && status < 400,
+        ),
         onReceiveProgress: (received, total) {
           final elapsedMs = stopwatch.elapsedMilliseconds;
           final deltaBytes = received - lastBytes;
@@ -241,7 +369,7 @@ class ModelStore {
     } catch (_) {
       // ignore
     }
-    
+
     final current = await listInstalled();
     final updated = current.where((m) => m.id != model.id).toList();
     await _writeInstalled(updated);
