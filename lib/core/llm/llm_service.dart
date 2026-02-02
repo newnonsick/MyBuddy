@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:mybuddy/core/google/google_auth_service.dart';
 import 'package:mybuddy/core/google/google_calendar_service.dart';
 import 'package:mybuddy/core/unity/unity_bridge.dart';
+import 'package:mybuddy/shared/utils/json_extractor.dart';
 
 class LlmService {
   LlmService({
@@ -320,10 +321,7 @@ class LlmService {
     }
   }
 
-  Future<String> _handleFunctionCall(
-    FunctionCallResponse functionCall,
-    InferenceChat chat,
-  ) async {
+  Future<String> _handleFunctionCall(FunctionCallResponse functionCall) async {
     switch (functionCall.name) {
       case 'animate_character':
         final animation = functionCall.args['animation'] as String?;
@@ -475,7 +473,7 @@ class LlmService {
           if (r is TextResponse) {
             buffer.write(r.token);
           } else if (r is FunctionCallResponse) {
-            String textResponse = await _handleFunctionCall(r, chat);
+            String textResponse = await _handleFunctionCall(r);
             buffer.write(textResponse);
           } else {
             continue;
@@ -485,22 +483,24 @@ class LlmService {
         String text = buffer.toString();
         // if (lastNonText != null && text.isEmpty) text = lastNonText.toString();
         final cleanedResponse = cleanLLMResponse(text);
-        try {
-          final cleanedResponsFuncCall = FunctionCallParser.parse(
-            cleanedResponse,
-            modelType: modelType,
-          );
-          if (cleanedResponsFuncCall == null) {
-            return cleanedResponse;
-          }
-          String textResponse = await _handleFunctionCall(
-            cleanedResponsFuncCall,
-            chat,
-          );
-          return textResponse;
-        } catch (e) {
+        final blocks = extractJsonBlocks(cleanedResponse);
+        if (blocks.isEmpty) {
           return cleanedResponse;
         }
+        final newBuffer = StringBuffer();
+        for (final block in blocks) {
+          final blockFuncCall = FunctionCallParser.parse(
+            block,
+            modelType: modelType,
+          );
+          if (blockFuncCall == null) {
+            continue;
+          }
+          String textResponse = await _handleFunctionCall(blockFuncCall);
+          newBuffer.writeln(textResponse);
+        }
+
+        return newBuffer.toString().trim();
       });
     });
   }
