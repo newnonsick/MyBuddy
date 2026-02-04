@@ -142,7 +142,7 @@ class _GlassNoisePainter extends CustomPainter {
     final seed = (size.width * 13 + size.height * 7).round();
     final random = math.Random(seed);
 
-    final cell = 18.0;
+    const cell = 18.0;
     final cols = (size.width / cell).ceil();
     final rows = (size.height / cell).ceil();
 

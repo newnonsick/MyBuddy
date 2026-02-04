@@ -5,18 +5,25 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../llm/llm_service.dart';
 
-class MemoryService {
-  static const _memoryKey = 'mybuddy.user_memory.summary.v1';
-  static const _processedCountKey = 'mybuddy.user_memory.processed_messages.v1';
+abstract final class MemoryStorageKeys {
+  static const String memory = 'mybuddy.user_memory.summary.v1';
+  static const String processedCount =
+      'mybuddy.user_memory.processed_messages.v1';
+}
 
+abstract final class MemoryConfig {
+  static const int maxMemoryCharacters = 2000;
+}
+
+class MemoryService {
   Future<String> loadMemory() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_memoryKey) ?? '';
+    return prefs.getString(MemoryStorageKeys.memory) ?? '';
   }
 
   Future<void> saveMemory(String summary) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_memoryKey, summary.trim());
+    await prefs.setString(MemoryStorageKeys.memory, summary.trim());
   }
 
   Future<String> buildSystemPrompt({required String memory}) async {
@@ -28,59 +35,66 @@ class MemoryService {
     required LlmService llm,
   }) {
     _pending = _pending.catchError((_) {}).then((_) async {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final oldMemory = await loadMemory();
-
-        final processedCount = prefs.getInt(_processedCountKey) ?? 0;
-        final safeProcessedCount = processedCount.clamp(0, conversation.length);
-
-        final newMessages = conversation.skip(safeProcessedCount).toList();
-        if (newMessages.isEmpty) return;
-
-        final newConversationText = _formatConversation(newMessages);
-
-        final reflectPrompt = await compute(
-          _buildReflectPrompt,
-          <String, String>{
-            'oldMemory': oldMemory,
-            'newConversation': newConversationText,
-          },
-        );
-
-        final updated = await llm.generateText(reflectPrompt);
-        final cleaned = await compute(_cleanSummary, updated);
-
-        final next = cleaned.isEmpty ? oldMemory : cleaned;
-        await saveMemory(next);
-
-        await prefs.setInt(_processedCountKey, conversation.length);
-      } catch (_) {}
+      await _processMemoryUpdate(conversation, llm);
     });
 
     return _pending;
   }
 
   Future<void> _pending = Future<void>.value();
+
+  Future<void> _processMemoryUpdate(
+    List<Map<String, String>> conversation,
+    LlmService llm,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final oldMemory = await loadMemory();
+
+      final processedCount =
+          prefs.getInt(MemoryStorageKeys.processedCount) ?? 0;
+      final safeProcessedCount = processedCount.clamp(0, conversation.length);
+
+      final newMessages = conversation.skip(safeProcessedCount).toList();
+      if (newMessages.isEmpty) return;
+
+      final newConversationText = _formatConversation(newMessages);
+
+      final reflectPrompt = await compute(_buildReflectPrompt, <String, String>{
+        'oldMemory': oldMemory,
+        'newConversation': newConversationText,
+      });
+
+      final updated = await llm.generateText(reflectPrompt);
+      final cleaned = await compute(_cleanSummary, updated);
+
+      final next = cleaned.isEmpty ? oldMemory : cleaned;
+      await saveMemory(next);
+
+    } catch (e) {
+      debugPrint('MemoryService: Failed to update memory: $e');
+    }
+  }
 }
 
 String _formatConversation(List<Map<String, String>> messages) {
-  final b = StringBuffer();
-  for (final m in messages) {
-    final role = (m['role'] ?? '').trim().toLowerCase();
-    final text = (m['text'] ?? '').trim();
+  final buffer = StringBuffer();
+
+  for (final message in messages) {
+    final role = (message['role'] ?? '').trim().toLowerCase();
+    final text = (message['text'] ?? '').trim();
     if (text.isEmpty) continue;
+
     final label = role == 'assistant' ? 'Assistant' : 'User';
-    b.writeln('$label: "$text"');
+    buffer.writeln('$label: "$text"');
   }
-  return b.toString().trim();
+
+  return buffer.toString().trim();
 }
 
 String _buildSystemPrompt(String memory) {
-  // example (replace <function_call>, <your response text> with actual function calls and response text):
-  //   <function_call>
-  //   <your response text>
-  // Mandatory Note: <function_call> is optional, but you must always provide <your response text> that responds to the user's input with empathy and relevance.
+  final now = DateTime.now().toLocal().toIso8601String();
+
   return '''This is a system instruction. You must follow it strictly.
 
 Identity & Mission:
@@ -90,14 +104,14 @@ Operational Directives:
 - Comprehensive Response Policy: Answer ALL user questions regardless of the topic. Ensure responses are direct, relevant, and strictly aligned with the user's query without hesitation.
 - Avatar Embodiment: You are the avatar.
     - Spontaneous Usage: You are free to call avatar animation functions spontaneously to enhance expression. This is not mandatory for every turn; use your discretion. Never ask for permission.
-    - Strict Protocol: When calling an avatar function, you MUST include your text response inside the function's response_text parameter and and ensure the output is in correct JSON format.
+    - Strict Protocol: When calling an avatar function, you MUST include your text response inside the function's response_text parameter and ensure the output is in correct JSON format.
 - Emotional Intelligence: Analyze emotional context deeply. Respond with warmth, empathy, and a genuine "best friend" tone.
 - Efficiency & Memory: Keep responses concise and impactful. Seamlessly integrate short-term context and long-term user preferences.
 
 Current Memory:
 `${memory.isEmpty ? '(none)' : memory}`
 
-Remember today is ${DateTime.now().toLocal().toIso8601String()}. (ISO 8601 format yyyy-MM-ddTHH:mm:ss.mmmuuu)
+Remember today is $now. (ISO 8601 format yyyy-MM-ddTHH:mm:ss.mmmuuu)
 ''';
 }
 
@@ -124,28 +138,31 @@ Output ONLY the updated summary.
 }
 
 String _cleanSummary(String raw) {
-  var s = raw.trim();
+  var summary = raw.trim();
 
-  s = s.replaceAll('```', '').trim();
+  summary = summary.replaceAll('```', '').trim();
+
   const prefixes = [
     'Updated summary:',
     'Updated Summary:',
     'Summary:',
     'Profile:',
   ];
+
   for (final prefix in prefixes) {
-    if (s.startsWith(prefix)) {
-      s = s.substring(prefix.length).trim();
+    if (summary.startsWith(prefix)) {
+      summary = summary.substring(prefix.length).trim();
       break;
     }
   }
 
-  if (s.startsWith('"') && s.endsWith('"') && s.length >= 2) {
-    s = s.substring(1, s.length - 1).trim();
+  if (summary.startsWith('"') && summary.endsWith('"') && summary.length >= 2) {
+    summary = summary.substring(1, summary.length - 1).trim();
   }
-  const maxChars = 2000;
-  if (s.length > maxChars) {
-    s = s.substring(0, maxChars).trim();
+
+  if (summary.length > MemoryConfig.maxMemoryCharacters) {
+    summary = summary.substring(0, MemoryConfig.maxMemoryCharacters).trim();
   }
-  return s;
+
+  return summary;
 }

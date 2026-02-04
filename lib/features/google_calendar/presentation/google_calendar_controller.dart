@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
+import '../../../app/providers.dart';
 import '../../../core/google/google_auth_service.dart';
 import '../../../core/google/google_calendar_service.dart';
-import '../../../app/providers.dart';
 
 class GoogleCalendarController extends ChangeNotifier {
   GoogleCalendarController({

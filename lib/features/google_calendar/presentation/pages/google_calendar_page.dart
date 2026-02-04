@@ -6,12 +6,12 @@ import '../../../../core/google/google_auth_service.dart';
 import '../../../../core/google/google_calendar_service.dart';
 import '../../../../shared/widgets/glass/glass.dart';
 import '../google_calendar_controller.dart';
+import '../widgets/account_menu.dart';
+import '../widgets/add_event_sheet.dart';
 import '../widgets/calendar_grid.dart';
+import '../widgets/calendar_header.dart';
 import '../widgets/event_list.dart';
 import '../widgets/google_sign_in_prompt.dart';
-import '../widgets/add_event_sheet.dart';
-import '../widgets/calendar_header.dart';
-import '../widgets/account_menu.dart';
 
 class GoogleCalendarPage extends ConsumerStatefulWidget {
   const GoogleCalendarPage({super.key});

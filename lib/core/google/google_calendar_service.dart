@@ -16,15 +16,6 @@ class CalendarEvent {
     this.colorId,
   });
 
-  final String id;
-  final String title;
-  final String? description;
-  final DateTime startTime;
-  final DateTime endTime;
-  final bool isAllDay;
-  final String? location;
-  final String? colorId;
-
   factory CalendarEvent.fromGoogleEvent(calendar.Event event) {
     final start = event.start;
     final end = event.end;
@@ -55,6 +46,15 @@ class CalendarEvent {
       colorId: event.colorId,
     );
   }
+
+  final String id;
+  final String title;
+  final String? description;
+  final DateTime startTime;
+  final DateTime endTime;
+  final bool isAllDay;
+  final String? location;
+  final String? colorId;
 
   Future<calendar.Event> toGoogleEvent() async {
     final event = calendar.Event();

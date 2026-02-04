@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import 'package:mybuddy/core/model/model_descriptor.dart';
-import 'package:mybuddy/core/utils/format_bytes.dart';
-import 'package:mybuddy/shared/widgets/glass/glass.dart';
+import '../../../../core/model/model_descriptor.dart';
+import '../../../../core/utils/format_bytes.dart';
+import '../../../../shared/widgets/glass/glass.dart';
 
 class CatalogModelTile extends StatelessWidget {
   const CatalogModelTile({

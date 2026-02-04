@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../domain/chat_line.dart';
 import '../../../../shared/widgets/glass/glass.dart';
+import '../../domain/chat_line.dart';
 
 class ChatTranscript extends StatelessWidget {
   const ChatTranscript({

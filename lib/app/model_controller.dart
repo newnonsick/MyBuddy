@@ -47,10 +47,11 @@ class ModelController extends ChangeNotifier {
   InstalledModel? get selectedInstalledModel {
     final id = _selectedModelId;
     if (id == null) return null;
-    for (final m in _installed) {
-      if (m.id == id) return m;
-    }
-    return null;
+
+    return _installed.cast<InstalledModel?>().firstWhere(
+      (m) => m?.id == id,
+      orElse: () => null,
+    );
   }
 
   bool _downloading = false;
@@ -93,9 +94,12 @@ class ModelController extends ChangeNotifier {
     for (final remote in _catalogItems) {
       final hasFile = await _store.hasValidFile(remote);
       if (!hasFile) continue;
+
       try {
         await _store.ensureRegistered(remote);
-      } catch (_) {}
+      } catch (_) {
+        // Ignore registration failures
+      }
     }
     await refreshInstalled();
   }
@@ -124,24 +128,24 @@ class ModelController extends ChangeNotifier {
       await _store.download(
         remote: remote,
         cancelToken: token,
-        onProgress: (p) {
-          _downloadProgress = p;
-          notifyListeners();
-        },
+        onProgress: _handleDownloadProgress,
       );
       await refreshInstalled();
+    } on DioException catch (e) {
+      _downloadError = CancelToken.isCancel(e) ? 'Download cancelled.' : '$e';
     } catch (e) {
-      if (e is DioException && CancelToken.isCancel(e)) {
-        _downloadError = 'Download cancelled.';
-      } else {
-        _downloadError = '$e';
-      }
+      _downloadError = '$e';
     } finally {
       _cancelToken = null;
       _downloading = false;
       _downloadProgress = null;
       notifyListeners();
     }
+  }
+
+  void _handleDownloadProgress(ModelDownloadProgress progress) {
+    _downloadProgress = progress;
+    notifyListeners();
   }
 
   Future<void> cancelDownload() async {
@@ -169,13 +173,16 @@ class ModelController extends ChangeNotifier {
 
   Future<void> deleteModel(InstalledModel model) async {
     await _store.delete(model);
+
     if (_selectedModelId == model.id) {
       _selectedModelId = null;
       await _selection.saveSelectedModelId(null);
     }
+
     if (_pendingSelectionId == model.id) {
       _pendingSelectionId = null;
     }
+
     await refreshInstalled();
   }
 }

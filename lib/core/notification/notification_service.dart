@@ -1,54 +1,64 @@
-import 'dart:math';
 import 'dart:convert';
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:timezone/timezone.dart' as tz;
+
+abstract final class NotificationStorageKeys {
+  static const String scheduledDays = 'notification_scheduled_days';
+  static const String dailyReminderEnabled = 'daily_reminder_enabled';
+}
+
+abstract final class NotificationConfig {
+  static const int baseNotificationId = 1001;
+  static const int daysToSchedule = 6;
+  static const String channelId = 'buddy_reminders';
+  static const String channelName = 'Buddy Reminders';
+  static const String channelDescription = 'Friendly reminders from your buddy';
+}
 
 class NotificationService extends ChangeNotifier {
-  static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
+  static final NotificationService _instance = NotificationService._internal();
 
   final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
-
-  static const String _prefScheduledDays = 'notification_scheduled_days';
-  static const String _prefDailyReminderEnabled = 'daily_reminder_enabled';
-  static const int _baseNotificationId = 1001;
-  static const int _daysToSchedule = 6;
 
   bool _isAppInForeground = true;
   bool _isInitialized = false;
   bool _isDailyReminderEnabled = true;
 
   bool get isDailyReminderEnabled => _isDailyReminderEnabled;
+  bool get isAppInForeground => _isAppInForeground;
 
   static const List<String> _notificationMessages = [
     "Hey there! 🌟 I've been waiting for you~ Come back and chat with me!",
     "Missing you already! 💕 Let's have a fun conversation today!",
-    "Psst! 🐾 Your buddy is feeling lonely... Come say hi!",
-    "Where did you go? 🥺 I saved some cool stories just for you!",
+    'Psst! 🐾 Your buddy is feeling lonely... Come say hi!',
+    'Where did you go? 🥺 I saved some cool stories just for you!',
     "Hello sunshine! ☀️ It's been a while. I miss our chats!",
     "Guess who's thinking about you? 💭 Hint: It's me, your buddy!",
     "I've been practicing new jokes! 🎉 Come hear them~",
-    "Your buddy is sending virtual hugs! 🤗 Come get them!",
+    'Your buddy is sending virtual hugs! 🤗 Come get them!',
     "The app feels empty without you! 🌈 Let's brighten it up together!",
     "Knock knock! 🚪 Oh wait, you're not here... Come back soon!",
     "I learned something new today! 📚 Can't wait to share it with you!",
-    "Feeling lonely here... 🌙 A quick hello would make my day!",
+    'Feeling lonely here... 🌙 A quick hello would make my day!',
     "Your favorite buddy is waiting! 🎀 Don't keep me waiting too long~",
     "I promise I'll be extra fun today! 🌺 Come and see!",
     "Someone special hasn't visited in a while... 💫 Is it you?",
   ];
 
   static const List<String> _notificationTitles = [
-    "Your Buddy Misses You! 💕",
-    "Hey, Remember Me? 🌟",
-    "Come Back Soon! 🥰",
-    "Missing You! 💭",
-    "Your Buddy Says Hi! 👋",
+    'Your Buddy Misses You! 💕',
+    'Hey, Remember Me? 🌟',
+    'Come Back Soon! 🥰',
+    'Missing You! 💭',
+    'Your Buddy Says Hi! 👋',
   ];
 
   Future<void> initialize() async {
@@ -57,12 +67,12 @@ class NotificationService extends ChangeNotifier {
     tz_data.initializeTimeZones();
 
     final prefs = await SharedPreferences.getInstance();
-    _isDailyReminderEnabled = prefs.getBool(_prefDailyReminderEnabled) ?? true;
+    _isDailyReminderEnabled =
+        prefs.getBool(NotificationStorageKeys.dailyReminderEnabled) ?? true;
 
     const androidSettings = AndroidInitializationSettings(
       '@mipmap/ic_launcher',
     );
-
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -111,7 +121,7 @@ class NotificationService extends ChangeNotifier {
     _isDailyReminderEnabled = enabled;
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_prefDailyReminderEnabled, enabled);
+    await prefs.setBool(NotificationStorageKeys.dailyReminderEnabled, enabled);
 
     if (enabled) {
       await _scheduleNext6DaysNotifications();
@@ -125,38 +135,12 @@ class NotificationService extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _onNotificationTapped(NotificationResponse response) {
-    debugPrint('Notification tapped: ${response.payload}');
-  }
-
   void setAppForegroundState(bool isInForeground) {
     _isAppInForeground = isInForeground;
     debugPrint('App foreground state: $_isAppInForeground');
 
     if (isInForeground) {
       _cancelImmediateNotifications();
-    }
-  }
-
-  bool get isAppInForeground => _isAppInForeground;
-
-  Future<void> _cancelImmediateNotifications() async {
-    final scheduledDays = await _getScheduledDays();
-    final now = DateTime.now();
-
-    for (final entry in scheduledDays.entries) {
-      final scheduledTimeMs = entry.value;
-      final scheduledTime = DateTime.fromMillisecondsSinceEpoch(
-        scheduledTimeMs,
-      );
-
-      if (scheduledTime.difference(now).inMinutes.abs() <= 1) {
-        final dayOffset = int.tryParse(entry.key) ?? 0;
-        await _notifications.cancel(_baseNotificationId + dayOffset);
-        debugPrint(
-          'Cancelled immediate notification for day ${entry.key} - user is in app',
-        );
-      }
     }
   }
 
@@ -172,14 +156,78 @@ class NotificationService extends ChangeNotifier {
     }
   }
 
+  Future<void> cancelAllScheduledNotifications() async {
+    for (
+      int dayOffset = 1;
+      dayOffset <= NotificationConfig.daysToSchedule;
+      dayOffset++
+    ) {
+      await _notifications.cancel(
+        NotificationConfig.baseNotificationId + dayOffset,
+      );
+    }
+    debugPrint('Cancelled all scheduled notifications');
+  }
+
+  Future<void> clearScheduledData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(NotificationStorageKeys.scheduledDays);
+    await cancelAllScheduledNotifications();
+    debugPrint('Cleared all scheduled notification data');
+  }
+
+  Future<Map<String, dynamic>> getScheduledInfo() async {
+    final scheduledDays = await _getScheduledDays();
+
+    final formattedDays = <String, String>{};
+    for (final entry in scheduledDays.entries) {
+      formattedDays[entry.key] = DateTime.fromMillisecondsSinceEpoch(
+        entry.value,
+      ).toString();
+    }
+
+    return {
+      'scheduledDays': formattedDays,
+      'totalScheduled': scheduledDays.length,
+      'isInitialized': _isInitialized,
+      'isAppInForeground': _isAppInForeground,
+    };
+  }
+
+  void _onNotificationTapped(NotificationResponse response) {
+    debugPrint('Notification tapped: ${response.payload}');
+  }
+
+  Future<void> _cancelImmediateNotifications() async {
+    final scheduledDays = await _getScheduledDays();
+    final now = DateTime.now();
+
+    for (final entry in scheduledDays.entries) {
+      final scheduledTimeMs = entry.value;
+      final scheduledTime = DateTime.fromMillisecondsSinceEpoch(
+        scheduledTimeMs,
+      );
+
+      if (scheduledTime.difference(now).inMinutes.abs() <= 1) {
+        final dayOffset = int.tryParse(entry.key) ?? 0;
+        await _notifications.cancel(
+          NotificationConfig.baseNotificationId + dayOffset,
+        );
+        debugPrint(
+          'Cancelled immediate notification for day ${entry.key} - user is in app',
+        );
+      }
+    }
+  }
+
   Future<void> _clearScheduledDaysData() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_prefScheduledDays);
+    await prefs.remove(NotificationStorageKeys.scheduledDays);
   }
 
   Future<Map<String, int>> _getScheduledDays() async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonStr = prefs.getString(_prefScheduledDays);
+    final jsonStr = prefs.getString(NotificationStorageKeys.scheduledDays);
 
     if (jsonStr == null) {
       return {};
@@ -196,7 +244,10 @@ class NotificationService extends ChangeNotifier {
 
   Future<void> _saveScheduledDays(Map<String, int> scheduledDays) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefScheduledDays, json.encode(scheduledDays));
+    await prefs.setString(
+      NotificationStorageKeys.scheduledDays,
+      json.encode(scheduledDays),
+    );
   }
 
   String _getDateKey(int dayOffset) {
@@ -230,7 +281,11 @@ class NotificationService extends ChangeNotifier {
       debugPrint('Removed past scheduled day: $key');
     }
 
-    for (int dayOffset = 1; dayOffset <= _daysToSchedule; dayOffset++) {
+    for (
+      int dayOffset = 1;
+      dayOffset <= NotificationConfig.daysToSchedule;
+      dayOffset++
+    ) {
       final dateKey = _getDateKey(dayOffset);
 
       if (scheduledDays.containsKey(dateKey)) {
@@ -238,24 +293,10 @@ class NotificationService extends ChangeNotifier {
         continue;
       }
 
-      final hour = 9 + random.nextInt(12);
-      final minute = random.nextInt(60);
+      final scheduledDateTime = _generateRandomScheduleTime(dayOffset, random);
+      final (title, message) = _getRandomNotificationContent(random);
 
-      final targetDate = _getDateForOffset(dayOffset);
-      final scheduledDateTime = DateTime(
-        targetDate.year,
-        targetDate.month,
-        targetDate.day,
-        hour,
-        minute,
-      );
-
-      final message =
-          _notificationMessages[random.nextInt(_notificationMessages.length)];
-      final title =
-          _notificationTitles[random.nextInt(_notificationTitles.length)];
-
-      final notificationId = _baseNotificationId + dayOffset;
+      final notificationId = NotificationConfig.baseNotificationId + dayOffset;
 
       await _scheduleNotification(
         id: notificationId,
@@ -281,16 +322,38 @@ class NotificationService extends ChangeNotifier {
     debugPrint('Total scheduled days: ${scheduledDays.length}');
   }
 
+  DateTime _generateRandomScheduleTime(int dayOffset, Random random) {
+    final hour = 9 + random.nextInt(12); // 9 AM to 8 PM
+    final minute = random.nextInt(60);
+    final targetDate = _getDateForOffset(dayOffset);
+
+    return DateTime(
+      targetDate.year,
+      targetDate.month,
+      targetDate.day,
+      hour,
+      minute,
+    );
+  }
+
+  (String title, String message) _getRandomNotificationContent(Random random) {
+    final message =
+        _notificationMessages[random.nextInt(_notificationMessages.length)];
+    final title =
+        _notificationTitles[random.nextInt(_notificationTitles.length)];
+    return (title, message);
+  }
+
   Future<void> _scheduleNotification({
     required int id,
     required String title,
     required String body,
     required DateTime scheduledTime,
   }) async {
-    final androidDetails = AndroidNotificationDetails(
-      'buddy_reminders',
-      'Buddy Reminders',
-      channelDescription: 'Friendly reminders from your buddy',
+    const androidDetails = AndroidNotificationDetails(
+      NotificationConfig.channelId,
+      NotificationConfig.channelName,
+      channelDescription: NotificationConfig.channelDescription,
       importance: Importance.high,
       priority: Priority.high,
       icon: '@mipmap/ic_launcher',
@@ -304,7 +367,7 @@ class NotificationService extends ChangeNotifier {
       presentSound: true,
     );
 
-    final notificationDetails = NotificationDetails(
+    const notificationDetails = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
@@ -320,37 +383,5 @@ class NotificationService extends ChangeNotifier {
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       payload: 'buddy_reminder',
     );
-  }
-
-  Future<void> cancelAllScheduledNotifications() async {
-    for (int dayOffset = 1; dayOffset <= _daysToSchedule; dayOffset++) {
-      await _notifications.cancel(_baseNotificationId + dayOffset);
-    }
-    debugPrint('Cancelled all scheduled notifications');
-  }
-
-  Future<void> clearScheduledData() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_prefScheduledDays);
-    await cancelAllScheduledNotifications();
-    debugPrint('Cleared all scheduled notification data');
-  }
-
-  Future<Map<String, dynamic>> getScheduledInfo() async {
-    final scheduledDays = await _getScheduledDays();
-
-    final formattedDays = <String, String>{};
-    for (final entry in scheduledDays.entries) {
-      formattedDays[entry.key] = DateTime.fromMillisecondsSinceEpoch(
-        entry.value,
-      ).toString();
-    }
-
-    return {
-      'scheduledDays': formattedDays,
-      'totalScheduled': scheduledDays.length,
-      'isInitialized': _isInitialized,
-      'isAppInForeground': _isAppInForeground,
-    };
   }
 }

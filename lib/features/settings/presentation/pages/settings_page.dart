@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:mybuddy/app/app_controller.dart';
-import 'package:mybuddy/app/model_controller.dart';
-import 'package:mybuddy/app/providers.dart';
-import 'package:mybuddy/core/model/model_descriptor.dart';
-import 'package:mybuddy/core/model/model_store.dart';
-import 'package:mybuddy/core/notification/notification_service.dart';
-import 'package:mybuddy/core/utils/format_bytes.dart';
-import 'package:mybuddy/shared/widgets/glass/glass.dart';
+import '../../../../app/app_controller.dart';
+import '../../../../app/model_controller.dart';
+import '../../../../app/providers.dart';
+import '../../../../core/model/model_descriptor.dart';
+import '../../../../core/model/model_store.dart';
+import '../../../../core/notification/notification_service.dart';
+import '../../../../core/utils/format_bytes.dart';
+import '../../../../shared/widgets/glass/glass.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -184,15 +184,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           ...installed.map((m) {
-            final isActive = m.id == models.selectedModelId;
+            final isActiveAndLoaded =
+                m.id == models.selectedModelId && app.llmInstalled;
             final isSelected = m.id == pendingId;
             return _buildModelOption(
               context,
               model: m,
               isSelected: isSelected,
-              isActive: isActive,
+              isActive: isActiveAndLoaded,
               models: models,
-              onTap: installing || isActive
+              onTap: installing || isActiveAndLoaded
                   ? null
                   : () => models.setPendingSelection(m.id),
             );
@@ -442,7 +443,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       ),
     );
 
-    if (confirmed == true && mounted) {
+    if ((confirmed ?? false) && mounted) {
       final models = ref.read(modelControllerProvider);
       await models.deleteModel(model);
     }
@@ -700,7 +701,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 Text(
                   [
                     model.config.type,
-                    if (model.approximateSize?.isNotEmpty == true)
+                    if (model.approximateSize?.isNotEmpty ?? false)
                       model.approximateSize,
                   ].join(' • '),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(

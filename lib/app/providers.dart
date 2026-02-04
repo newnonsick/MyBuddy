@@ -19,17 +19,6 @@ final memoryServiceProvider = Provider<MemoryService>((ref) {
   return MemoryService();
 });
 
-final modelControllerProvider = ChangeNotifierProvider<ModelController>((ref) {
-  return ModelController();
-});
-
-final appControllerProvider = ChangeNotifierProvider<AppController>((ref) {
-  final models = ref.read(modelControllerProvider);
-  final llm = ref.read(llmServiceProvider);
-  final memory = ref.read(memoryServiceProvider);
-
-  return AppController(models: models, llm: llm, memory: memory);
-});
 
 final googleAuthServiceProvider = ChangeNotifierProvider<GoogleAuthService>((
   ref,
@@ -44,12 +33,25 @@ final googleCalendarServiceProvider =
     });
 
 final llmServiceProvider = Provider<LlmService>((ref) {
-  final unityBridge = ref.watch(unityBridgeProvider);
-  final googleAuthService = ref.watch(googleAuthServiceProvider);
-  final googleCalendarService = ref.watch(googleCalendarServiceProvider);
+  final unityBridge = ref.read(unityBridgeProvider);
+  final googleAuthService = ref.read(googleAuthServiceProvider);
+  final googleCalendarService = ref.read(googleCalendarServiceProvider);
+
   return LlmService(
     unityBridge: unityBridge,
     googleAuthService: googleAuthService,
     googleCalendarService: googleCalendarService,
   );
+});
+
+final modelControllerProvider = ChangeNotifierProvider<ModelController>((ref) {
+  return ModelController();
+});
+
+final appControllerProvider = ChangeNotifierProvider<AppController>((ref) {
+  final models = ref.read(modelControllerProvider);
+  final llm = ref.read(llmServiceProvider);
+  final memory = ref.read(memoryServiceProvider);
+
+  return AppController(models: models, llm: llm, memory: memory);
 });

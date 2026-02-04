@@ -46,3 +46,6 @@ app.*.map.json
 
 .vscode
 env.json
+
+.agents
+.github/skills

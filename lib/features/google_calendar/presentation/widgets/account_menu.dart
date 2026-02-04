@@ -117,7 +117,7 @@ class AccountMenu extends ConsumerWidget {
     String? displayName,
     double size,
   ) {
-    final initial = (displayName?.isNotEmpty == true)
+    final initial = (displayName?.isNotEmpty ?? false)
         ? displayName![0].toUpperCase()
         : 'U';
 

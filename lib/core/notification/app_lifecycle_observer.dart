@@ -1,11 +1,12 @@
 import 'package:flutter/widgets.dart';
-import 'package:mybuddy/core/notification/notification_service.dart';
+
+import 'notification_service.dart';
 
 class AppLifecycleObserver extends WidgetsBindingObserver {
-  final NotificationService _notificationService;
-
   AppLifecycleObserver({NotificationService? notificationService})
     : _notificationService = notificationService ?? NotificationService();
+
+  final NotificationService _notificationService;
 
   void initialize() {
     WidgetsBinding.instance.addObserver(this);
