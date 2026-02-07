@@ -18,13 +18,14 @@ class GlassPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return GlassSurface(
       borderRadius: BorderRadius.circular(20),
-      blurSigma: 12,
+      blurSigma: 0,
+      enableBlur: false,
       padding: padding,
       startColor: GlassSurface.blackTintFrom(tint, baseAlpha: 0.28),
       elevation: 12,
       borderOpacity: 0.22,
       highlightOpacity: 0.17,
-      noiseOpacity: 0.014,
+      noiseOpacity: 0,
       child: child,
     );
   }

@@ -49,3 +49,7 @@ env.json
 
 .agents
 .github/skills
+
+**/.cxx/
+**/.gradle/
+**/build/

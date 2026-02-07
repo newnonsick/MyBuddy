@@ -48,6 +48,58 @@ class GlassSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     final tint = startColor;
 
+    final useBlur = enableBlur && blurSigma > 0;
+    final useNoise = noiseOpacity > 0;
+
+    // Fast path: no blur, no noise — skip ClipRRect + BackdropFilter + noise
+    // paint entirely and use a single Container with merged decoration.
+    if (!useBlur && !useNoise) {
+      return RepaintBoundary(
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: borderRadius,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color.alphaBlend(tint, _kInk3.withValues(alpha: 0.55)),
+                _kInk1.withValues(alpha: 0.62),
+                _kInk0.withValues(alpha: 0.70),
+              ],
+              stops: const [0.0, 0.55, 1.0],
+            ),
+            border: Border.all(
+              color: _kInk2.withValues(alpha: borderOpacity),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _kInk0.withValues(alpha: 0.32),
+                blurRadius: elevation,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          foregroundDecoration: BoxDecoration(
+            borderRadius: borderRadius,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                _kInk2.withValues(alpha: highlightOpacity * 0.65),
+                Colors.transparent,
+                _kInk0.withValues(alpha: highlightOpacity * 0.95),
+              ],
+              stops: const [0.0, 0.60, 1.0],
+            ),
+          ),
+          padding: padding,
+          child: child,
+        ),
+      );
+    }
+
+    // Full path with blur / noise (kept for any widget that re-enables blur).
     final baseDecoration = BoxDecoration(
       borderRadius: borderRadius,
       gradient: LinearGradient(

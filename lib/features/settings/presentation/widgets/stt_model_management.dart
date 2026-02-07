@@ -292,7 +292,7 @@ class _SttModelManagementState extends ConsumerState<SttModelManagement> {
                       (v) => DropdownMenuItem<String>(
                         value: v,
                         child: Text(
-                          'Language: ${WhisperLanguages.labelFor(v)}',
+                          WhisperLanguages.labelFor(v),
                           style: const TextStyle(fontSize: 14),
                         ),
                       ),

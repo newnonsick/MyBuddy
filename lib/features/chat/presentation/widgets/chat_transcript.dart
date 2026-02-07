@@ -50,7 +50,7 @@ class ChatTranscript extends StatelessWidget {
                           horizontal: 8,
                           vertical: 2,
                         ),
-                        child: SelectableText(
+                        child: Text(
                           line.text,
                           style: TextStyle(
                             fontSize: 14,
@@ -157,36 +157,27 @@ class ChatBubble extends StatelessWidget {
           );
 
     return GestureDetector(
+      onLongPress: () {
+        Clipboard.setData(ClipboardData(text: text));
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Copied to clipboard'),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 2),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          );
+        }
+      },
       onSecondaryTapDown: (details) => _showCopyMenu(context, details),
       child: GlassChatBubble(
         borderRadius: borderRadius,
         tint: tint,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: SelectableText(
-          text,
-          style: const TextStyle(fontSize: 14, height: 1.45),
-          contextMenuBuilder: (context, editableTextState) {
-            return AdaptiveTextSelectionToolbar.buttonItems(
-              anchors: editableTextState.contextMenuAnchors,
-              buttonItems: [
-                ContextMenuButtonItem(
-                  label: 'Copy',
-                  onPressed: () {
-                    editableTextState.copySelection(
-                      SelectionChangedCause.toolbar,
-                    );
-                  },
-                ),
-                ContextMenuButtonItem(
-                  label: 'Select All',
-                  onPressed: () {
-                    editableTextState.selectAll(SelectionChangedCause.toolbar);
-                  },
-                ),
-              ],
-            );
-          },
-        ),
+        child: Text(text, style: const TextStyle(fontSize: 14, height: 1.45)),
       ),
     );
   }
