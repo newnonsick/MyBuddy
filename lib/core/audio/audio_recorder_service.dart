@@ -1,0 +1,83 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
+
+class AudioRecorderService {
+  AudioRecorderService({AudioRecorder? recorder})
+    : _recorder = recorder ?? AudioRecorder();
+
+  final AudioRecorder _recorder;
+
+  String? _currentPath;
+
+  Future<bool> hasPermission() async {
+    try {
+      return await _recorder.hasPermission();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<String> start() async {
+    if (await _recorder.isRecording()) {
+      throw StateError('Recorder is already running');
+    }
+
+    final temp = await getTemporaryDirectory();
+    final dir = Directory(p.join(temp.path, 'stt_recordings'));
+    await dir.create(recursive: true);
+
+    final fileName = 'rec_${DateTime.now().toUtc().millisecondsSinceEpoch}.wav';
+    final outPath = p.join(dir.path, fileName);
+
+    const config = RecordConfig(
+      encoder: AudioEncoder.wav,
+      sampleRate: 16000,
+      numChannels: 1,
+      bitRate: 128000,
+    );
+
+    await _recorder.start(config, path: outPath);
+    _currentPath = outPath;
+
+    debugPrint('STT recording started: $outPath');
+    return outPath;
+  }
+
+  Future<String?> stop() async {
+    if (!await _recorder.isRecording()) {
+      return _currentPath;
+    }
+
+    final stoppedPath = await _recorder.stop();
+    final path = stoppedPath ?? _currentPath;
+    _currentPath = null;
+
+    if (path != null) {
+      debugPrint('STT recording stopped: $path');
+    }
+
+    return path;
+  }
+
+  Future<void> cancelAndDelete() async {
+    final path = await stop();
+    if (path == null) return;
+
+    try {
+      final f = File(path);
+      if (await f.exists()) {
+        await f.delete();
+      }
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  Future<void> dispose() async {
+    await _recorder.dispose();
+  }
+}

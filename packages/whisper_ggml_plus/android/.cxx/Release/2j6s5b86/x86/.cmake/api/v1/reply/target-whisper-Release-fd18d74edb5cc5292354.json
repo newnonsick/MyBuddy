@@ -1,0 +1,473 @@
+{
+	"archive" : {},
+	"artifacts" : 
+	[
+		{
+			"path" : "libwhisper.a"
+		}
+	],
+	"backtrace" : 1,
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"add_library",
+			"target_compile_options",
+			"target_compile_definitions",
+			"include_directories"
+		],
+		"files" : 
+		[
+			"CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 27,
+				"parent" : 0
+			},
+			{
+				"command" : 1,
+				"file" : 0,
+				"line" : 35,
+				"parent" : 0
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 30,
+				"parent" : 0
+			},
+			{
+				"command" : 3,
+				"file" : 0,
+				"line" : 11,
+				"parent" : 0
+			},
+			{
+				"command" : 3,
+				"file" : 0,
+				"line" : 12,
+				"parent" : 0
+			},
+			{
+				"command" : 3,
+				"file" : 0,
+				"line" : 13,
+				"parent" : 0
+			},
+			{
+				"command" : 3,
+				"file" : 0,
+				"line" : 14,
+				"parent" : 0
+			},
+			{
+				"command" : 3,
+				"file" : 0,
+				"line" : 15,
+				"parent" : 0
+			},
+			{
+				"command" : 3,
+				"file" : 0,
+				"line" : 16,
+				"parent" : 0
+			},
+			{
+				"command" : 3,
+				"file" : 0,
+				"line" : 17,
+				"parent" : 0
+			}
+		]
+	},
+	"compileGroups" : 
+	[
+		{
+			"compileCommandFragments" : 
+			[
+				{
+					"fragment" : "-g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -mstackrealign -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security -O3 -s -flto=thin -ffunction-sections -fdata-sections -fvisibility=hidden -fvisibility-inlines-hidden -O3 -fdata-sections -ffunction-sections -O3 -DNDEBUG  -fPIC"
+				},
+				{
+					"backtrace" : 2,
+					"fragment" : "-include"
+				},
+				{
+					"backtrace" : 2,
+					"fragment" : "whisper-version.h"
+				}
+			],
+			"defines" : 
+			[
+				{
+					"backtrace" : 3,
+					"define" : "GGML_USE_CPU"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 4,
+					"path" : "D:/flutter_llm_stt/mybuddy/packages/whisper_ggml_plus/android/src/whisper/json"
+				},
+				{
+					"backtrace" : 5,
+					"path" : "D:/flutter_llm_stt/mybuddy/packages/whisper_ggml_plus/android/src/whisper/src"
+				},
+				{
+					"backtrace" : 6,
+					"path" : "D:/flutter_llm_stt/mybuddy/packages/whisper_ggml_plus/android/src/whisper/src/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "D:/flutter_llm_stt/mybuddy/packages/whisper_ggml_plus/android/src/whisper/src/src"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "D:/flutter_llm_stt/mybuddy/packages/whisper_ggml_plus/android/src/whisper/src/ggml/include"
+				},
+				{
+					"backtrace" : 9,
+					"path" : "D:/flutter_llm_stt/mybuddy/packages/whisper_ggml_plus/android/src/whisper/src/ggml/src"
+				},
+				{
+					"backtrace" : 10,
+					"path" : "D:/flutter_llm_stt/mybuddy/packages/whisper_ggml_plus/android/src/whisper/src/ggml/src/ggml-cpu"
+				}
+			],
+			"language" : "C",
+			"sourceIndexes" : 
+			[
+				0,
+				6,
+				9,
+				12,
+				16,
+				22,
+				24
+			],
+			"sysroot" : 
+			{
+				"path" : "C:/Users/New/AppData/Local/Android/Sdk/ndk/29.0.13113456/toolchains/llvm/prebuilt/windows-x86_64/sysroot"
+			}
+		},
+		{
+			"compileCommandFragments" : 
+			[
+				{
+					"fragment" : "-g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -mstackrealign -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -O3 -s -flto=thin -ffunction-sections -fdata-sections -fvisibility=hidden -fvisibility-inlines-hidden -O3 -fdata-sections -ffunction-sections -O3 -DNDEBUG  -fPIC"
+				},
+				{
+					"backtrace" : 2,
+					"fragment" : "-include"
+				},
+				{
+					"backtrace" : 2,
+					"fragment" : "whisper-version.h"
+				},
+				{
+					"fragment" : "-std=gnu++20"
+				}
+			],
+			"defines" : 
+			[
+				{
+					"backtrace" : 3,
+					"define" : "GGML_USE_CPU"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 4,
+					"path" : "D:/flutter_llm_stt/mybuddy/packages/whisper_ggml_plus/android/src/whisper/json"
+				},
+				{
+					"backtrace" : 5,
+					"path" : "D:/flutter_llm_stt/mybuddy/packages/whisper_ggml_plus/android/src/whisper/src"
+				},
+				{
+					"backtrace" : 6,
+					"path" : "D:/flutter_llm_stt/mybuddy/packages/whisper_ggml_plus/android/src/whisper/src/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "D:/flutter_llm_stt/mybuddy/packages/whisper_ggml_plus/android/src/whisper/src/src"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "D:/flutter_llm_stt/mybuddy/packages/whisper_ggml_plus/android/src/whisper/src/ggml/include"
+				},
+				{
+					"backtrace" : 9,
+					"path" : "D:/flutter_llm_stt/mybuddy/packages/whisper_ggml_plus/android/src/whisper/src/ggml/src"
+				},
+				{
+					"backtrace" : 10,
+					"path" : "D:/flutter_llm_stt/mybuddy/packages/whisper_ggml_plus/android/src/whisper/src/ggml/src/ggml-cpu"
+				}
+			],
+			"language" : "CXX",
+			"languageStandard" : 
+			{
+				"backtraces" : 
+				[
+					1
+				],
+				"standard" : "20"
+			},
+			"sourceIndexes" : 
+			[
+				1,
+				2,
+				3,
+				4,
+				5,
+				7,
+				8,
+				10,
+				11,
+				13,
+				14,
+				15,
+				17,
+				18,
+				19,
+				20,
+				21,
+				23,
+				25,
+				26,
+				27
+			],
+			"sysroot" : 
+			{
+				"path" : "C:/Users/New/AppData/Local/Android/Sdk/ndk/29.0.13113456/toolchains/llvm/prebuilt/windows-x86_64/sysroot"
+			}
+		}
+	],
+	"id" : "whisper::@6890427a1f51a3e7e1df",
+	"name" : "whisper",
+	"nameOnDisk" : "libwhisper.a",
+	"paths" : 
+	{
+		"build" : ".",
+		"source" : "."
+	},
+	"sourceGroups" : 
+	[
+		{
+			"name" : "Source Files",
+			"sourceIndexes" : 
+			[
+				0,
+				1,
+				2,
+				3,
+				4,
+				5,
+				6,
+				7,
+				8,
+				9,
+				10,
+				11,
+				12,
+				13,
+				14,
+				15,
+				16,
+				17,
+				18,
+				19,
+				20,
+				21,
+				22,
+				23,
+				24,
+				25,
+				26,
+				27
+			]
+		}
+	],
+	"sources" : 
+	[
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "src/ggml/src/ggml-alloc.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "src/ggml/src/ggml-backend-reg.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "src/ggml/src/ggml-backend.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "src/ggml/src/ggml-cpu/amx/amx.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "src/ggml/src/ggml-cpu/amx/mmq.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "src/ggml/src/ggml-cpu/arch/arm/cpu-feats.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "src/ggml/src/ggml-cpu/arch/arm/quants.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "src/ggml/src/ggml-cpu/arch/arm/repack.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "src/ggml/src/ggml-cpu/arch/x86/cpu-feats.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "src/ggml/src/ggml-cpu/arch/x86/quants.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "src/ggml/src/ggml-cpu/arch/x86/repack.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "src/ggml/src/ggml-cpu/binary-ops.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "src/ggml/src/ggml-cpu/ggml-cpu.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "src/ggml/src/ggml-cpu/ggml-cpu.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "src/ggml/src/ggml-cpu/hbm.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "src/ggml/src/ggml-cpu/ops.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "src/ggml/src/ggml-cpu/quants.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "src/ggml/src/ggml-cpu/repack.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "src/ggml/src/ggml-cpu/traits.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "src/ggml/src/ggml-cpu/unary-ops.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "src/ggml/src/ggml-cpu/vec.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "src/ggml/src/ggml-opt.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "src/ggml/src/ggml-quants.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "src/ggml/src/ggml-threading.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "src/ggml/src/ggml.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "src/ggml/src/ggml.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "src/ggml/src/gguf.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "src/src/whisper.cpp",
+			"sourceGroupIndex" : 0
+		}
+	],
+	"type" : "STATIC_LIBRARY"
+}

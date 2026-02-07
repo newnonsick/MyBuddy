@@ -14,7 +14,7 @@ dependencies {
 android {
     namespace = "com.example.mybuddy"
     compileSdk = 36
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "29.0.13113456"
 
     compileOptions {
         // Enable core library desugaring for flutter_local_notifications

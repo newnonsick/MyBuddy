@@ -45,6 +45,10 @@ dependencies:
   shared_preferences: ^2.5.4
   path: ^1.9.1
 
+  whisper_ggml_plus: ^1.3.1
+  record: ^6.1.1
+  archive: ^4.0.7
+
   flutter_tts: ^4.2.5
 
   flutter_local_notifications: ^19.5.0
@@ -84,6 +88,10 @@ flutter:
   #   - images/a_dot_ham.jpeg
   assets:
     - assets/images/google_logo.png
+
+dependency_overrides:
+  whisper_ggml_plus:
+    path: packages/whisper_ggml_plus
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

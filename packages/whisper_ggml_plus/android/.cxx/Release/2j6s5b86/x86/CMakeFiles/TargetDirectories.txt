@@ -1,0 +1,4 @@
+D:/flutter_llm_stt/mybuddy/packages/whisper_ggml_plus/android/.cxx/Release/2j6s5b86/x86/CMakeFiles/whisper.dir
+D:/flutter_llm_stt/mybuddy/packages/whisper_ggml_plus/android/.cxx/Release/2j6s5b86/x86/CMakeFiles/whisper_flutter.dir
+D:/flutter_llm_stt/mybuddy/packages/whisper_ggml_plus/android/.cxx/Release/2j6s5b86/x86/CMakeFiles/edit_cache.dir
+D:/flutter_llm_stt/mybuddy/packages/whisper_ggml_plus/android/.cxx/Release/2j6s5b86/x86/CMakeFiles/rebuild_cache.dir

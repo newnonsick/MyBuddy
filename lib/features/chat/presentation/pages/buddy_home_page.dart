@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/app_controller.dart';
 import '../../../../app/my_app.dart';
 import '../../../../app/providers.dart';
+import '../../../../core/audio/audio_recorder_service.dart';
 import '../../../../core/tts/tts_service.dart';
 import '../../../../core/unity/unity_bridge.dart';
 import '../../../../shared/widgets/glass/glass.dart';
@@ -25,6 +28,7 @@ class BuddyHomePage extends ConsumerStatefulWidget {
 class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
   late final UnityBridge _unity;
   final TtsService _tts = TtsService();
+  final AudioRecorderService _recorder = AudioRecorderService();
 
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
@@ -34,6 +38,11 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
   bool _speaking = false;
   int _speakGeneration = 0;
 
+  bool _recording = false;
+  bool _transcribing = false;
+  int _recordGeneration = 0;
+  DateTime? _recordStartedAt;
+
   @override
   void initState() {
     super.initState();
@@ -42,12 +51,17 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final controller = ref.read(appControllerProvider);
       await controller.startup();
+
+      final stt = ref.read(sttModelControllerProvider);
+      await stt.loadLocalState();
+      await stt.refreshInstalled();
     });
   }
 
   @override
   void dispose() {
     _tts.dispose();
+    unawaited(_recorder.dispose());
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -166,6 +180,8 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
   }
 
   String _getStatusText(AppController controller) {
+    if (_recording) return 'Listening… release to send';
+    if (_transcribing) return 'Transcribing…';
     if (controller.installingLlm) return 'Preparing model…';
     if (controller.llmInstalled) return 'MyBuddy';
     return 'Select a model in Settings';
@@ -207,15 +223,174 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
 
   Widget _buildComposer(AppController controller) {
     final canSend = controller.llmInstalled && !_sending;
+    final stt = ref.watch(sttModelControllerProvider);
+
+    final llmIdle =
+        controller.llmInstalled && !_sending && !controller.installingLlm;
+    final hasSttModel = stt.selectedInstalledModel != null;
+    final micEnabled = llmIdle && hasSttModel;
+
     return ChatComposer(
       textController: _textController,
       canSend: canSend,
       sending: _sending,
       speaking: _speaking,
       isModelReady: controller.llmInstalled,
+      micEnabled: micEnabled,
+      isRecording: _recording,
+      isTranscribing: _transcribing,
+      onMicHoldStart: _onMicHoldStart,
+      onMicHoldEnd: _onMicHoldEnd,
+      onMicHoldCancel: _onMicHoldCancel,
       onSend: _onSend,
       onStopSpeaking: _onStopSpeaking,
     );
+  }
+
+  Future<void> _onMicHoldStart() async {
+    if (_sending || _transcribing || _recording) return;
+
+    // If the buddy is speaking, stop first to reduce feedback.
+    if (_speaking) {
+      await _onStopSpeaking();
+    }
+
+    final generation = ++_recordGeneration;
+    setState(() => _recording = true);
+    _recordStartedAt = null;
+    unawaited(HapticFeedback.selectionClick());
+
+    final hasPermission = await _recorder.hasPermission();
+    if (!hasPermission) {
+      if (!mounted) return;
+      setState(() => _recording = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Microphone permission is required.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    try {
+      await _recorder.start();
+      if (!mounted || generation != _recordGeneration) return;
+      _recordStartedAt = DateTime.now();
+      unawaited(HapticFeedback.lightImpact());
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _recording = false);
+      _recordStartedAt = null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to start recording: $e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _onMicHoldCancel() async {
+    _recordGeneration++;
+    if (_recording) {
+      setState(() => _recording = false);
+    }
+    _recordStartedAt = null;
+    await _recorder.cancelAndDelete();
+  }
+
+  Future<void> _onMicHoldEnd() async {
+    if (_sending || _transcribing) return;
+    if (!_recording) return;
+
+    final generation = _recordGeneration;
+    final startedAt = _recordStartedAt;
+
+    // Immediately show loading UI while we stop -> transcribe.
+    setState(() {
+      _recording = false;
+      _transcribing = true;
+    });
+    _recordStartedAt = null;
+
+    try {
+      final audioPath = await _recorder.stop();
+      if (!mounted || generation != _recordGeneration) return;
+
+      if (audioPath == null || audioPath.trim().isEmpty) {
+        throw StateError('No audio file recorded.');
+      }
+
+      // Guard against very short taps / empty files.
+      if (startedAt != null) {
+        final elapsed = DateTime.now().difference(startedAt);
+        if (elapsed.inMilliseconds < 450) {
+          await _recorder.cancelAndDelete();
+          if (!mounted || generation != _recordGeneration) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Hold the mic a bit longer to record.'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
+      }
+
+      final audioFile = File(audioPath);
+      if (!await audioFile.exists()) {
+        throw StateError('Recorded file not found.');
+      }
+      final bytes = await audioFile.length();
+      if (bytes < 2048) {
+        throw StateError('Recording is too short (file is ${bytes}B).');
+      }
+
+      final sttController = ref.read(sttModelControllerProvider);
+      final selected = sttController.selectedInstalledModel;
+      if (selected == null) {
+        throw StateError('No STT model selected.');
+      }
+
+      final sttService = ref.read(sttServiceProvider);
+
+      final text = await sttService.transcribe(
+        modelPath: selected.localPath,
+        audioPath: audioPath,
+        lang: sttController.selectedLanguage,
+        isTranslate: true,
+      );
+
+      if (!mounted || generation != _recordGeneration) return;
+
+      if (text == null || text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No speech detected.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      // Insert text and immediately send to the LLM.
+      _textController.text = text.trim();
+      _textController.selection = TextSelection.collapsed(
+        offset: _textController.text.length,
+      );
+
+      unawaited(_onSend());
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$e'), behavior: SnackBarBehavior.floating),
+      );
+    } finally {
+      if (mounted && generation == _recordGeneration) {
+        setState(() => _transcribing = false);
+      }
+    }
   }
 
   Future<void> _onStopSpeaking() async {

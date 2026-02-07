@@ -6,9 +6,11 @@ import '../core/google/google_auth_service.dart';
 import '../core/google/google_calendar_service.dart';
 import '../core/llm/llm_service.dart';
 import '../core/memory/memory_service.dart';
+import '../core/stt/stt_service.dart';
 import '../core/unity/unity_bridge.dart';
 import 'app_controller.dart';
 import 'model_controller.dart';
+import 'stt_model_controller.dart';
 
 final unityBridgeProvider = Provider<UnityBridge>((ref) {
   const channel = MethodChannel('unity_bridge');
@@ -18,7 +20,6 @@ final unityBridgeProvider = Provider<UnityBridge>((ref) {
 final memoryServiceProvider = Provider<MemoryService>((ref) {
   return MemoryService();
 });
-
 
 final googleAuthServiceProvider = ChangeNotifierProvider<GoogleAuthService>((
   ref,
@@ -46,6 +47,16 @@ final llmServiceProvider = Provider<LlmService>((ref) {
 
 final modelControllerProvider = ChangeNotifierProvider<ModelController>((ref) {
   return ModelController();
+});
+
+final sttModelControllerProvider = ChangeNotifierProvider<SttModelController>((
+  ref,
+) {
+  return SttModelController();
+});
+
+final sttServiceProvider = Provider<SttService>((ref) {
+  return const SttService();
 });
 
 final appControllerProvider = ChangeNotifierProvider<AppController>((ref) {

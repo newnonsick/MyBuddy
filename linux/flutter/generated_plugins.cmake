@@ -5,9 +5,11 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   flutter_gemma
   flutter_timezone
+  record_linux
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
+  whisper_ggml_plus
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)
