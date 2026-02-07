@@ -250,7 +250,6 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
   Future<void> _onMicHoldStart() async {
     if (_sending || _transcribing || _recording) return;
 
-    // If the buddy is speaking, stop first to reduce feedback.
     if (_speaking) {
       await _onStopSpeaking();
     }
@@ -307,7 +306,6 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
     final generation = _recordGeneration;
     final startedAt = _recordStartedAt;
 
-    // Immediately show loading UI while we stop -> transcribe.
     setState(() {
       _recording = false;
       _transcribing = true;
@@ -322,7 +320,6 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
         throw StateError('No audio file recorded.');
       }
 
-      // Guard against very short taps / empty files.
       if (startedAt != null) {
         final elapsed = DateTime.now().difference(startedAt);
         if (elapsed.inMilliseconds < 450) {
@@ -374,7 +371,6 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
         return;
       }
 
-      // Insert text and immediately send to the LLM.
       _textController.text = text.trim();
       _textController.selection = TextSelection.collapsed(
         offset: _textController.text.length,

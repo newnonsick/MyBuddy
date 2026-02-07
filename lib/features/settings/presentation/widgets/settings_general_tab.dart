@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/providers.dart';
+import '../../../../core/stt/whisper_languages.dart';
 import 'settings_common.dart';
 
 class SettingsGeneralTab extends ConsumerWidget {
@@ -37,21 +38,8 @@ class SettingsGeneralTab extends ConsumerWidget {
                 subtitle:
                     'Select the input language for speech recognition (or auto).',
                 value: stt.selectedLanguage,
-                items: const <String>[
-                  'auto',
-                  'en',
-                  'ko',
-                  'ja',
-                  'zh',
-                  'fr',
-                  'de',
-                  'es',
-                  'it',
-                  'pt',
-                  'ru',
-                  'ar',
-                  'hi',
-                ],
+                items: WhisperLanguages.codes,
+                itemLabelBuilder: WhisperLanguages.labelFor,
                 onChanged: (v) => stt.setSelectedLanguage(v),
               ),
               SettingsActionRow(

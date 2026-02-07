@@ -127,6 +127,7 @@ class SettingsDropdownRow extends StatelessWidget {
     required this.subtitle,
     required this.value,
     required this.items,
+    this.itemLabelBuilder,
     required this.onChanged,
   });
 
@@ -134,6 +135,7 @@ class SettingsDropdownRow extends StatelessWidget {
   final String subtitle;
   final String value;
   final List<String> items;
+  final String Function(String value)? itemLabelBuilder;
   final Future<void> Function(String value) onChanged;
 
   @override
@@ -182,7 +184,11 @@ class SettingsDropdownRow extends StatelessWidget {
                     .map(
                       (v) => DropdownMenuItem<String>(
                         value: v,
-                        child: Text(v == 'auto' ? 'Auto-detect' : v),
+                        child: Text(
+                          itemLabelBuilder?.call(v) ??
+                              (v == 'auto' ? 'Auto-detect' : v),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     )
                     .toList(),

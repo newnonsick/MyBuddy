@@ -12,8 +12,6 @@ class SttService {
     required bool isTranslate,
     int threads = 6,
   }) async {
-    // We use the low-level Whisper entry point so we can provide a custom model
-    // path (quantized GGML bin), while still leveraging whisper_ggml_plus.
     final whisper = Whisper(
       model: _guessModelFromPath(modelPath),
       modelDir: p.dirname(modelPath),
@@ -46,7 +44,6 @@ class SttService {
 
   WhisperModel _guessModelFromPath(String modelPath) {
     final lower = modelPath.toLowerCase();
-    // Heuristic only; modelPath is authoritative for the engine.
     if (lower.contains('large-v3-turbo')) return WhisperModel.largeV3Turbo;
     if (lower.contains('large-v3')) return WhisperModel.large;
     if (lower.contains('medium')) return WhisperModel.medium;

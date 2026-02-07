@@ -167,8 +167,6 @@ class InstalledSttModel {
   final SttModelDisplay display;
   final int downloadedBytes;
   final String downloadedAtIso;
-
-  /// Full path to the extracted `.mlmodelc` directory if present.
   final String? coreMlFolderPath;
 
   static InstalledSttModel fromJson(Map<String, Object?> json) {

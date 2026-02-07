@@ -5,6 +5,7 @@ import '../../../../app/providers.dart';
 import '../../../../app/stt_model_controller.dart';
 import '../../../../core/stt/stt_model_descriptor.dart';
 import '../../../../core/stt/stt_store.dart';
+import '../../../../core/stt/whisper_languages.dart';
 import '../../../../core/utils/format_bytes.dart';
 import '../../../../shared/widgets/glass/glass.dart';
 
@@ -262,21 +263,7 @@ class _SttModelManagementState extends ConsumerState<SttModelManagement> {
   }
 
   Widget _buildSttLanguagePicker(BuildContext context, SttModelController stt) {
-    const langs = <String>[
-      'auto',
-      'en',
-      'ko',
-      'ja',
-      'zh',
-      'fr',
-      'de',
-      'es',
-      'it',
-      'pt',
-      'ru',
-      'ar',
-      'hi',
-    ];
+    final langs = WhisperLanguages.codes;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -295,9 +282,9 @@ class _SttModelManagementState extends ConsumerState<SttModelManagement> {
           Expanded(
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
-                value: langs.contains(stt.selectedLanguage)
+                value: WhisperLanguages.isSupported(stt.selectedLanguage)
                     ? stt.selectedLanguage
-                    : 'auto',
+                    : WhisperLanguages.auto,
                 isExpanded: true,
                 dropdownColor: const Color(0xFF2A2A2E),
                 items: langs
@@ -305,7 +292,7 @@ class _SttModelManagementState extends ConsumerState<SttModelManagement> {
                       (v) => DropdownMenuItem<String>(
                         value: v,
                         child: Text(
-                          v == 'auto' ? 'Language: Auto' : 'Language: $v',
+                          'Language: ${WhisperLanguages.labelFor(v)}',
                           style: const TextStyle(fontSize: 14),
                         ),
                       ),
