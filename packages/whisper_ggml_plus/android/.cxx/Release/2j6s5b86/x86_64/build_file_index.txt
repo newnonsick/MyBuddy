@@ -1,1 +1,0 @@
-D:\flutter_llm_stt\mybuddy\packages\whisper_ggml_plus\android\src\whisper\CMakeLists.txt
