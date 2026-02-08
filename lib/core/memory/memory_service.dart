@@ -9,10 +9,12 @@ abstract final class MemoryStorageKeys {
   static const String memory = 'mybuddy.user_memory.summary.v1';
   static const String processedCount =
       'mybuddy.user_memory.processed_messages.v1';
+  static const String allowAutoUpdate =
+      'mybuddy.user_memory.allow_auto_update.v1';
 }
 
 abstract final class MemoryConfig {
-  static const int maxMemoryCharacters = 2000;
+  static const int maxMemoryCharacters = 200;
 }
 
 class MemoryService {
@@ -24,6 +26,16 @@ class MemoryService {
   Future<void> saveMemory(String summary) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(MemoryStorageKeys.memory, summary.trim());
+  }
+
+  Future<bool> isAutoUpdateAllowed() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(MemoryStorageKeys.allowAutoUpdate) ?? true;
+  }
+
+  Future<void> setAutoUpdateAllowed(bool allowed) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(MemoryStorageKeys.allowAutoUpdate, allowed);
   }
 
   Future<String> buildSystemPrompt({required String memory}) async {
@@ -70,7 +82,6 @@ class MemoryService {
 
       final next = cleaned.isEmpty ? oldMemory : cleaned;
       await saveMemory(next);
-
     } catch (e) {
       debugPrint('MemoryService: Failed to update memory: $e');
     }
@@ -108,7 +119,7 @@ Operational Directives:
 - Emotional Intelligence: Analyze emotional context deeply. Respond with warmth, empathy, and a genuine "best friend" tone.
 - Efficiency & Memory: Keep responses concise and impactful. Seamlessly integrate short-term context and long-term user preferences.
 
-Current Memory:
+Current Memory (about the person you are talking to):
 `${memory.isEmpty ? '(none)' : memory}`
 
 Remember today is $now. (ISO 8601 format yyyy-MM-ddTHH:mm:ss.mmmuuu)
@@ -122,9 +133,9 @@ String _buildReflectPrompt(Map<String, String> args) {
   return '''You are updating a concise user profile summary for a personal AI assistant.
 
 Important:
-- Do NOT create a brand-new memory from scratch.
 - Start from Old Memory and MERGE in any new stable facts from the newly added conversation.
 - Keep existing facts unless they are clearly contradicted.
+- You are able to create a brand-new memory from scratch.
 
 Old Memory:
 "${oldMem.isEmpty ? '(none)' : oldMem}"

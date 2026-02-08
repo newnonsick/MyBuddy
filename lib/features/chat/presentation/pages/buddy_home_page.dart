@@ -17,6 +17,7 @@ import '../../../settings/presentation/pages/settings_page.dart';
 import '../../domain/chat_line.dart';
 import '../widgets/chat_composer.dart';
 import '../widgets/chat_transcript.dart';
+import '../widgets/memory_editor_sheet.dart';
 
 class BuddyHomePage extends ConsumerStatefulWidget {
   const BuddyHomePage({super.key});
@@ -79,6 +80,25 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
     ).push(MaterialPageRoute<void>(builder: (_) => const GoogleCalendarPage()));
   }
 
+  Future<void> _openMemoryEditor() async {
+    final memoryService = ref.read(memoryServiceProvider);
+    final currentMemory = await memoryService.loadMemory();
+    final autoUpdate = await memoryService.isAutoUpdateAllowed();
+
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => MemoryEditorSheet(
+        initialMemory: currentMemory,
+        initialAutoUpdate: autoUpdate,
+        memoryService: memoryService,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = ref.watch(appControllerProvider);
@@ -120,6 +140,12 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
         mainAxisSize: MainAxisSize.min,
         children: [
           _buildCalendarButton(),
+          const SizedBox(width: 8),
+          GlassIconButton.pill(
+            tooltip: 'Memory',
+            icon: Icons.psychology_rounded,
+            onPressed: _openMemoryEditor,
+          ),
           const SizedBox(width: 8),
           GlassIconButton.pill(
             tooltip: 'Settings',

@@ -172,6 +172,9 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> _updateMemory() async {
+    final allowed = await memory.isAutoUpdateAllowed();
+    if (!allowed) return;
+
     await memory.updateMemoryFromConversation(
       conversation: List<Map<String, String>>.unmodifiable(_conversation),
       llm: llm,
