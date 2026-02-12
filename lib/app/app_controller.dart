@@ -33,6 +33,9 @@ class AppController extends ChangeNotifier {
   bool _hideChatLog = false;
   bool get hideChatLog => _hideChatLog;
 
+  Future<void>? _startupFuture;
+  bool _startupCompleted = false;
+
   Future<void> loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     _hideChatLog = prefs.getBool(AppPreferenceKeys.hideChatLog) ?? false;
@@ -50,23 +53,47 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> startup() async {
+    if (_startupCompleted) {
+      debugPrint('AppController.startup: Already completed, skipping.');
+      return;
+    }
+
+    final inFlight = _startupFuture;
+    if (inFlight != null) {
+      debugPrint('AppController.startup: Awaiting in-flight startup...');
+      return inFlight;
+    }
+
+    final future = _runStartup();
+    _startupFuture = future;
+    return future;
+  }
+
+  Future<void> _runStartup() async {
     debugPrint('AppController.startup: Starting...');
 
-    await loadPreferences();
-    await llm.initialize();
-    await models.loadLocalState();
-    await models.refreshInstalled();
+    try {
+      await loadPreferences();
+      await llm.initialize();
+      await models.loadLocalState();
+      await models.refreshInstalled();
 
-    debugPrint(
-      'AppController.startup: Installed models: ${models.installedModels.length}',
-    );
-    debugPrint(
-      'AppController.startup: Last used model ID: ${models.lastUsedModelId}',
-    );
+      debugPrint(
+        'AppController.startup: Installed models: ${models.installedModels.length}',
+      );
+      debugPrint(
+        'AppController.startup: Last used model ID: ${models.lastUsedModelId}',
+      );
 
-    await _restoreLastUsedModel();
+      await _restoreLastUsedModel();
 
-    debugPrint('AppController.startup: Complete. LLM installed: $llmInstalled');
+      _startupCompleted = true;
+      debugPrint(
+        'AppController.startup: Complete. LLM installed: $llmInstalled',
+      );
+    } finally {
+      _startupFuture = null;
+    }
   }
 
   Future<void> _restoreLastUsedModel() async {

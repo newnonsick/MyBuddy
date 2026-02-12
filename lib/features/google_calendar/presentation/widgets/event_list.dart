@@ -10,12 +10,14 @@ class EventList extends StatelessWidget {
     required this.events,
     required this.isLoading,
     required this.onDeleteEvent,
+    required this.onEditEvent,
   });
 
   final DateTime selectedDate;
   final List<CalendarEvent> events;
   final bool isLoading;
   final ValueChanged<String> onDeleteEvent;
+  final ValueChanged<CalendarEvent> onEditEvent;
 
   @override
   Widget build(BuildContext context) {
@@ -37,6 +39,7 @@ class EventList extends StatelessWidget {
           child: EventCard(
             event: event,
             onDelete: () => onDeleteEvent(event.id),
+            onEdit: () => onEditEvent(event),
           ),
         );
       }, childCount: dayEvents.length),
@@ -105,10 +108,16 @@ class EventList extends StatelessWidget {
 }
 
 class EventCard extends StatelessWidget {
-  const EventCard({super.key, required this.event, required this.onDelete});
+  const EventCard({
+    super.key,
+    required this.event,
+    required this.onDelete,
+    required this.onEdit,
+  });
 
   final CalendarEvent event;
   final VoidCallback onDelete;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -175,11 +184,24 @@ class EventCard extends StatelessWidget {
               size: 20,
             ),
             onSelected: (value) {
+              if (value == 'edit') {
+                onEdit();
+              }
               if (value == 'delete') {
                 _confirmDelete(context);
               }
             },
             itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'edit',
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_rounded, size: 18),
+                    SizedBox(width: 8),
+                    Text('Edit'),
+                  ],
+                ),
+              ),
               const PopupMenuItem(
                 value: 'delete',
                 child: Row(

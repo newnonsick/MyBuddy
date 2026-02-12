@@ -194,6 +194,12 @@ class _GoogleCalendarPageState extends ConsumerState<GoogleCalendarPage> {
               selectedDate: controller.selectedDate ?? DateTime.now(),
               events: calendarService.events,
               isLoading: calendarService.isLoading,
+              onEditEvent: (event) {
+                _showAddEventSheet(
+                  controller.selectedDate,
+                  initialEvent: event,
+                );
+              },
               onDeleteEvent: (eventId) async {
                 final result = await calendarService.deleteEvent(eventId);
                 if (result.isFailure && mounted) {
@@ -278,14 +284,18 @@ class _GoogleCalendarPageState extends ConsumerState<GoogleCalendarPage> {
     return '${months[date.month - 1]} ${date.day}';
   }
 
-  void _showAddEventSheet(DateTime? selectedDate) {
+  void _showAddEventSheet(
+    DateTime? selectedDate, {
+    CalendarEvent? initialEvent,
+  }) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => AddEventSheet(
-        initialDate: selectedDate ?? DateTime.now(),
-        onEventCreated: () {
+        initialDate: selectedDate ?? initialEvent?.startTime ?? DateTime.now(),
+        initialEvent: initialEvent,
+        onEventSaved: () {
           _loadEventsIfSignedIn();
         },
       ),

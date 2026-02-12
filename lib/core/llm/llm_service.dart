@@ -28,6 +28,10 @@ class LlmService {
     this.googleCalendarService,
   });
 
+  /// Creates a no-op placeholder for use in the overlay isolate
+  /// where no actual LLM inference is needed.
+  factory LlmService.dummy() => LlmService(unityBridge: UnityBridge());
+
   ModelType modelType;
   PreferredBackend preferredBackend;
   int maxTokens;
@@ -138,12 +142,25 @@ class LlmService {
 
   Future<InferenceModel> _ensureModel() async {
     if (_model != null) return _model!;
-    final model = await FlutterGemma.getActiveModel(
-      maxTokens: maxTokens,
-      preferredBackend: preferredBackend,
-    );
-    _model = model;
-    return model;
+
+    try {
+      final model = await FlutterGemma.getActiveModel(
+        maxTokens: maxTokens,
+        preferredBackend: preferredBackend,
+      );
+      _model = model;
+      return model;
+    } catch (_) {
+      await _resetNativeState();
+      await Future<void>.delayed(const Duration(seconds: 2));
+
+      final retryModel = await FlutterGemma.getActiveModel(
+        maxTokens: maxTokens,
+        preferredBackend: preferredBackend,
+      );
+      _model = retryModel;
+      return retryModel;
+    }
   }
 
   Future<InferenceChat> _ensureChat(InferenceModel model) async {

@@ -52,6 +52,7 @@ dependencies:
   flutter_tts: ^4.2.5
 
   flutter_local_notifications: ^19.5.0
+  flutter_overlay_window: ^0.5.0
 
   timezone: ^0.10.1
   flutter_timezone: ^5.0.1
@@ -70,8 +71,8 @@ flutter_icons:
   android: true
   ios: true
   image_path: "assets/logo.png"
-  adaptive_icon_background: "#ffffff"
-  adaptive_icon_foreground: "assets/logo_foreground.png"
+  # adaptive_icon_background: "#ffffff"
+  # adaptive_icon_foreground: "assets/logo_foreground.png"
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

@@ -2,17 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/providers.dart';
+import '../../../../core/google/google_calendar_service.dart';
 import '../../../../shared/widgets/glass/glass.dart';
 
 class AddEventSheet extends ConsumerStatefulWidget {
   const AddEventSheet({
     super.key,
     required this.initialDate,
-    required this.onEventCreated,
+    required this.onEventSaved,
+    this.initialEvent,
   });
 
   final DateTime initialDate;
-  final VoidCallback onEventCreated;
+  final VoidCallback onEventSaved;
+  final CalendarEvent? initialEvent;
 
   @override
   ConsumerState<AddEventSheet> createState() => _AddEventSheetState();
@@ -31,15 +34,45 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
   bool _isAllDay = false;
   bool _isLoading = false;
 
+  bool get _isEditing => widget.initialEvent != null;
+
   @override
   void initState() {
     super.initState();
+    final event = widget.initialEvent;
+
+    if (event != null) {
+      _titleController.text = event.title;
+      _descriptionController.text = event.description ?? '';
+      _locationController.text = event.location ?? '';
+
+      _isAllDay = event.isAllDay;
+      _startDate = DateTime(
+        event.startTime.year,
+        event.startTime.month,
+        event.startTime.day,
+      );
+      final effectiveEndDate = event.isAllDay
+          ? event.endTime.subtract(const Duration(days: 1))
+          : event.endTime;
+      _endDate = DateTime(
+        effectiveEndDate.year,
+        effectiveEndDate.month,
+        effectiveEndDate.day,
+      );
+      _startTime = TimeOfDay.fromDateTime(event.startTime);
+      _endTime = TimeOfDay.fromDateTime(event.endTime);
+      return;
+    }
+
     _startDate = widget.initialDate;
     _endDate = widget.initialDate;
 
     final now = TimeOfDay.now();
-    _startTime = TimeOfDay(hour: now.hour + 1, minute: 0);
-    _endTime = TimeOfDay(hour: now.hour + 2, minute: 0);
+    final startHour = (now.hour + 1) % 24;
+    final endHour = (now.hour + 2) % 24;
+    _startTime = TimeOfDay(hour: startHour, minute: 0);
+    _endTime = TimeOfDay(hour: endHour, minute: 0);
   }
 
   @override
@@ -107,13 +140,13 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
     return Row(
       children: [
         Icon(
-          Icons.add_circle_rounded,
+          _isEditing ? Icons.edit_rounded : Icons.add_circle_rounded,
           color: Theme.of(context).colorScheme.primary,
           size: 24,
         ),
         const SizedBox(width: 12),
         Text(
-          'New Event',
+          _isEditing ? 'Edit Event' : 'New Event',
           style: Theme.of(
             context,
           ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
@@ -336,7 +369,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
         const SizedBox(width: 16),
         Expanded(
           child: FilledButton(
-            onPressed: _isLoading ? null : _createEvent,
+            onPressed: _isLoading ? null : _saveEvent,
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
@@ -352,7 +385,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
                       color: Colors.white,
                     ),
                   )
-                : const Text('Create Event'),
+                : Text(_isEditing ? 'Save Changes' : 'Create Event'),
           ),
         ),
       ],
@@ -446,7 +479,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
     }
   }
 
-  Future<void> _createEvent() async {
+  Future<void> _saveEvent() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -494,31 +527,58 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
         return;
       }
 
-      final result = await calendarService.createEvent(
-        title: _titleController.text.trim(),
-        description: _descriptionController.text.trim().isEmpty
-            ? null
-            : _descriptionController.text.trim(),
-        startTime: startDateTime,
-        endTime: endDateTime,
-        isAllDay: _isAllDay,
-        location: _locationController.text.trim().isEmpty
-            ? null
-            : _locationController.text.trim(),
-      );
+      final title = _titleController.text.trim();
+      final description = _descriptionController.text.trim().isEmpty
+          ? null
+          : _descriptionController.text.trim();
+      final location = _locationController.text.trim().isEmpty
+          ? null
+          : _locationController.text.trim();
+
+      final result = _isEditing
+          ? await calendarService.updateEvent(
+              eventId: widget.initialEvent!.id,
+              title: title,
+              description: description,
+              startTime: startDateTime,
+              endTime: endDateTime,
+              isAllDay: _isAllDay,
+              location: location,
+            )
+          : await calendarService.createEvent(
+              title: title,
+              description: description,
+              startTime: startDateTime,
+              endTime: endDateTime,
+              isAllDay: _isAllDay,
+              location: location,
+            );
 
       if (!mounted) return;
 
       if (result.isSuccess) {
-        widget.onEventCreated();
+        widget.onEventSaved();
         Navigator.of(context).pop();
-        _showSuccess('Event created successfully');
+        _showSuccess(
+          _isEditing
+              ? 'Event updated successfully'
+              : 'Event created successfully',
+        );
       } else {
-        _showError(result.error ?? 'Failed to create event');
+        _showError(
+          result.error ??
+              (_isEditing
+                  ? 'Failed to update event'
+                  : 'Failed to create event'),
+        );
       }
     } catch (e) {
       if (mounted) {
-        _showError('Failed to create event: $e');
+        _showError(
+          _isEditing
+              ? 'Failed to update event: $e'
+              : 'Failed to create event: $e',
+        );
       }
     } finally {
       if (mounted) {

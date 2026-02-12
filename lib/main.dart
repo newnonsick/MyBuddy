@@ -2,8 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/my_app.dart';
+import 'app/providers.dart';
 import 'core/notification/app_lifecycle_observer.dart';
 import 'core/notification/notification_service.dart';
+import 'core/overlay/overlay_chat_relay.dart';
+import 'core/overlay/overlay_service.dart';
+import 'features/overlay/presentation/pages/overlay_host_app.dart';
+
+@pragma('vm:entry-point')
+void overlayMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const ProviderScope(child: OverlayHostApp()));
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,7 +32,7 @@ Future<void> main() async {
   );
 }
 
-class _AppWithLifecycle extends StatefulWidget {
+class _AppWithLifecycle extends ConsumerStatefulWidget {
   const _AppWithLifecycle({
     required this.notificationService,
     required this.child,
@@ -32,22 +42,32 @@ class _AppWithLifecycle extends StatefulWidget {
   final Widget child;
 
   @override
-  State<_AppWithLifecycle> createState() => _AppWithLifecycleState();
+  ConsumerState<_AppWithLifecycle> createState() => _AppWithLifecycleState();
 }
 
-class _AppWithLifecycleState extends State<_AppWithLifecycle> {
+class _AppWithLifecycleState extends ConsumerState<_AppWithLifecycle> {
   late final AppLifecycleObserver _lifecycleObserver;
+  final OverlayService _overlayService = OverlayService();
+  OverlayChatRelay? _chatRelay;
 
   @override
   void initState() {
     super.initState();
+    _overlayService.initialize();
     _lifecycleObserver = AppLifecycleObserver(
       notificationService: widget.notificationService,
+      overlayService: _overlayService,
     )..initialize();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final appController = ref.read(appControllerProvider);
+      _chatRelay = OverlayChatRelay(appController: appController)..start();
+    });
   }
 
   @override
   void dispose() {
+    _chatRelay?.dispose();
     _lifecycleObserver.dispose();
     super.dispose();
   }

@@ -1,16 +1,22 @@
 import 'package:flutter/widgets.dart';
 
+import '../overlay/overlay_service.dart';
 import 'notification_service.dart';
 
 class AppLifecycleObserver extends WidgetsBindingObserver {
-  AppLifecycleObserver({NotificationService? notificationService})
-    : _notificationService = notificationService ?? NotificationService();
+  AppLifecycleObserver({
+    NotificationService? notificationService,
+    OverlayService? overlayService,
+  }) : _notificationService = notificationService ?? NotificationService(),
+       _overlayService = overlayService ?? OverlayService();
 
   final NotificationService _notificationService;
+  final OverlayService _overlayService;
 
   void initialize() {
     WidgetsBinding.instance.addObserver(this);
     _notificationService.setAppForegroundState(true);
+    _overlayService.initialize();
   }
 
   void dispose() {
@@ -20,6 +26,8 @@ class AppLifecycleObserver extends WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
+
+    _overlayService.onAppLifecycleChanged(state);
 
     switch (state) {
       case AppLifecycleState.resumed:

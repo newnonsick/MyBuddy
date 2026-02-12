@@ -8,6 +8,17 @@ import 'package:path_provider/path_provider.dart';
 class TtsService {
   final FlutterTts _tts = FlutterTts();
 
+  Future<void> speakText(String text) async {
+    final safe = text.trim();
+    if (safe.isEmpty) return;
+
+    await _tts.setSpeechRate(0.5);
+    await _tts.setVolume(1.0);
+    await _tts.setPitch(1.0);
+    await _tts.stop();
+    await _tts.speak(safe);
+  }
+
   Future<String?> _waitForStableFile(
     String filePath, {
     required Duration timeout,
@@ -52,8 +63,7 @@ class TtsService {
   }) async {
     try {
       await (_tts as dynamic).awaitSynthCompletion(true);
-    } catch (_) {
-    }
+    } catch (_) {}
 
     final List<Directory> candidateDirs = <Directory>[];
     candidateDirs.add(await getTemporaryDirectory());
@@ -63,8 +73,7 @@ class TtsService {
       if (externalCaches != null) {
         candidateDirs.addAll(externalCaches);
       }
-    } catch (_) {
-    }
+    } catch (_) {}
 
     final attempts = <String>[];
     Object? lastError;
@@ -77,8 +86,7 @@ class TtsService {
 
       try {
         await File(filePath).delete();
-      } catch (_) {
-      }
+      } catch (_) {}
 
       try {
         final synthResult = await _tts.synthesizeToFile(text, filePath, true);

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,7 +13,7 @@ import '../../../../core/unity/unity_bridge.dart';
 import '../../../../shared/widgets/glass/glass.dart';
 import '../../../google_calendar/presentation/pages/google_calendar_page.dart';
 import '../../../settings/presentation/pages/settings_page.dart';
-import '../../domain/chat_line.dart';
+import '../controllers/chat_session_controller.dart';
 import '../widgets/chat_composer.dart';
 import '../widgets/chat_transcript.dart';
 import '../widgets/memory_editor_sheet.dart';
@@ -30,24 +29,26 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
   late final UnityBridge _unity;
   final TtsService _tts = TtsService();
   final AudioRecorderService _recorder = AudioRecorderService();
+  late final ChatSessionController _session;
 
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
-  final List<ChatLine> _chat = <ChatLine>[];
-
-  bool _sending = false;
-  bool _speaking = false;
-  int _speakGeneration = 0;
-
-  bool _recording = false;
-  bool _transcribing = false;
-  int _recordGeneration = 0;
-  DateTime? _recordStartedAt;
+  int _lastChatCount = 0;
 
   @override
   void initState() {
     super.initState();
     _unity = ref.read(unityBridgeProvider);
+
+    _session = ChatSessionController(
+      appController: ref.read(appControllerProvider),
+      sttModelController: ref.read(sttModelControllerProvider),
+      sttService: ref.read(sttServiceProvider),
+      recorder: _recorder,
+      onSpeak: _speakInUnity,
+      onStopSpeaking: _stopUnitySpeaking,
+      onError: _showSnack,
+    )..addListener(_onSessionUpdated);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final controller = ref.read(appControllerProvider);
@@ -61,11 +62,22 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
 
   @override
   void dispose() {
+    _session.removeListener(_onSessionUpdated);
     _tts.dispose();
     unawaited(_recorder.dispose());
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onSessionUpdated() {
+    final chatCount = _session.chat.length;
+    if (chatCount == _lastChatCount) return;
+
+    _lastChatCount = chatCount;
+    if (chatCount > 0 && _session.chat.last.isAssistant) {
+      _scrollToBottom();
+    }
   }
 
   Future<void> _openSettings() async {
@@ -99,6 +111,13 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
     );
   }
 
+  Future<void> _openOverlayChat() async {
+    final overlay = ref.read(overlayServiceProvider);
+    await overlay.showOverlay();
+    if (!mounted) return;
+    await SystemNavigator.pop(animated: true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = ref.watch(appControllerProvider);
@@ -108,51 +127,76 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: SafeArea(
-          child: Stack(
-            children: [
-              _buildTopRightButtons(),
-              _buildStatusPill(controller),
-              Positioned(
-                left: 12,
-                right: 12,
-                top: 74,
-                bottom: 96,
-                child: _buildTranscript(context, controller),
-              ),
-              Positioned(
-                left: 12,
-                right: 12,
-                bottom: 12,
-                child: _buildComposer(controller),
-              ),
-            ],
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+            child: Column(
+              children: [
+                ListenableBuilder(
+                  listenable: _session,
+                  builder: (_, _) => _buildTopActions(),
+                ),
+                const SizedBox(height: 10),
+                Expanded(child: _buildTranscript(context, controller)),
+                const SizedBox(height: 8),
+                ListenableBuilder(
+                  listenable: _session,
+                  builder: (_, _) => _buildComposerStatus(controller),
+                ),
+                const SizedBox(height: 6),
+                ListenableBuilder(
+                  listenable: _session,
+                  builder: (_, _) => _buildComposer(controller),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildTopRightButtons() {
-    return Positioned(
-      top: 10,
-      right: 12,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+  Widget _buildTopActions() {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
         children: [
           _buildCalendarButton(),
-          const SizedBox(width: 8),
           GlassIconButton.pill(
             tooltip: 'Memory',
             icon: Icons.psychology_rounded,
             onPressed: _openMemoryEditor,
           ),
-          const SizedBox(width: 8),
           GlassIconButton.pill(
             tooltip: 'Settings',
             icon: Icons.settings,
             onPressed: _openSettings,
           ),
+          GlassIconButton.pill(
+            tooltip: 'Overlay',
+            icon: Icons.picture_in_picture_rounded,
+            onPressed: _openOverlayChat,
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildComposerStatus(AppController controller) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Text(
+          _getStatusText(controller),
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.2,
+            color: Colors.black.withValues(alpha: 0.86),
+          ),
+        ),
       ),
     );
   }
@@ -188,26 +232,10 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
     );
   }
 
-  Widget _buildStatusPill(AppController controller) {
-    return Positioned(
-      top: 10,
-      left: 12,
-      child: GlassPill(
-        child: Text(
-          _getStatusText(controller),
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.2,
-          ),
-        ),
-      ),
-    );
-  }
-
   String _getStatusText(AppController controller) {
-    if (_recording) return 'Listening… release to send';
-    if (_transcribing) return 'Transcribing…';
+    if (_session.recording) return 'Listening… release to send';
+    if (_session.transcribing) return 'Transcribing…';
+    if (_session.sending) return 'Generating response…';
     if (controller.installingLlm) return 'Preparing model…';
     if (controller.llmInstalled) return 'MyBuddy';
     return 'Select a model in Settings';
@@ -239,260 +267,73 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
       );
     }
 
-    return ChatTranscript(
-      chat: _chat,
-      scrollController: _scrollController,
-      sending: _sending,
-      hideChatLog: controller.hideChatLog,
+    return ListenableBuilder(
+      listenable: _session,
+      builder: (_, _) => ChatTranscript(
+        chat: _session.chat,
+        scrollController: _scrollController,
+        sending: _session.sending,
+        hideChatLog: controller.hideChatLog,
+      ),
     );
   }
 
   Widget _buildComposer(AppController controller) {
-    final canSend = controller.llmInstalled && !_sending;
+    final canSend = controller.llmInstalled && !_session.sending;
     final stt = ref.watch(sttModelControllerProvider);
 
     final llmIdle =
-        controller.llmInstalled && !_sending && !controller.installingLlm;
+        controller.llmInstalled &&
+        !_session.sending &&
+        !controller.installingLlm;
     final hasSttModel = stt.selectedInstalledModel != null;
     final micEnabled = llmIdle && hasSttModel;
 
     return ChatComposer(
       textController: _textController,
       canSend: canSend,
-      sending: _sending,
-      speaking: _speaking,
+      sending: _session.sending,
+      speaking: _session.speaking,
       isModelReady: controller.llmInstalled,
       micEnabled: micEnabled,
-      isRecording: _recording,
-      isTranscribing: _transcribing,
-      onMicHoldStart: _onMicHoldStart,
-      onMicHoldEnd: _onMicHoldEnd,
-      onMicHoldCancel: _onMicHoldCancel,
+      isRecording: _session.recording,
+      isTranscribing: _session.transcribing,
+      onMicHoldStart: () {
+        unawaited(HapticFeedback.selectionClick());
+        unawaited(_session.startMicHold());
+      },
+      onMicHoldEnd: () {
+        unawaited(_session.endMicHoldAndSend());
+      },
+      onMicHoldCancel: () {
+        unawaited(_session.cancelMicHold());
+      },
       onSend: _onSend,
-      onStopSpeaking: _onStopSpeaking,
+      onStopSpeaking: () {
+        unawaited(_session.stopSpeaking());
+      },
     );
-  }
-
-  Future<void> _onMicHoldStart() async {
-    if (_sending || _transcribing || _recording) return;
-
-    if (_speaking) {
-      await _onStopSpeaking();
-    }
-
-    final generation = ++_recordGeneration;
-    setState(() => _recording = true);
-    _recordStartedAt = null;
-    unawaited(HapticFeedback.selectionClick());
-
-    final hasPermission = await _recorder.hasPermission();
-    if (!hasPermission) {
-      if (!mounted) return;
-      setState(() => _recording = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Microphone permission is required.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
-
-    try {
-      await _recorder.start();
-      if (!mounted || generation != _recordGeneration) return;
-      _recordStartedAt = DateTime.now();
-      unawaited(HapticFeedback.lightImpact());
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _recording = false);
-      _recordStartedAt = null;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to start recording: $e'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
-  Future<void> _onMicHoldCancel() async {
-    _recordGeneration++;
-    if (_recording) {
-      setState(() => _recording = false);
-    }
-    _recordStartedAt = null;
-    await _recorder.cancelAndDelete();
-  }
-
-  Future<void> _onMicHoldEnd() async {
-    if (_sending || _transcribing) return;
-    if (!_recording) return;
-
-    final generation = _recordGeneration;
-    final startedAt = _recordStartedAt;
-
-    setState(() {
-      _recording = false;
-      _transcribing = true;
-    });
-    _recordStartedAt = null;
-
-    try {
-      final audioPath = await _recorder.stop();
-      if (!mounted || generation != _recordGeneration) return;
-
-      if (audioPath == null || audioPath.trim().isEmpty) {
-        throw StateError('No audio file recorded.');
-      }
-
-      if (startedAt != null) {
-        final elapsed = DateTime.now().difference(startedAt);
-        if (elapsed.inMilliseconds < 450) {
-          await _recorder.cancelAndDelete();
-          if (!mounted || generation != _recordGeneration) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Hold the mic a bit longer to record.'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-          return;
-        }
-      }
-
-      final audioFile = File(audioPath);
-      if (!await audioFile.exists()) {
-        throw StateError('Recorded file not found.');
-      }
-      final bytes = await audioFile.length();
-      if (bytes < 2048) {
-        throw StateError('Recording is too short (file is ${bytes}B).');
-      }
-
-      final sttController = ref.read(sttModelControllerProvider);
-      final selected = sttController.selectedInstalledModel;
-      if (selected == null) {
-        throw StateError('No STT model selected.');
-      }
-
-      final sttService = ref.read(sttServiceProvider);
-
-      final text = await sttService.transcribe(
-        modelPath: selected.localPath,
-        audioPath: audioPath,
-        lang: sttController.selectedLanguage,
-        isTranslate: true,
-      );
-
-      if (!mounted || generation != _recordGeneration) return;
-
-      if (text == null || text.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No speech detected.'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        return;
-      }
-
-      _textController.text = text.trim();
-      _textController.selection = TextSelection.collapsed(
-        offset: _textController.text.length,
-      );
-
-      unawaited(_onSend());
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$e'), behavior: SnackBarBehavior.floating),
-      );
-    } finally {
-      if (mounted && generation == _recordGeneration) {
-        setState(() => _transcribing = false);
-      }
-    }
-  }
-
-  Future<void> _onStopSpeaking() async {
-    _speakGeneration++;
-    try {
-      await _tts.stop();
-      await _unity.stopSpeak();
-    } catch (_) {
-      // Ignore errors when stopping
-    } finally {
-      if (mounted) {
-        setState(() => _speaking = false);
-      }
-    }
   }
 
   Future<void> _onSend() async {
     final text = _textController.text.trim();
-    if (text.isEmpty || _sending) return;
-
-    setState(() {
-      _sending = true;
-      _chat.add(ChatLine.user(text));
-      _textController.clear();
-    });
-
-    try {
-      final controller = ref.read(appControllerProvider);
-      final reply = await controller.chatOnce(text);
-
-      if (!mounted || reply.trim().isEmpty) return;
-
-      setState(() {
-        _chat.add(ChatLine.assistant(reply.trim()));
-      });
-      _scrollToBottom();
-
-      if (reply.trim().isNotEmpty) {
-        unawaited(_speakInUnity(reply.trim()));
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _chat.add(ChatLine.assistant('Error: $e'));
-      });
-    } finally {
-      if (mounted) {
-        setState(() => _sending = false);
-      }
-    }
+    if (text.isEmpty) return;
+    _textController.clear();
+    await _session.sendText(text);
   }
 
   Future<void> _speakInUnity(String text) async {
-    final generation = ++_speakGeneration;
-    if (!mounted) return;
+    await _stopUnitySpeaking();
+    final wavPath = await _tts.synthesizeToWavFile(
+      text: text,
+      fileNameBase: 'reply_${DateTime.now().millisecondsSinceEpoch}',
+    );
+    await _unity.speak(wavPath);
+  }
 
-    setState(() => _speaking = true);
-
-    try {
-      await _tts.stop();
-      await _unity.stopSpeak();
-
-      final wavPath = await _tts.synthesizeToWavFile(
-        text: text,
-        fileNameBase: 'reply_${DateTime.now().millisecondsSinceEpoch}',
-      );
-
-      if (!mounted || generation != _speakGeneration) return;
-
-      await _unity.speak(wavPath);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('TTS/Unity failed: $e')));
-    } finally {
-      if (mounted && generation == _speakGeneration) {
-        setState(() => _speaking = false);
-      }
-    }
+  Future<void> _stopUnitySpeaking() async {
+    await _tts.stop();
+    await _unity.stopSpeak();
   }
 
   void _scrollToBottom() {
@@ -504,5 +345,12 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
         curve: Curves.easeOut,
       );
     });
+  }
+
+  void _showSnack(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text), behavior: SnackBarBehavior.floating),
+    );
   }
 }

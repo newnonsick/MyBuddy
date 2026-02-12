@@ -272,6 +272,68 @@ class GoogleCalendarService extends ChangeNotifier {
     }
   }
 
+  Future<CalendarResult<CalendarEvent>> updateEvent({
+    required String eventId,
+    required String title,
+    String? description,
+    required DateTime startTime,
+    required DateTime endTime,
+    bool isAllDay = false,
+    String? location,
+  }) async {
+    if (!authService.isSignedIn) {
+      return CalendarResult.failure('Please sign in to edit events.');
+    }
+
+    final tokenValid = await authService.ensureValidToken();
+    if (!tokenValid) {
+      return CalendarResult.failure('Session expired. Please sign in again.');
+    }
+
+    _calendarApi ??= calendar.CalendarApi(authService.authClient!);
+
+    _setLoading(true);
+    _clearError();
+
+    try {
+      final event = CalendarEvent(
+        id: eventId,
+        title: title,
+        description: description,
+        startTime: startTime,
+        endTime: endTime,
+        isAllDay: isAllDay,
+        location: location,
+      );
+
+      final googleEvent = await event.toGoogleEvent();
+      final updatedEvent = await _calendarApi!.events.update(
+        googleEvent,
+        'primary',
+        eventId,
+      );
+
+      final updatedCalendarEvent = CalendarEvent.fromGoogleEvent(updatedEvent);
+
+      final existingIndex = _events.indexWhere((e) => e.id == eventId);
+      if (existingIndex >= 0) {
+        _events[existingIndex] = updatedCalendarEvent;
+      } else {
+        _events.add(updatedCalendarEvent);
+      }
+      _events.sort((a, b) => a.startTime.compareTo(b.startTime));
+
+      _setLoading(false);
+      return CalendarResult.success(updatedCalendarEvent);
+    } catch (e) {
+      debugPrint('GoogleCalendarService: Failed to update event: $e');
+      final error = _parseApiError(e);
+      _setError(error);
+      _setLoading(false);
+      return CalendarResult.failure(error);
+    }
+  }
+
   Future<CalendarResult<void>> deleteEvent(String eventId) async {
     if (!authService.isSignedIn) {
       return CalendarResult.failure('Please sign in to delete events.');
