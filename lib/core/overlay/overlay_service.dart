@@ -142,12 +142,13 @@ class OverlayService extends ChangeNotifier {
     final ticket = ++_lifecycleTicket;
 
     if (state == AppLifecycleState.resumed) {
-      await _refreshRuntimeState();
-      if (_overlayActive) {
-        await closeOverlay();
-      } else {
-        notifyListeners();
+      try {
+        await FlutterOverlayWindow.closeOverlay();
+      } catch (_) {
+        // Ignore when no overlay is currently attached.
       }
+      await _refreshRuntimeState();
+      notifyListeners();
       return;
     }
 

@@ -47,4 +47,9 @@ class UnityBridge {
       'index': index,
     });
   }
+
+  Future<bool> moveAppToBackground() async {
+    final moved = await _channel.invokeMethod<bool>('moveAppToBackground');
+    return moved ?? false;
+  }
 }

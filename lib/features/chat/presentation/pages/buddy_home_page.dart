@@ -38,10 +38,11 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
   @override
   void initState() {
     super.initState();
+    final appController = ref.read(appControllerProvider);
     _unity = ref.read(unityBridgeProvider);
 
     _session = ChatSessionController(
-      appController: ref.read(appControllerProvider),
+      appController: appController,
       sttModelController: ref.read(sttModelControllerProvider),
       sttService: ref.read(sttServiceProvider),
       recorder: _recorder,
@@ -50,9 +51,12 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
       onError: _showSnack,
     )..addListener(_onSessionUpdated);
 
+    appController.addListener(_onAppConversationUpdated);
+    _onAppConversationUpdated();
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final controller = ref.read(appControllerProvider);
-      await controller.startup();
+      // final controller = ref.read(appControllerProvider);
+      // await controller.startup();
 
       final stt = ref.read(sttModelControllerProvider);
       await stt.loadLocalState();
@@ -62,6 +66,7 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
 
   @override
   void dispose() {
+    ref.read(appControllerProvider).removeListener(_onAppConversationUpdated);
     _session.removeListener(_onSessionUpdated);
     _tts.dispose();
     unawaited(_recorder.dispose());
@@ -114,8 +119,12 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
   Future<void> _openOverlayChat() async {
     final overlay = ref.read(overlayServiceProvider);
     await overlay.showOverlay();
-    if (!mounted) return;
-    await SystemNavigator.pop(animated: true);
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    await _unity.moveAppToBackground();
+  }
+
+  void _onAppConversationUpdated() {
+    _session.syncFromAppConversation();
   }
 
   @override

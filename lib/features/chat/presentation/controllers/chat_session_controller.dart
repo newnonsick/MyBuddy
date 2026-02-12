@@ -27,7 +27,9 @@ class ChatSessionController extends ChangeNotifier {
        _recorder = recorder,
        _onSpeak = onSpeak,
        _onStopSpeaking = onStopSpeaking,
-       _onError = onError;
+       _onError = onError {
+    syncFromAppConversation();
+  }
 
   final AppController _appController;
   final SttModelController _sttModelController;
@@ -56,6 +58,41 @@ class ChatSessionController extends ChangeNotifier {
   int _speakGeneration = 0;
   DateTime? _recordStartedAt;
 
+  void syncFromAppConversation() {
+    final next = _appController.conversation
+        .map(_mapConversationLine)
+        .whereType<ChatLine>()
+        .toList(growable: false);
+
+    if (_isSameChat(next)) return;
+
+    _chat
+      ..clear()
+      ..addAll(next);
+    notifyListeners();
+  }
+
+  ChatLine? _mapConversationLine(Map<String, String> line) {
+    final role = line['role'];
+    final text = (line['text'] ?? '').trim();
+    if (text.isEmpty) return null;
+    if (role == 'user') return ChatLine.user(text);
+    if (role == 'assistant') return ChatLine.assistant(text);
+    return null;
+  }
+
+  bool _isSameChat(List<ChatLine> next) {
+    if (next.length != _chat.length) return false;
+    for (var i = 0; i < next.length; i++) {
+      final current = _chat[i];
+      final incoming = next[i];
+      if (current.isUser != incoming.isUser || current.text != incoming.text) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   Future<void> startMicHold() async {
     if (_sending || _transcribing || _recording) return;
 
@@ -69,12 +106,6 @@ class ChatSessionController extends ChangeNotifier {
     notifyListeners();
 
     final hasPermission = await _recorder.hasPermission();
-    if (!hasPermission) {
-      _recording = false;
-      notifyListeners();
-      _onError?.call('Microphone permission is required.');
-      return;
-    }
 
     try {
       await _recorder.start();
@@ -84,7 +115,11 @@ class ChatSessionController extends ChangeNotifier {
       _recording = false;
       _recordStartedAt = null;
       notifyListeners();
-      _onError?.call('Failed to start recording: $e');
+      if (!hasPermission) {
+        _onError?.call('Microphone permission is required.');
+      } else {
+        _onError?.call('Failed to start recording: $e');
+      }
     }
   }
 

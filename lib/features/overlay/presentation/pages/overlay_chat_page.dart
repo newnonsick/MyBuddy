@@ -5,7 +5,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/scheduler.dart';
 
 import '../../../../app/app_controller.dart';
 import '../../../../app/providers.dart';
@@ -50,7 +49,8 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
   double _overlayDragX = 0;
   double _overlayDragY = 0;
   bool _headerDragReady = false;
-  bool _dragMoveScheduled = false;
+  bool _headerDragging = false;
+  bool _dragMoveInFlight = false;
   OverlayPosition? _pendingDragPosition;
 
   bool _booting = true;
@@ -78,7 +78,12 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
 
   Future<void> _bootstrap() async {
     final overlayPrefs = OverlayPreferences();
+    final stt = ref.read(sttModelControllerProvider);
     await overlayPrefs.load();
+    await stt.loadLocalState();
+    if (stt.installedModels.isEmpty) {
+      await stt.refreshInstalled();
+    }
 
     try {
       final pos = await FlutterOverlayWindow.getOverlayPosition();
@@ -125,7 +130,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
   void dispose() {
     _overlaySubscription?.cancel();
     _stopBubbleTracking();
-    _dragMoveScheduled = false;
+    _dragMoveInFlight = false;
     _pendingDragPosition = null;
     _session.dispose();
     unawaited(_tts.dispose());
@@ -238,17 +243,22 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
       onPanStart: _onHeaderDragStart,
       onPanUpdate: _onHeaderDragUpdate,
       onPanEnd: _onHeaderDragEnd,
+      onPanCancel: _onHeaderDragCancel,
       behavior: HitTestBehavior.opaque,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Center(
-            child: Container(
-              width: 32,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 130),
+              curve: Curves.easeOutCubic,
+              width: _headerDragging ? 44 : 32,
               height: 4,
               margin: const EdgeInsets.only(bottom: 6),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.25),
+                color: Colors.white.withValues(
+                  alpha: _headerDragging ? 0.45 : 0.25,
+                ),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -427,7 +437,13 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     required bool isNarrow,
     required bool compact,
   }) {
+    final stt = ref.watch(sttModelControllerProvider);
     final canSend = app.llmInstalled && !_session.sending;
+    final micEnabled =
+        app.llmInstalled &&
+        !_session.sending &&
+        !_session.transcribing &&
+        stt.selectedInstalledModel != null;
 
     if (isNarrow || compact) {
       return Column(
@@ -450,14 +466,21 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              GlassIconButton.pill(
-                tooltip: _session.recording ? 'Stop recording' : 'Record voice',
-                icon: _session.transcribing
-                    ? Icons.more_horiz
-                    : (_session.recording
-                          ? Icons.stop_rounded
-                          : Icons.mic_rounded),
-                onPressed: _session.transcribing ? null : _toggleRecording,
+              Listener(
+                onPointerDown: micEnabled ? (_) => _onMicHoldStart() : null,
+                onPointerUp: micEnabled ? (_) => _onMicHoldEnd() : null,
+                onPointerCancel: micEnabled ? (_) => _onMicHoldCancel() : null,
+                child: GlassIconButton.pill(
+                  tooltip: _session.recording
+                      ? 'Release to send'
+                      : 'Hold to record',
+                  icon: _session.transcribing
+                      ? Icons.more_horiz
+                      : (_session.recording
+                            ? Icons.stop_rounded
+                            : Icons.mic_rounded),
+                  onPressed: null,
+                ),
               ),
               const SizedBox(width: 8),
               GlassIconButton.pill(
@@ -492,12 +515,17 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
           ),
         ),
         const SizedBox(width: 6),
-        GlassIconButton.pill(
-          tooltip: _session.recording ? 'Stop recording' : 'Record voice',
-          icon: _session.transcribing
-              ? Icons.more_horiz
-              : (_session.recording ? Icons.stop_rounded : Icons.mic_rounded),
-          onPressed: _session.transcribing ? null : _toggleRecording,
+        Listener(
+          onPointerDown: micEnabled ? (_) => _onMicHoldStart() : null,
+          onPointerUp: micEnabled ? (_) => _onMicHoldEnd() : null,
+          onPointerCancel: micEnabled ? (_) => _onMicHoldCancel() : null,
+          child: GlassIconButton.pill(
+            tooltip: _session.recording ? 'Release to send' : 'Hold to record',
+            icon: _session.transcribing
+                ? Icons.more_horiz
+                : (_session.recording ? Icons.stop_rounded : Icons.mic_rounded),
+            onPressed: null,
+          ),
         ),
         const SizedBox(width: 6),
         GlassIconButton.pill(
@@ -521,12 +549,16 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     return 'MyBuddy Overlay';
   }
 
-  Future<void> _toggleRecording() async {
-    if (_session.recording) {
-      await _session.endMicHoldAndSend();
-      return;
-    }
-    await _session.startMicHold();
+  void _onMicHoldStart() {
+    unawaited(_session.startMicHold());
+  }
+
+  void _onMicHoldEnd() {
+    unawaited(_session.endMicHoldAndSend());
+  }
+
+  void _onMicHoldCancel() {
+    unawaited(_session.cancelMicHold());
   }
 
   Future<void> _onSend() async {
@@ -563,124 +595,150 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
 
     await showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) {
         return Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
           child: StatefulBuilder(
             builder: (context, setSheetState) {
-              return GlassCard(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Overlay quick settings',
-                      style: TextStyle(fontWeight: FontWeight.w700),
+              final width = MediaQuery.sizeOf(context).width;
+              final compact = width < 430;
+              final maxSheetHeight = MediaQuery.sizeOf(context).height * 0.82;
+
+              return SafeArea(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: maxSheetHeight),
+                  child: GlassCard(
+                    padding: const EdgeInsets.all(14),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Text(
+                            'Overlay quick settings',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 10),
+                          _dropdownBlock<String>(
+                            title: 'Overlay mode',
+                            value: overlayPrefs.mode.storageValue,
+                            items: OverlayUiMode.values
+                                .map((m) => m.storageValue)
+                                .toList(),
+                            label: (v) => OverlayUiModeX.fromStorage(v).label,
+                            compact: compact,
+                            onChanged: (v) async {
+                              final mode = OverlayUiModeX.fromStorage(v);
+                              await overlayPrefs.setMode(mode);
+                              if (!mounted) return;
+                              setState(() => _mode = mode);
+                              setSheetState(() {});
+                              await overlayService.syncOverlayConfig();
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          SwitchListTile.adaptive(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Speak replies in overlay'),
+                            value: _overlayTtsEnabled,
+                            onChanged: (v) async {
+                              await overlayPrefs.setOverlayTtsEnabled(v);
+                              if (!mounted) return;
+                              setState(() => _overlayTtsEnabled = v);
+                              setSheetState(() {});
+                              await overlayService.syncOverlayConfig();
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          if (models.installedModels.isNotEmpty)
+                            _dropdownBlock<String>(
+                              title: 'LLM model',
+                              value:
+                                  models.selectedModelId ??
+                                  models.installedModels.first.id,
+                              items: models.installedModels
+                                  .map((m) => m.id)
+                                  .toList(),
+                              label: (v) => v,
+                              compact: compact,
+                              onChanged: (v) async {
+                                models.setPendingSelection(v);
+                                await models.commitSelection();
+                                await app.activateSelectedModel();
+                                setSheetState(() {});
+                              },
+                            ),
+                          if (stt.installedModels.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            _dropdownBlock<String>(
+                              title: 'STT model',
+                              value:
+                                  stt.selectedModelId ??
+                                  stt.installedModels.first.id,
+                              items: stt.installedModels
+                                  .map((m) => m.id)
+                                  .toList(),
+                              label: (v) {
+                                final model = stt.installedModels
+                                    .where((m) => m.id == v)
+                                    .first;
+                                return model.display.name.isNotEmpty
+                                    ? model.display.name
+                                    : model.id;
+                              },
+                              compact: compact,
+                              onChanged: (v) async {
+                                stt.setPendingSelection(v);
+                                await stt.commitSelection();
+                                await stt.markLastUsedSelected();
+                                setSheetState(() {});
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                            _dropdownBlock<String>(
+                              title: 'Spoken language',
+                              value:
+                                  WhisperLanguages.isSupported(
+                                    stt.selectedLanguage,
+                                  )
+                                  ? stt.selectedLanguage
+                                  : WhisperLanguages.auto,
+                              items: WhisperLanguages.codes,
+                              label: WhisperLanguages.labelFor,
+                              compact: compact,
+                              onChanged: (v) async {
+                                await stt.setSelectedLanguage(v);
+                                setSheetState(() {});
+                              },
+                            ),
+                          ],
+                          if (_customHeight != null) ...[
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                onPressed: () async {
+                                  await overlayPrefs.setCustomHeight(null);
+                                  if (!mounted) return;
+                                  setState(() => _customHeight = null);
+                                  setSheetState(() {});
+                                  await overlayService.syncOverlayConfig();
+                                },
+                                icon: const Icon(
+                                  Icons.restart_alt_rounded,
+                                  size: 16,
+                                ),
+                                label: const Text('Reset overlay size'),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 10),
-                    _dropdownBlock<String>(
-                      title: 'Overlay mode',
-                      value: overlayPrefs.mode.storageValue,
-                      items: OverlayUiMode.values
-                          .map((m) => m.storageValue)
-                          .toList(),
-                      label: (v) => OverlayUiModeX.fromStorage(v).label,
-                      onChanged: (v) async {
-                        final mode = OverlayUiModeX.fromStorage(v);
-                        await overlayPrefs.setMode(mode);
-                        if (!mounted) return;
-                        setState(() => _mode = mode);
-                        setSheetState(() {});
-                        await overlayService.syncOverlayConfig();
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    SwitchListTile.adaptive(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Speak replies in overlay'),
-                      value: _overlayTtsEnabled,
-                      onChanged: (v) async {
-                        await overlayPrefs.setOverlayTtsEnabled(v);
-                        if (!mounted) return;
-                        setState(() => _overlayTtsEnabled = v);
-                        setSheetState(() {});
-                        await overlayService.syncOverlayConfig();
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    if (models.installedModels.isNotEmpty)
-                      _dropdownBlock<String>(
-                        title: 'LLM model',
-                        value:
-                            models.selectedModelId ??
-                            models.installedModels.first.id,
-                        items: models.installedModels.map((m) => m.id).toList(),
-                        label: (v) => v,
-                        onChanged: (v) async {
-                          models.setPendingSelection(v);
-                          await models.commitSelection();
-                          await app.activateSelectedModel();
-                          setSheetState(() {});
-                        },
-                      ),
-                    if (stt.installedModels.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      _dropdownBlock<String>(
-                        title: 'STT model',
-                        value:
-                            stt.selectedModelId ?? stt.installedModels.first.id,
-                        items: stt.installedModels.map((m) => m.id).toList(),
-                        label: (v) {
-                          final model = stt.installedModels
-                              .where((m) => m.id == v)
-                              .first;
-                          return model.display.name.isNotEmpty
-                              ? model.display.name
-                              : model.id;
-                        },
-                        onChanged: (v) async {
-                          stt.setPendingSelection(v);
-                          await stt.commitSelection();
-                          await stt.markLastUsedSelected();
-                          setSheetState(() {});
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      _dropdownBlock<String>(
-                        title: 'Spoken language',
-                        value:
-                            WhisperLanguages.isSupported(stt.selectedLanguage)
-                            ? stt.selectedLanguage
-                            : WhisperLanguages.auto,
-                        items: WhisperLanguages.codes,
-                        label: WhisperLanguages.labelFor,
-                        onChanged: (v) async {
-                          await stt.setSelectedLanguage(v);
-                          setSheetState(() {});
-                        },
-                      ),
-                    ],
-                    if (_customHeight != null) ...[
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton.icon(
-                          onPressed: () async {
-                            await overlayPrefs.setCustomHeight(null);
-                            if (!mounted) return;
-                            setState(() => _customHeight = null);
-                            setSheetState(() {});
-                            await overlayService.syncOverlayConfig();
-                          },
-                          icon: const Icon(Icons.restart_alt_rounded, size: 16),
-                          label: const Text('Reset overlay size'),
-                        ),
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
               );
             },
@@ -695,42 +753,57 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     required T value,
     required List<T> items,
     required String Function(T item) label,
+    required bool compact,
     required ValueChanged<T> onChanged,
   }) {
+    final titleWidget = Text(
+      title,
+      style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
+    );
+
+    final dropdown = Container(
+      width: compact ? double.infinity : null,
+      constraints: compact
+          ? null
+          : const BoxConstraints(minWidth: 170, maxWidth: 280),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          isExpanded: true,
+          value: value,
+          dropdownColor: const Color(0xFF2A2A2E),
+          items: items
+              .map(
+                (item) => DropdownMenuItem<T>(
+                  value: item,
+                  child: Text(label(item), overflow: TextOverflow.ellipsis),
+                ),
+              )
+              .toList(),
+          onChanged: (next) {
+            if (next == null) return;
+            onChanged(next);
+          },
+        ),
+      ),
+    );
+
+    if (compact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [titleWidget, const SizedBox(height: 6), dropdown],
+      );
+    }
+
     return Row(
       children: [
-        Expanded(
-          child: Text(
-            title,
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
-          ),
-        ),
+        Expanded(child: titleWidget),
         const SizedBox(width: 12),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<T>(
-              value: value,
-              dropdownColor: const Color(0xFF2A2A2E),
-              items: items
-                  .map(
-                    (item) => DropdownMenuItem<T>(
-                      value: item,
-                      child: Text(label(item), overflow: TextOverflow.ellipsis),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (next) {
-                if (next == null) return;
-                onChanged(next);
-              },
-            ),
-          ),
-        ),
+        dropdown,
       ],
     );
   }
@@ -741,8 +814,11 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
   }
 
   void _onHeaderDragStart(DragStartDetails d) async {
+    if (!_headerDragging && mounted) {
+      setState(() => _headerDragging = true);
+    }
     _headerDragReady = false;
-    _dragMoveScheduled = false;
+    _dragMoveInFlight = false;
     _pendingDragPosition = null;
     try {
       final pos = await FlutterOverlayWindow.getOverlayPosition();
@@ -757,20 +833,34 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     _overlayDragX += d.delta.dx;
     _overlayDragY += d.delta.dy;
     _pendingDragPosition = OverlayPosition(_overlayDragX, _overlayDragY);
+    _scheduleDragMove();
+  }
 
-    if (_dragMoveScheduled) return;
-    _dragMoveScheduled = true;
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      _dragMoveScheduled = false;
+  void _scheduleDragMove() {
+    if (_dragMoveInFlight || !_headerDragReady) return;
+    _dragMoveInFlight = true;
+    unawaited(_drainDragMoves());
+  }
+
+  Future<void> _drainDragMoves() async {
+    while (_headerDragReady) {
       final pending = _pendingDragPosition;
-      if (pending == null || !_headerDragReady) return;
+      if (pending == null) break;
       _pendingDragPosition = null;
-      FlutterOverlayWindow.moveOverlay(pending);
-    });
+
+      try {
+        await FlutterOverlayWindow.moveOverlay(pending);
+      } catch (_) {}
+    }
+
+    _dragMoveInFlight = false;
+    if (_headerDragReady && _pendingDragPosition != null) {
+      _scheduleDragMove();
+    }
   }
 
   void _onHeaderDragEnd(DragEndDetails _) {
-    _dragMoveScheduled = false;
+    _dragMoveInFlight = false;
     final finalPosition =
         _pendingDragPosition ?? OverlayPosition(_overlayDragX, _overlayDragY);
     _pendingDragPosition = null;
@@ -780,6 +870,18 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     _overlayDragY = finalPosition.y;
     _lastExpandedPosition = finalPosition;
     _headerDragReady = false;
+    if (_headerDragging && mounted) {
+      setState(() => _headerDragging = false);
+    }
+  }
+
+  void _onHeaderDragCancel() {
+    _dragMoveInFlight = false;
+    _pendingDragPosition = null;
+    _headerDragReady = false;
+    if (_headerDragging && mounted) {
+      setState(() => _headerDragging = false);
+    }
   }
 
   Widget _buildResizeHandle() {

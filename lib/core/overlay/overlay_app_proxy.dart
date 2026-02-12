@@ -23,11 +23,12 @@ class OverlayAppProxy extends AppController {
 
   StreamSubscription<dynamic>? _responseSubscription;
   final Map<String, Completer<String>> _pending = {};
-  int _nextId = 0;
+  bool _isListening = false;
 
   /// Call once to start listening for responses from the main app.
   void startListening(Stream<dynamic> overlayStream) {
     _responseSubscription?.cancel();
+    _isListening = true;
     _responseSubscription = overlayStream.listen(_onPayload);
   }
 
@@ -38,7 +39,7 @@ class OverlayAppProxy extends AppController {
       if (map is! Map<String, dynamic>) return;
       if (map['type'] != 'chat_response') return;
 
-      final requestId = map['requestId'] as String? ?? '';
+      final requestId = '${map['requestId'] ?? ''}';
       final completer = _pending.remove(requestId);
       if (completer == null) return;
 
@@ -66,7 +67,11 @@ class OverlayAppProxy extends AppController {
   /// Relay the chat to the main app and wait for a response.
   @override
   Future<String> chatOnce(String userText) async {
-    final id = '${_nextId++}';
+    if (!_isListening) {
+      throw StateError('Overlay channel is not ready yet. Please try again.');
+    }
+
+    final id = _createRequestId();
     final completer = Completer<String>();
     _pending[id] = completer;
 
@@ -76,15 +81,26 @@ class OverlayAppProxy extends AppController {
       'requestId': id,
     };
 
-    await FlutterOverlayWindow.shareData(jsonEncode(payload));
+    try {
+      await FlutterOverlayWindow.shareData(jsonEncode(payload));
+    } catch (_) {
+      _pending.remove(id);
+      rethrow;
+    }
 
     return completer.future.timeout(
-      const Duration(seconds: 120),
+      const Duration(seconds: 45),
       onTimeout: () {
         _pending.remove(id);
         throw TimeoutException('LLM response timed out');
       },
     );
+  }
+
+  String _createRequestId() {
+    final micros = DateTime.now().microsecondsSinceEpoch;
+    final hash = identityHashCode(this);
+    return '$micros-$hash';
   }
 
   @override
@@ -100,6 +116,7 @@ class OverlayAppProxy extends AppController {
   void disposeRelay() {
     _responseSubscription?.cancel();
     _responseSubscription = null;
+    _isListening = false;
     for (final c in _pending.values) {
       if (!c.isCompleted) {
         c.completeError(Exception('Overlay closed'));

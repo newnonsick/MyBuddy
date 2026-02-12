@@ -189,6 +189,15 @@ class MainActivity : FlutterActivity() {
                     }
                 }
 
+                "moveAppToBackground" -> {
+                    try {
+                        val moved = moveTaskToBack(true)
+                        result.success(moved)
+                    } catch (t: Throwable) {
+                        result.error("MOVE_TO_BACKGROUND_FAILED", t.message, null)
+                    }
+                }
+
                 else -> result.notImplemented()
             }
         }

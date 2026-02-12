@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -58,11 +60,9 @@ class _AppWithLifecycleState extends ConsumerState<_AppWithLifecycle> {
       notificationService: widget.notificationService,
       overlayService: _overlayService,
     )..initialize();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final appController = ref.read(appControllerProvider);
-      _chatRelay = OverlayChatRelay(appController: appController)..start();
-    });
+    final appController = ref.read(appControllerProvider);
+    unawaited(appController.startup());
+    _chatRelay = OverlayChatRelay(appController: appController)..start();
   }
 
   @override

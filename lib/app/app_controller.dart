@@ -22,6 +22,8 @@ class AppController extends ChangeNotifier {
   final LlmService llm;
   final MemoryService memory;
   final List<Map<String, String>> _conversation = <Map<String, String>>[];
+  List<Map<String, String>> get conversation =>
+      List<Map<String, String>>.unmodifiable(_conversation);
 
   bool _llmInstalled = false;
   bool get llmInstalled => _llmInstalled;
@@ -179,6 +181,7 @@ class AppController extends ChangeNotifier {
     final systemPrompt = await memory.buildSystemPrompt(memory: memoryText);
 
     _conversation.add(_createMessage('user', userText));
+    notifyListeners();
 
     final assistant = await llm.generateChat(
       systemText: systemPrompt,
@@ -186,6 +189,7 @@ class AppController extends ChangeNotifier {
     );
 
     _conversation.add(_createMessage('assistant', assistant));
+    notifyListeners();
 
     debugPrint('LLM assistant response:\n$assistant');
 
