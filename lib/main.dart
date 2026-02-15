@@ -62,7 +62,10 @@ class _AppWithLifecycleState extends ConsumerState<_AppWithLifecycle> {
     )..initialize();
     final appController = ref.read(appControllerProvider);
     unawaited(appController.startup());
-    _chatRelay = OverlayChatRelay(appController: appController)..start();
+    _chatRelay = OverlayChatRelay(
+      appController: appController,
+      sttService: ref.read(sttServiceProvider),
+    )..start();
   }
 
   @override

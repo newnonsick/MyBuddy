@@ -52,6 +52,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
   bool _headerDragging = false;
   bool _dragMoveInFlight = false;
   OverlayPosition? _pendingDragPosition;
+  Timer? _headerDragPumpTimer;
 
   bool _booting = true;
 
@@ -130,6 +131,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
   void dispose() {
     _overlaySubscription?.cancel();
     _stopBubbleTracking();
+    _stopHeaderDragPump();
     _dragMoveInFlight = false;
     _pendingDragPosition = null;
     _session.dispose();
@@ -565,7 +567,12 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
     _textController.clear();
-    await _session.sendText(text);
+    try {
+      await _session.sendText(text);
+    } catch (e) {
+      debugPrint('Overlay _onSend error: $e');
+      _showSnack('Send failed: $e');
+    }
   }
 
   Future<void> _openQuickSettings() async {
@@ -817,15 +824,10 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     if (!_headerDragging && mounted) {
       setState(() => _headerDragging = true);
     }
-    _headerDragReady = false;
+    _headerDragReady = true;
     _dragMoveInFlight = false;
     _pendingDragPosition = null;
-    try {
-      final pos = await FlutterOverlayWindow.getOverlayPosition();
-      _overlayDragX = pos.x;
-      _overlayDragY = pos.y;
-    } catch (_) {}
-    _headerDragReady = true;
+    _startHeaderDragPump();
   }
 
   void _onHeaderDragUpdate(DragUpdateDetails d) {
@@ -833,49 +835,71 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     _overlayDragX += d.delta.dx;
     _overlayDragY += d.delta.dy;
     _pendingDragPosition = OverlayPosition(_overlayDragX, _overlayDragY);
-    _scheduleDragMove();
+    unawaited(_flushPendingDragMove());
   }
 
-  void _scheduleDragMove() {
-    if (_dragMoveInFlight || !_headerDragReady) return;
+  void _startHeaderDragPump() {
+    _stopHeaderDragPump();
+    _headerDragPumpTimer = Timer.periodic(const Duration(milliseconds: 16), (
+      _,
+    ) {
+      unawaited(_flushPendingDragMove());
+    });
+  }
+
+  void _stopHeaderDragPump() {
+    _headerDragPumpTimer?.cancel();
+    _headerDragPumpTimer = null;
+  }
+
+  Future<void> _flushPendingDragMove({bool force = false}) async {
+    if (!_headerDragReady && !force) return;
+    if (_dragMoveInFlight) return;
+
+    final pending = _pendingDragPosition;
+    if (pending == null) return;
+
+    _pendingDragPosition = null;
     _dragMoveInFlight = true;
-    unawaited(_drainDragMoves());
-  }
 
-  Future<void> _drainDragMoves() async {
-    while (_headerDragReady) {
-      final pending = _pendingDragPosition;
-      if (pending == null) break;
-      _pendingDragPosition = null;
-
-      try {
-        await FlutterOverlayWindow.moveOverlay(pending);
-      } catch (_) {}
-    }
-
-    _dragMoveInFlight = false;
-    if (_headerDragReady && _pendingDragPosition != null) {
-      _scheduleDragMove();
+    try {
+      await FlutterOverlayWindow.moveOverlay(pending);
+    } catch (_) {
+      // Ignore move failures during drag.
+    } finally {
+      _dragMoveInFlight = false;
     }
   }
 
   void _onHeaderDragEnd(DragEndDetails _) {
-    _dragMoveInFlight = false;
-    final finalPosition =
-        _pendingDragPosition ?? OverlayPosition(_overlayDragX, _overlayDragY);
-    _pendingDragPosition = null;
-    // Final move to ensure we land at the exact accumulated position.
-    FlutterOverlayWindow.moveOverlay(finalPosition);
-    _overlayDragX = finalPosition.x;
-    _overlayDragY = finalPosition.y;
-    _lastExpandedPosition = finalPosition;
+    _stopHeaderDragPump();
     _headerDragReady = false;
+    unawaited(_commitHeaderDragFinalPosition());
     if (_headerDragging && mounted) {
       setState(() => _headerDragging = false);
     }
   }
 
+  Future<void> _commitHeaderDragFinalPosition() async {
+    final finalPosition =
+        _pendingDragPosition ?? OverlayPosition(_overlayDragX, _overlayDragY);
+    _pendingDragPosition = finalPosition;
+
+    var waitCount = 0;
+    while (_dragMoveInFlight && waitCount < 8) {
+      waitCount++;
+      await Future<void>.delayed(const Duration(milliseconds: 8));
+    }
+
+    await _flushPendingDragMove(force: true);
+
+    _overlayDragX = finalPosition.x;
+    _overlayDragY = finalPosition.y;
+    _lastExpandedPosition = finalPosition;
+  }
+
   void _onHeaderDragCancel() {
+    _stopHeaderDragPump();
     _dragMoveInFlight = false;
     _pendingDragPosition = null;
     _headerDragReady = false;
@@ -961,7 +985,6 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
       _lastExpandedPosition = null;
     }
 
-    // Use last known bubble side if available, otherwise keep current default.
     if (_lastBubblePosition != null) {
       _collapsedOnLeft = _lastBubblePosition!.x < (_displayWidth() / 2);
     }
@@ -970,7 +993,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
       await FlutterOverlayWindow.resizeOverlay(
         _bubbleSize.toInt(),
         _bubbleSize.toInt(),
-        true, // enable native drag for the bubble
+        true,
       );
     } catch (_) {}
 
@@ -1001,7 +1024,6 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
   Future<void> _expandFromBubble() async {
     _stopBubbleTracking();
 
-    // Record which side the bubble was on before expanding.
     try {
       final pos = await FlutterOverlayWindow.getOverlayPosition();
       _lastBubblePosition = pos;
@@ -1013,7 +1035,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
       await FlutterOverlayWindow.resizeOverlay(
         size.$1,
         size.$2,
-        false, // disable native drag in expanded mode
+        false,
       );
       await FlutterOverlayWindow.updateFlag(OverlayFlag.focusPointer);
     } catch (_) {}
@@ -1036,8 +1058,6 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     setState(() => _collapsed = false);
   }
 
-  /// Polls the bubble position so we know which edge it snapped to.
-  /// Native [PositionGravity.auto] handles the actual snap animation.
   void _startBubbleTracking() {
     _stopBubbleTracking();
 

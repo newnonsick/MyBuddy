@@ -210,10 +210,13 @@ class ChatSessionController extends ChangeNotifier {
 
     try {
       final reply = await _appController.chatOnce(text);
-      if (reply.trim().isEmpty) return;
 
-      _chat.add(ChatLine.assistant(reply.trim()));
-      notifyListeners();
+      final trimmed = reply.trim();
+      if (trimmed.isEmpty) {
+        _chat.add(ChatLine.assistant('[No response from model]'));
+        notifyListeners();
+        return;
+      }
 
       if (_onSpeak != null) {
         final generation = ++_speakGeneration;
