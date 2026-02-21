@@ -218,17 +218,43 @@ class OverlayService extends ChangeNotifier {
     if (custom != null && custom >= 200) {
       return (WindowSize.matchParent, custom);
     }
-    return (WindowSize.matchParent, _defaultHeightForMode(mode));
+    return (
+      WindowSize.matchParent,
+      _defaultHeightForMode(mode, _readScreenHeight()),
+    );
   }
 
-  static int _defaultHeightForMode(OverlayUiMode mode) {
+  static int _defaultHeightForMode(OverlayUiMode mode, double screenHeight) {
+    final hasScreen = screenHeight > 100;
+    final maxHeight = hasScreen ? (screenHeight - 24).round() : 980;
+
     switch (mode) {
       case OverlayUiMode.minimal:
-        return 420;
+        final target = hasScreen ? (screenHeight * 0.70).round() : 560;
+        return target.clamp(380, maxHeight);
       case OverlayUiMode.avatarLite:
-        return 760;
+        final target = hasScreen ? (screenHeight * 0.92).round() : 900;
+        return target.clamp(560, maxHeight);
       case OverlayUiMode.balanced:
-        return 680;
+        final target = hasScreen ? (screenHeight * 0.84).round() : 780;
+        return target.clamp(500, maxHeight);
     }
+  }
+
+  double _readScreenHeight() {
+    double screenH = 0;
+    try {
+      final dispatcher = WidgetsBinding.instance.platformDispatcher;
+      if (dispatcher.displays.isNotEmpty) {
+        final d = dispatcher.displays.first;
+        screenH = d.size.height / d.devicePixelRatio;
+      } else if (dispatcher.views.isNotEmpty) {
+        final v = dispatcher.views.first;
+        screenH = v.physicalSize.height / v.devicePixelRatio;
+      }
+    } catch (_) {
+      screenH = 0;
+    }
+    return screenH;
   }
 }

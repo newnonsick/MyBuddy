@@ -26,6 +26,7 @@ class OverlayChatPage extends ConsumerStatefulWidget {
 class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
   static const double _bubbleSize = 74;
   static const double _bubbleEdgeInset = 8;
+  static const double _expandedEdgeInset = 8;
 
   final TtsService _tts = TtsService();
   final AudioRecorderService _recorder = AudioRecorderService();
@@ -48,11 +49,11 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
 
   double _overlayDragX = 0;
   double _overlayDragY = 0;
-  bool _headerDragReady = false;
   bool _headerDragging = false;
+  Offset? _headerDragStartGlobal;
+  OverlayPosition? _headerDragStartPosition;
   bool _dragMoveInFlight = false;
-  OverlayPosition? _pendingDragPosition;
-  Timer? _headerDragPumpTimer;
+  OverlayPosition? _queuedDragPosition;
 
   bool _booting = true;
 
@@ -122,6 +123,9 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
         _mode = mode;
         _overlayTtsEnabled = ttsEnabled;
       });
+      if (!_collapsed) {
+        unawaited(_ensureExpandedOverlayFullyVisible());
+      }
     } catch (_) {
       // Ignore malformed payloads.
     }
@@ -131,9 +135,8 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
   void dispose() {
     _overlaySubscription?.cancel();
     _stopBubbleTracking();
-    _stopHeaderDragPump();
     _dragMoveInFlight = false;
-    _pendingDragPosition = null;
+    _queuedDragPosition = null;
     _session.dispose();
     unawaited(_tts.dispose());
     unawaited(_recorder.dispose());
@@ -820,70 +823,69 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     await FlutterOverlayWindow.closeOverlay();
   }
 
-  void _onHeaderDragStart(DragStartDetails d) async {
+  void _onHeaderDragStart(DragStartDetails d) {
     if (!_headerDragging && mounted) {
       setState(() => _headerDragging = true);
     }
-    _headerDragReady = true;
-    _dragMoveInFlight = false;
-    _pendingDragPosition = null;
-    _startHeaderDragPump();
+    _headerDragStartGlobal = d.globalPosition;
+    _headerDragStartPosition = OverlayPosition(_overlayDragX, _overlayDragY);
+    _queuedDragPosition = null;
   }
 
   void _onHeaderDragUpdate(DragUpdateDetails d) {
-    if (!_headerDragReady) return;
-    _overlayDragX += d.delta.dx;
-    _overlayDragY += d.delta.dy;
-    _pendingDragPosition = OverlayPosition(_overlayDragX, _overlayDragY);
-    unawaited(_flushPendingDragMove());
+    final startGlobal = _headerDragStartGlobal;
+    final startPosition = _headerDragStartPosition;
+    if (startGlobal == null || startPosition == null) return;
+
+    final pointerDelta = d.globalPosition - startGlobal;
+    final next = _clampExpandedPosition(
+      OverlayPosition(
+        startPosition.x + pointerDelta.dx,
+        startPosition.y + pointerDelta.dy,
+      ),
+    );
+
+    _overlayDragX = next.x;
+    _overlayDragY = next.y;
+    _queuedDragPosition = next;
+    unawaited(_flushQueuedDragMove());
   }
 
-  void _startHeaderDragPump() {
-    _stopHeaderDragPump();
-    _headerDragPumpTimer = Timer.periodic(const Duration(milliseconds: 16), (
-      _,
-    ) {
-      unawaited(_flushPendingDragMove());
-    });
-  }
-
-  void _stopHeaderDragPump() {
-    _headerDragPumpTimer?.cancel();
-    _headerDragPumpTimer = null;
-  }
-
-  Future<void> _flushPendingDragMove({bool force = false}) async {
-    if (!_headerDragReady && !force) return;
+  Future<void> _flushQueuedDragMove() async {
     if (_dragMoveInFlight) return;
+    final target = _queuedDragPosition;
+    if (target == null) return;
 
-    final pending = _pendingDragPosition;
-    if (pending == null) return;
-
-    _pendingDragPosition = null;
     _dragMoveInFlight = true;
+    _queuedDragPosition = null;
 
     try {
-      await FlutterOverlayWindow.moveOverlay(pending);
+      await FlutterOverlayWindow.moveOverlay(target);
     } catch (_) {
       // Ignore move failures during drag.
     } finally {
       _dragMoveInFlight = false;
+
+      if (_queuedDragPosition != null) {
+        unawaited(_flushQueuedDragMove());
+      }
     }
   }
 
   void _onHeaderDragEnd(DragEndDetails _) {
-    _stopHeaderDragPump();
-    _headerDragReady = false;
     unawaited(_commitHeaderDragFinalPosition());
+    _headerDragStartGlobal = null;
+    _headerDragStartPosition = null;
     if (_headerDragging && mounted) {
       setState(() => _headerDragging = false);
     }
   }
 
   Future<void> _commitHeaderDragFinalPosition() async {
-    final finalPosition =
-        _pendingDragPosition ?? OverlayPosition(_overlayDragX, _overlayDragY);
-    _pendingDragPosition = finalPosition;
+    final finalPosition = _clampExpandedPosition(
+      _queuedDragPosition ?? OverlayPosition(_overlayDragX, _overlayDragY),
+    );
+    _queuedDragPosition = finalPosition;
 
     var waitCount = 0;
     while (_dragMoveInFlight && waitCount < 8) {
@@ -891,7 +893,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
       await Future<void>.delayed(const Duration(milliseconds: 8));
     }
 
-    await _flushPendingDragMove(force: true);
+    await _flushQueuedDragMove();
 
     _overlayDragX = finalPosition.x;
     _overlayDragY = finalPosition.y;
@@ -899,10 +901,9 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
   }
 
   void _onHeaderDragCancel() {
-    _stopHeaderDragPump();
-    _dragMoveInFlight = false;
-    _pendingDragPosition = null;
-    _headerDragReady = false;
+    _queuedDragPosition = null;
+    _headerDragStartGlobal = null;
+    _headerDragStartPosition = null;
     if (_headerDragging && mounted) {
       setState(() => _headerDragging = false);
     }
@@ -1023,6 +1024,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
 
   Future<void> _expandFromBubble() async {
     _stopBubbleTracking();
+    _cacheScreenDimensionsFromView();
 
     try {
       final pos = await FlutterOverlayWindow.getOverlayPosition();
@@ -1032,30 +1034,30 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
 
     final size = _expandedSizeForMode(_mode);
     try {
-      await FlutterOverlayWindow.resizeOverlay(
-        size.$1,
-        size.$2,
-        false,
-      );
+      await FlutterOverlayWindow.resizeOverlay(size.$1, size.$2, false);
       await FlutterOverlayWindow.updateFlag(OverlayFlag.focusPointer);
     } catch (_) {}
 
-    if (_lastExpandedPosition != null) {
+    OverlayPosition? baseTarget = _lastExpandedPosition ?? _lastBubblePosition;
+    if (baseTarget == null) {
       try {
-        await FlutterOverlayWindow.moveOverlay(_lastExpandedPosition!);
-        _overlayDragX = _lastExpandedPosition!.x;
-        _overlayDragY = _lastExpandedPosition!.y;
+        baseTarget = await FlutterOverlayWindow.getOverlayPosition();
       } catch (_) {}
-    } else {
+    }
+
+    if (baseTarget != null) {
+      final target = _clampExpandedPosition(baseTarget);
       try {
-        final pos = await FlutterOverlayWindow.getOverlayPosition();
-        _overlayDragX = pos.x;
-        _overlayDragY = pos.y;
+        await FlutterOverlayWindow.moveOverlay(target);
+        _overlayDragX = target.x;
+        _overlayDragY = target.y;
+        _lastExpandedPosition = target;
       } catch (_) {}
     }
 
     if (!mounted) return;
     setState(() => _collapsed = false);
+    unawaited(_ensureExpandedOverlayFullyVisible());
   }
 
   void _startBubbleTracking() {
@@ -1083,6 +1085,11 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
 
   double _displayWidth() {
     if (_screenWidth > 100) return _screenWidth;
+    try {
+      final view = View.of(context);
+      final width = view.physicalSize.width / view.devicePixelRatio;
+      if (width > 100) return width;
+    } catch (_) {}
     final dispatcher = WidgetsBinding.instance.platformDispatcher;
     if (dispatcher.displays.isNotEmpty) {
       final display = dispatcher.displays.first;
@@ -1098,6 +1105,11 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
 
   double _displayHeight() {
     if (_screenHeight > 100) return _screenHeight;
+    try {
+      final view = View.of(context);
+      final height = view.physicalSize.height / view.devicePixelRatio;
+      if (height > 100) return height;
+    } catch (_) {}
     final dispatcher = WidgetsBinding.instance.platformDispatcher;
     if (dispatcher.displays.isNotEmpty) {
       final display = dispatcher.displays.first;
@@ -1115,14 +1127,83 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     if (_customHeight != null && _customHeight! >= 200) {
       return (WindowSize.matchParent, _customHeight!);
     }
+    final screenHeight = _displayHeight();
+    final hasScreen = screenHeight > 100;
+    final maxHeight = hasScreen ? (screenHeight - 24).round() : 980;
+
     switch (mode) {
       case OverlayUiMode.minimal:
-        return (WindowSize.matchParent, 420);
+        final target = hasScreen ? (screenHeight * 0.70).round() : 560;
+        return (WindowSize.matchParent, target.clamp(380, maxHeight));
       case OverlayUiMode.avatarLite:
-        return (WindowSize.matchParent, 760);
+        final target = hasScreen ? (screenHeight * 0.92).round() : 900;
+        return (WindowSize.matchParent, target.clamp(560, maxHeight));
       case OverlayUiMode.balanced:
-        return (WindowSize.matchParent, 680);
+        final target = hasScreen ? (screenHeight * 0.84).round() : 780;
+        return (WindowSize.matchParent, target.clamp(500, maxHeight));
     }
+  }
+
+  OverlayPosition _clampExpandedPosition(OverlayPosition position) {
+    _cacheScreenDimensionsFromView();
+
+    final size = _expandedSizeForMode(_mode);
+    final width = size.$1 == WindowSize.matchParent
+        ? _displayWidth()
+        : size.$1.toDouble();
+    final height = size.$2.toDouble();
+
+    final displayWidth = _displayWidth();
+    final displayHeight = _displayHeight();
+
+    final minX = width >= displayWidth ? 0.0 : _expandedEdgeInset;
+    final maxX = width >= displayWidth
+        ? math.max(0.0, displayWidth - width)
+        : math.max(minX, displayWidth - width - _expandedEdgeInset);
+    const minY = _expandedEdgeInset;
+    final maxY = math.max(minY, displayHeight - height - _expandedEdgeInset);
+
+    return OverlayPosition(
+      position.x.clamp(minX, maxX).toDouble(),
+      position.y.clamp(minY, maxY).toDouble(),
+    );
+  }
+
+  Future<void> _ensureExpandedOverlayFullyVisible() async {
+    if (_collapsed) return;
+
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    _cacheScreenDimensionsFromView();
+
+    OverlayPosition? current;
+    try {
+      current = await FlutterOverlayWindow.getOverlayPosition();
+    } catch (_) {
+      current = null;
+    }
+
+    final desired = _clampExpandedPosition(
+      current ??
+          _lastExpandedPosition ??
+          OverlayPosition(_overlayDragX, _overlayDragY),
+    );
+
+    final needsMove =
+        current == null ||
+        (current.x - desired.x).abs() > 0.5 ||
+        (current.y - desired.y).abs() > 0.5;
+
+    if (needsMove) {
+      try {
+        await FlutterOverlayWindow.moveOverlay(desired);
+      } catch (_) {
+        // Ignore correction failures.
+      }
+    }
+
+    _overlayDragX = desired.x;
+    _overlayDragY = desired.y;
+    _lastExpandedPosition = desired;
   }
 
   void _showSnack(String text) {

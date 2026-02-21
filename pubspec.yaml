@@ -63,6 +63,8 @@ dependencies:
 
   flutter_launcher_icons: ^0.14.4
 
+  toastification: ^3.0.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -102,6 +104,8 @@ flutter:
 dependency_overrides:
   whisper_ggml_plus:
     path: packages/whisper_ggml_plus
+  flutter_overlay_window:
+    path: packages/flutter_overlay_window
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

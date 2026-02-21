@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
@@ -40,7 +41,20 @@ class AudioRecorderService {
       bitRate: 128000,
     );
 
-    await _recorder.start(config, path: outPath);
+    try {
+      await _recorder.start(config, path: outPath);
+    } on PlatformException catch (e) {
+      if (_isMicrophonePermissionError(e)) {
+        throw const MicrophonePermissionException();
+      }
+      rethrow;
+    } catch (e) {
+      if (_isMicrophonePermissionError(e)) {
+        throw const MicrophonePermissionException();
+      }
+      rethrow;
+    }
+
     _currentPath = outPath;
 
     debugPrint('STT recording started: $outPath');
@@ -80,4 +94,20 @@ class AudioRecorderService {
   Future<void> dispose() async {
     await _recorder.dispose();
   }
+
+  bool _isMicrophonePermissionError(Object error) {
+    final text = error.toString().toLowerCase();
+    return text.contains('permission') ||
+        text.contains('not granted') ||
+        text.contains('denied') ||
+        text.contains('record_audio');
+  }
+}
+
+class MicrophonePermissionException implements Exception {
+  const MicrophonePermissionException();
+
+  @override
+  String toString() =>
+      'Microphone permission is not granted. Please allow microphone access in Android app permissions.';
 }

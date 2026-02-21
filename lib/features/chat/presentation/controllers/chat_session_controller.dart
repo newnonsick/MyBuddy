@@ -105,8 +105,6 @@ class ChatSessionController extends ChangeNotifier {
     _recordStartedAt = null;
     notifyListeners();
 
-    final hasPermission = await _recorder.hasPermission();
-
     try {
       await _recorder.start();
       if (generation != _recordGeneration) return;
@@ -115,8 +113,10 @@ class ChatSessionController extends ChangeNotifier {
       _recording = false;
       _recordStartedAt = null;
       notifyListeners();
-      if (!hasPermission) {
-        _onError?.call('Microphone permission is required.');
+      if (e is MicrophonePermissionException) {
+        _onError?.call(
+          'Microphone permission is required. Open Android Settings > MyBuddy > Permissions > Microphone and allow it.',
+        );
       } else {
         _onError?.call('Failed to start recording: $e');
       }
@@ -216,6 +216,16 @@ class ChatSessionController extends ChangeNotifier {
         _chat.add(ChatLine.assistant('[No response from model]'));
         notifyListeners();
         return;
+      }
+
+      final alreadyAppendedBySync =
+          _chat.isNotEmpty &&
+          _chat.last.isAssistant &&
+          _chat.last.text == trimmed;
+
+      if (!alreadyAppendedBySync) {
+        _chat.add(ChatLine.assistant(trimmed));
+        notifyListeners();
       }
 
       if (_onSpeak != null) {
