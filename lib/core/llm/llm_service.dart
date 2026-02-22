@@ -414,7 +414,8 @@ class LlmService {
         '- Preserve unchanged existing entries\n'
         '- Replace contradicted entries\n'
         '- Ignore small talk, greetings, ephemeral details\n'
-        '- Do NOT infer or guess missing information\n';
+        '- Important: You Must NOT infer or guess missing information\n'
+        '- Important: Do not make assumptions, random guesses, or fabricated information. Any predictions or inferences about the user\'s actions or behavior should be strictly based on the information given by the user.\n';
   }
 
   Future<void> close() async {
