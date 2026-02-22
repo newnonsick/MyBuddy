@@ -252,8 +252,25 @@ public class OverlayService extends Service implements View.OnTouchListener {
         }
     }
 
+    private void cancelTrayAnimation() {
+        if (mTrayTimerTask != null) {
+            mTrayTimerTask.cancel();
+            mTrayTimerTask = null;
+        }
+        if (mTrayAnimationTimer != null) {
+            mTrayAnimationTimer.cancel();
+            mTrayAnimationTimer = null;
+        }
+        // Remove any already-posted Runnables from the Handler queue.
+        // Without this, a Runnable posted by TrayAnimationTimerTask.run()
+        // just before cancel() can still execute and cause NPE or stale
+        // position updates.
+        mAnimationHandler.removeCallbacksAndMessages(null);
+    }
+
     private void resizeOverlay(int width, int height, boolean enableDrag, MethodChannel.Result result) {
         if (windowManager != null) {
+            cancelTrayAnimation();
             WindowManager.LayoutParams params = (WindowManager.LayoutParams) flutterView.getLayoutParams();
             params.width = (width == -1999 || width == -1) ? -1 : dpToPx(width);
             params.height = (height != 1999 || height != -1) ? dpToPx(height) : height;
@@ -267,6 +284,7 @@ public class OverlayService extends Service implements View.OnTouchListener {
 
     private void moveOverlay(int x, int y, MethodChannel.Result result) {
         if (windowManager != null) {
+            cancelTrayAnimation();
             WindowManager.LayoutParams params = (WindowManager.LayoutParams) flutterView.getLayoutParams();
             params.x = (x == -1999 || x == -1) ? -1 : dpToPx(x);
             params.y = dpToPx(y);
@@ -293,6 +311,7 @@ public class OverlayService extends Service implements View.OnTouchListener {
     public static boolean moveOverlay(int x, int y) {
         if (instance != null && instance.flutterView != null) {
             if (instance.windowManager != null) {
+                instance.cancelTrayAnimation();
                 WindowManager.LayoutParams params = (WindowManager.LayoutParams) instance.flutterView.getLayoutParams();
                 params.x = (x == -1999 || x == -1) ? -1 : instance.dpToPx(x);
                 params.y = instance.dpToPx(y);
@@ -393,17 +412,26 @@ public class OverlayService extends Service implements View.OnTouchListener {
         return mResources.getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT;
     }
 
+    private boolean canDragThisTouch = false;
+
     @Override
     public boolean onTouch(View view, MotionEvent event) {
         if (windowManager != null && WindowSetup.enableDrag) {
             WindowManager.LayoutParams params = (WindowManager.LayoutParams) flutterView.getLayoutParams();
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
+                    // If the window is large (expanded mode), only allow dragging from the top 100dp (header)
+                    if (params.height > dpToPx(200) && event.getY() > dpToPx(100)) {
+                        canDragThisTouch = false;
+                        return false;
+                    }
+                    canDragThisTouch = true;
                     dragging = false;
                     lastX = event.getRawX();
                     lastY = event.getRawY();
                     break;
                 case MotionEvent.ACTION_MOVE:
+                    if (!canDragThisTouch) return false;
                     float dx = event.getRawX() - lastX;
                     float dy = event.getRawY() - lastY;
                     if (!dragging && dx * dx + dy * dy < 25) {
@@ -419,6 +447,12 @@ public class OverlayService extends Service implements View.OnTouchListener {
                             || WindowSetup.gravity == (Gravity.BOTTOM | Gravity.RIGHT);
                     int xx = params.x + ((int) dx * (invertX ? -1 : 1));
                     int yy = params.y + ((int) dy * (invertY ? -1 : 1));
+                    
+                    // Prevent horizontal dragging in expanded mode (height > 200dp)
+                    if (params.height > dpToPx(200)) {
+                        xx = 0;
+                    }
+                    
                     params.x = xx;
                     params.y = yy;
                     if (windowManager != null) {
@@ -428,15 +462,22 @@ public class OverlayService extends Service implements View.OnTouchListener {
                     break;
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
+                    if (!canDragThisTouch) return false;
                     lastYPosition = params.y;
-                    if (!WindowSetup.positionGravity.equals("none")) {
+                    // Only start snap animation if the user actually dragged.
+                    // A simple tap (no drag) must not trigger the animation,
+                    // because the Dart-side expand/collapse flow that follows
+                    // the tap would race with the timer and corrupt the position.
+                    if (dragging && !WindowSetup.positionGravity.equals("none")) {
                         if (windowManager == null)
                             return false;
+                        cancelTrayAnimation();
                         windowManager.updateViewLayout(flutterView, params);
                         mTrayTimerTask = new TrayAnimationTimerTask();
                         mTrayAnimationTimer = new Timer();
                         mTrayAnimationTimer.schedule(mTrayTimerTask, 0, 25);
                     }
+                    dragging = false;
                     return false;
                 default:
                     return false;
@@ -475,14 +516,21 @@ public class OverlayService extends Service implements View.OnTouchListener {
         @Override
         public void run() {
             mAnimationHandler.post(() -> {
-                params.x = (2 * (params.x - mDestX)) / 3 + mDestX;
-                params.y = (2 * (params.y - mDestY)) / 3 + mDestY;
-                if (windowManager != null) {
+                if (windowManager == null || flutterView == null) {
+                    TrayAnimationTimerTask.this.cancel();
+                    if (mTrayAnimationTimer != null) mTrayAnimationTimer.cancel();
+                    return;
+                }
+                try {
+                    params.x = (2 * (params.x - mDestX)) / 3 + mDestX;
+                    params.y = (2 * (params.y - mDestY)) / 3 + mDestY;
                     windowManager.updateViewLayout(flutterView, params);
+                } catch (Exception e) {
+                    Log.w("OverlayService", "TrayAnimation updateViewLayout failed: " + e.getMessage());
                 }
                 if (Math.abs(params.x - mDestX) < 2 && Math.abs(params.y - mDestY) < 2) {
                     TrayAnimationTimerTask.this.cancel();
-                    mTrayAnimationTimer.cancel();
+                    if (mTrayAnimationTimer != null) mTrayAnimationTimer.cancel();
                 }
             });
         }

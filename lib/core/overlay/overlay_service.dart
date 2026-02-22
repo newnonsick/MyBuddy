@@ -113,7 +113,7 @@ class OverlayService extends ChangeNotifier {
     await FlutterOverlayWindow.showOverlay(
       width: size.$1,
       height: size.$2,
-      enableDrag: false,
+      enableDrag: true,
       overlayTitle: 'MyBuddy Overlay',
       overlayContent: 'Chat with MyBuddy while using other apps',
       flag: OverlayFlag.focusPointer,
@@ -230,14 +230,14 @@ class OverlayService extends ChangeNotifier {
 
     switch (mode) {
       case OverlayUiMode.minimal:
-        final target = hasScreen ? (screenHeight * 0.70).round() : 560;
-        return target.clamp(380, maxHeight);
+        final target = hasScreen ? (screenHeight * 0.80).round() : 640;
+        return target.clamp(480, maxHeight);
       case OverlayUiMode.avatarLite:
-        final target = hasScreen ? (screenHeight * 0.92).round() : 900;
-        return target.clamp(560, maxHeight);
+        final target = hasScreen ? (screenHeight * 0.95).round() : 920;
+        return target.clamp(640, maxHeight);
       case OverlayUiMode.balanced:
-        final target = hasScreen ? (screenHeight * 0.84).round() : 780;
-        return target.clamp(500, maxHeight);
+        final target = hasScreen ? (screenHeight * 0.90).round() : 840;
+        return target.clamp(600, maxHeight);
     }
   }
 

@@ -177,8 +177,8 @@ class AppController extends ChangeNotifier {
   }
 
   Future<String> chatOnce(String userText) async {
-    final memoryText = await memory.loadMemory();
-    final systemPrompt = await memory.buildSystemPrompt(memory: memoryText);
+    final memoryData = await memory.loadMemoryData();
+    final systemPrompt = await memory.buildSystemPrompt(memory: memoryData);
 
     _conversation.add(_createMessage('user', userText));
     notifyListeners();
@@ -206,9 +206,6 @@ class AppController extends ChangeNotifier {
     final allowed = await memory.isAutoUpdateAllowed();
     if (!allowed) return;
 
-    await memory.updateMemoryFromConversation(
-      conversation: List<Map<String, String>>.unmodifiable(_conversation),
-      llm: llm,
-    );
+    await memory.updateMemoryFromChat(llm: llm);
   }
 }

@@ -28,8 +28,6 @@ class LlmService {
     this.googleCalendarService,
   });
 
-  /// Creates a no-op placeholder for use in the overlay isolate
-  /// where no actual LLM inference is needed.
   factory LlmService.dummy() => LlmService(unityBridge: UnityBridge());
 
   ModelType modelType;
@@ -328,6 +326,95 @@ class LlmService {
 
     final result = results.toString().trim();
     return result.isNotEmpty ? result : response;
+  }
+
+  Future<String> extractMemoryFromChat(String currentMemoryJson) async {
+    return _enqueue(() async {
+      return _withRecovery(() async {
+        final chat = _chat;
+        if (chat == null) return '';
+
+        final history = chat.fullHistory;
+        if (history.length < 2) return '';
+
+        final conversationText = _formatHistoryForMemory(history);
+        if (conversationText.isEmpty) return '';
+
+        final prompt = _buildMemoryPrompt(conversationText, currentMemoryJson);
+
+        final model = await _ensureModel();
+        final session = await model.createSession(
+          temperature: 0.2,
+          randomSeed: randomSeed,
+          topK: 1,
+        );
+        try {
+          await session.addQueryChunk(Message.text(text: prompt, isUser: true));
+          final response = await session.getResponse();
+          return _cleanResponse(response);
+        } finally {
+          await session.close();
+        }
+      });
+    });
+  }
+
+  static String _formatHistoryForMemory(List<Message> history) {
+    const maxMessages = 20;
+    const maxCharsPerMessage = 200;
+
+    final filtered = history.where((m) {
+      if (m.hasImage) return false;
+      if (m.type != MessageType.text) return false;
+      final text = m.text.trim();
+      if (text.isEmpty) return false;
+      if (!m.isUser && text.startsWith('This is a system instruction')) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    if (filtered.isEmpty) return '';
+
+    final recent = filtered.length > maxMessages
+        ? filtered.sublist(filtered.length - maxMessages)
+        : filtered;
+
+    final buffer = StringBuffer();
+    for (final m in recent) {
+      final role = m.isUser ? 'User' : 'Assistant';
+      var text = m.text.trim();
+      if (text.length > maxCharsPerMessage) {
+        text = '${text.substring(0, maxCharsPerMessage)}…';
+      }
+      buffer.writeln('$role: $text');
+    }
+    return buffer.toString().trim();
+  }
+
+  static String _buildMemoryPrompt(String conversation, String currentMemory) {
+    return '<conversation>\n'
+        '$conversation\n'
+        '</conversation>\n'
+        '\n'
+        '<current_memory>\n'
+        '$currentMemory\n'
+        '</current_memory>\n'
+        '\n'
+        'TASK: Extract and update stable personal facts about "User" from the <conversation>'
+        'Merge them into <current_memory>.\n'
+        '\n'
+        'Output ONLY valid JSON, no explanation, no markdown:\n'
+        '{"name":string|null,"traits":[string],"preferences":[string],'
+        '"goals":[string],"facts":[string]}\n'
+        '\n'
+        'RULES:\n'
+        '- ≤8 words per entry, max 5 per array\n'
+        '- Only long-term, stable personal information\n'
+        '- Preserve unchanged existing entries\n'
+        '- Replace contradicted entries\n'
+        '- Ignore small talk, greetings, ephemeral details\n'
+        '- Do NOT infer or guess missing information\n';
   }
 
   Future<void> close() async {

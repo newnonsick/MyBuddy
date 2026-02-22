@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,26 +7,144 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../llm/llm_service.dart';
 
 abstract final class MemoryStorageKeys {
-  static const String memory = 'mybuddy.user_memory.summary.v1';
-  static const String processedCount =
-      'mybuddy.user_memory.processed_messages.v1';
+  static const String memory = 'mybuddy.user_memory.v2';
   static const String allowAutoUpdate =
       'mybuddy.user_memory.allow_auto_update.v1';
 }
 
 abstract final class MemoryConfig {
-  static const int maxMemoryCharacters = 200;
+  static const int maxEntriesPerField = 5;
+  static const int maxMemoryCharacters = 600;
+}
+
+class UserMemory {
+  const UserMemory({
+    this.name,
+    this.traits = const [],
+    this.preferences = const [],
+    this.goals = const [],
+    this.facts = const [],
+  });
+
+  factory UserMemory.fromJson(Map<String, dynamic> json) {
+    return UserMemory(
+      name: json['name'] as String?,
+      traits: _parseStringList(json['traits']),
+      preferences: _parseStringList(json['preferences']),
+      goals: _parseStringList(json['goals']),
+      facts: _parseStringList(json['facts']),
+    );
+  }
+
+  static UserMemory tryParse(String raw) {
+    if (raw.trim().isEmpty) return const UserMemory();
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) return UserMemory.fromJson(decoded);
+    } catch (_) {}
+    if (raw.trim().isNotEmpty) {
+      return UserMemory(facts: [raw.trim()]);
+    }
+    return const UserMemory();
+  }
+
+  static List<String> _parseStringList(dynamic value) {
+    if (value is List) {
+      return value
+          .whereType<String>()
+          .where((s) => s.trim().isNotEmpty)
+          .map((s) => s.trim())
+          .take(MemoryConfig.maxEntriesPerField)
+          .toList();
+    }
+    return const [];
+  }
+
+  final String? name;
+  final List<String> traits;
+  final List<String> preferences;
+  final List<String> goals;
+  final List<String> facts;
+
+  bool get isEmpty =>
+      (name == null || name!.trim().isEmpty) &&
+      traits.isEmpty &&
+      preferences.isEmpty &&
+      goals.isEmpty &&
+      facts.isEmpty;
+
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'traits': traits,
+    'preferences': preferences,
+    'goals': goals,
+    'facts': facts,
+  };
+
+  String toJsonString() => jsonEncode(toJson());
+
+  String toPrettyJsonString() {
+    const encoder = JsonEncoder.withIndent('  ');
+    return encoder.convert(toJson());
+  }
+
+  String toReadableString() {
+    if (isEmpty) return '(none)';
+    final parts = <String>[];
+    if (name != null && name!.trim().isNotEmpty) parts.add('Name: $name');
+    if (traits.isNotEmpty) parts.add('Traits: ${traits.join(', ')}');
+    if (preferences.isNotEmpty) {
+      parts.add('Preferences: ${preferences.join(', ')}');
+    }
+    if (goals.isNotEmpty) parts.add('Goals: ${goals.join(', ')}');
+    if (facts.isNotEmpty) parts.add('Facts: ${facts.join(', ')}');
+    return parts.join('\n');
+  }
 }
 
 class MemoryService {
-  Future<String> loadMemory() async {
+  Future<UserMemory> loadMemoryData() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(MemoryStorageKeys.memory) ?? '';
+    final raw = prefs.getString(MemoryStorageKeys.memory) ?? '';
+    return UserMemory.tryParse(raw);
   }
 
-  Future<void> saveMemory(String summary) async {
+  Future<String> loadMemory() async {
+    final data = await loadMemoryData();
+    return data.toPrettyJsonString();
+  }
+
+  Future<void> saveMemoryData(UserMemory data) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(MemoryStorageKeys.memory, summary.trim());
+    final json = data.toJsonString();
+    await prefs.setString(MemoryStorageKeys.memory, json);
+  }
+
+  Future<void> saveMemory(String raw) async {
+    final prefs = await SharedPreferences.getInstance();
+    try {
+      final decoded = jsonDecode(raw.trim());
+      if (decoded is Map<String, dynamic>) {
+        final validated = UserMemory.fromJson(decoded);
+        await prefs.setString(
+          MemoryStorageKeys.memory,
+          validated.toJsonString(),
+        );
+        return;
+      }
+    } catch (_) {}
+
+    if (raw.trim().isEmpty) {
+      await prefs.setString(
+        MemoryStorageKeys.memory,
+        const UserMemory().toJsonString(),
+      );
+    } else {
+      await prefs.setString(
+        MemoryStorageKeys.memory,
+        UserMemory(facts: [raw.trim()]).toJsonString(),
+      );
+    }
   }
 
   Future<bool> isAutoUpdateAllowed() async {
@@ -38,72 +157,67 @@ class MemoryService {
     await prefs.setBool(MemoryStorageKeys.allowAutoUpdate, allowed);
   }
 
-  Future<String> buildSystemPrompt({required String memory}) async {
-    return compute(_buildSystemPrompt, memory);
+  Future<String> buildSystemPrompt({required UserMemory memory}) async {
+    return compute(_buildSystemPrompt, memory.toReadableString());
   }
 
-  Future<void> updateMemoryFromConversation({
-    required List<Map<String, String>> conversation,
-    required LlmService llm,
-  }) {
+  Future<void> updateMemoryFromChat({required LlmService llm}) {
     _pending = _pending.catchError((_) {}).then((_) async {
-      await _processMemoryUpdate(conversation, llm);
+      await _extractAndSave(llm);
     });
-
     return _pending;
   }
 
   Future<void> _pending = Future<void>.value();
 
-  Future<void> _processMemoryUpdate(
-    List<Map<String, String>> conversation,
-    LlmService llm,
-  ) async {
+  Future<void> _extractAndSave(LlmService llm) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final oldMemory = await loadMemory();
+      final current = await loadMemoryData();
+      final currentJson = current.isEmpty ? '{}' : current.toJsonString();
 
-      final processedCount =
-          prefs.getInt(MemoryStorageKeys.processedCount) ?? 0;
-      final safeProcessedCount = processedCount.clamp(0, conversation.length);
+      final rawResponse = await llm.extractMemoryFromChat(currentJson);
+      if (rawResponse.trim().isEmpty) return;
 
-      final newMessages = conversation.skip(safeProcessedCount).toList();
-      if (newMessages.isEmpty) return;
+      final updated = _parseExtractedMemory(rawResponse, current);
+      if (updated.isEmpty && !current.isEmpty) return;
 
-      final newConversationText = _formatConversation(newMessages);
-
-      final reflectPrompt = await compute(_buildReflectPrompt, <String, String>{
-        'oldMemory': oldMemory,
-        'newConversation': newConversationText,
-      });
-
-      final updated = await llm.generateText(reflectPrompt);
-      final cleaned = await compute(_cleanSummary, updated);
-
-      final next = cleaned.isEmpty ? oldMemory : cleaned;
-      await saveMemory(next);
+      await saveMemoryData(updated);
+      debugPrint('MemoryService: Memory updated → ${updated.toJsonString()}');
     } catch (e) {
       debugPrint('MemoryService: Failed to update memory: $e');
     }
   }
-}
 
-String _formatConversation(List<Map<String, String>> messages) {
-  final buffer = StringBuffer();
+  UserMemory _parseExtractedMemory(String raw, UserMemory fallback) {
+    final jsonStr = _extractJson(raw);
+    if (jsonStr == null) return fallback;
 
-  for (final message in messages) {
-    final role = (message['role'] ?? '').trim().toLowerCase();
-    final text = (message['text'] ?? '').trim();
-    if (text.isEmpty) continue;
-
-    final label = role == 'assistant' ? 'Assistant' : 'User';
-    buffer.writeln('$label: "$text"');
+    try {
+      final decoded = jsonDecode(jsonStr);
+      if (decoded is Map<String, dynamic>) {
+        return UserMemory.fromJson(decoded);
+      }
+    } catch (_) {}
+    return fallback;
   }
 
-  return buffer.toString().trim();
+  String? _extractJson(String text) {
+    final codeBlockRegex = RegExp(
+      r'```(?:json)?\s*(\{.*?\})\s*```',
+      dotAll: true,
+    );
+    final codeMatch = codeBlockRegex.firstMatch(text);
+    if (codeMatch != null) return codeMatch.group(1);
+
+    final start = text.indexOf('{');
+    final end = text.lastIndexOf('}');
+    if (start != -1 && end > start) return text.substring(start, end + 1);
+
+    return null;
+  }
 }
 
-String _buildSystemPrompt(String memory) {
+String _buildSystemPrompt(String memoryReadable) {
   final now = DateTime.now().toLocal().toIso8601String();
 
   return '''This is a system instruction. You must follow it strictly.
@@ -120,60 +234,8 @@ Operational Directives:
 - Efficiency & Memory: Keep responses concise and impactful. Seamlessly integrate short-term context and long-term user preferences.
 
 Current Memory (about the person you are talking to):
-`${memory.isEmpty ? '(none)' : memory}`
+`$memoryReadable`
 
 Remember today is $now. (ISO 8601 format yyyy-MM-ddTHH:mm:ss.mmmuuu)
 ''';
-}
-
-String _buildReflectPrompt(Map<String, String> args) {
-  final oldMem = (args['oldMemory'] ?? '').trim();
-  final newConversation = (args['newConversation'] ?? '').trim();
-
-  return '''You are updating a concise user profile summary for a personal AI assistant.
-
-Important:
-- Start from Old Memory and MERGE in any new stable facts from the newly added conversation.
-- Keep existing facts unless they are clearly contradicted.
-- You are able to create a brand-new memory from scratch.
-
-Old Memory:
-"${oldMem.isEmpty ? '(none)' : oldMem}"
-
-Newly Added Conversation (since last update):
-$newConversation
-
-Update the profile with new stable facts (name, preferences, long-term goals). Avoid ephemeral details.
-Output ONLY the updated summary.
-''';
-}
-
-String _cleanSummary(String raw) {
-  var summary = raw.trim();
-
-  summary = summary.replaceAll('```', '').trim();
-
-  const prefixes = [
-    'Updated summary:',
-    'Updated Summary:',
-    'Summary:',
-    'Profile:',
-  ];
-
-  for (final prefix in prefixes) {
-    if (summary.startsWith(prefix)) {
-      summary = summary.substring(prefix.length).trim();
-      break;
-    }
-  }
-
-  if (summary.startsWith('"') && summary.endsWith('"') && summary.length >= 2) {
-    summary = summary.substring(1, summary.length - 1).trim();
-  }
-
-  if (summary.length > MemoryConfig.maxMemoryCharacters) {
-    summary = summary.substring(0, MemoryConfig.maxMemoryCharacters).trim();
-  }
-
-  return summary;
 }

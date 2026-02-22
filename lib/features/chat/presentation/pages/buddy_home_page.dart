@@ -55,9 +55,6 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
     _onAppConversationUpdated();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // final controller = ref.read(appControllerProvider);
-      // await controller.startup();
-
       final stt = ref.read(sttModelControllerProvider);
       await stt.loadLocalState();
       await stt.refreshInstalled();
@@ -99,7 +96,7 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
 
   Future<void> _openMemoryEditor() async {
     final memoryService = ref.read(memoryServiceProvider);
-    final currentMemory = await memoryService.loadMemory();
+    final currentMemory = await memoryService.loadMemoryData();
     final autoUpdate = await memoryService.isAutoUpdateAllowed();
 
     if (!mounted) return;
