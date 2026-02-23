@@ -18,28 +18,33 @@ class FunctionCallHandler {
   final GoogleAuthService? googleAuthService;
   final GoogleCalendarService? googleCalendarService;
 
-  Future<String> handle(FunctionCallResponse functionCall) async {
+  Future<Map<String, dynamic>> handle(FunctionCallResponse functionCall) async {
     switch (functionCall.name) {
       case 'animate_character':
         return _handleAnimateCharacter(functionCall);
       case 'create_calendar_event':
         return _handleCreateCalendarEvent(functionCall);
       default:
-        return functionCall.toString();
+        return {'error': 'Unknown function: ${functionCall.name}'};
     }
   }
 
-  Future<String> _handleAnimateCharacter(FunctionCallResponse call) async {
+  Future<Map<String, dynamic>> _handleAnimateCharacter(
+    FunctionCallResponse call,
+  ) async {
     final animationName = call.args['animation'] as String?;
     final animateCount = call.args['animate_count'] as int? ?? 1;
-    final responseText = call.args['response_text'] as String?;
 
     final animation = CharacterAnimation.fromName(animationName);
     if (animation != null) {
-      await _playAnimation(animation, count: animateCount);
+      unawaited(_playAnimation(animation, count: animateCount));
+      return {
+        'status': 'success',
+        'message': 'Animation "$animationName" played $animateCount time(s)',
+      };
     }
 
-    return responseText ?? call.toString();
+    return {'error': 'Unknown animation: $animationName'};
   }
 
   Future<void> _playAnimation(
@@ -48,27 +53,24 @@ class FunctionCallHandler {
   }) async {
     final clampedCount = count.clamp(1, 10);
 
-    if (animation == CharacterAnimation.jump) {
-      for (int i = 0; i < clampedCount; i++) {
-        unawaited(unityBridge.playAnimation(animation.animationIndex));
-        if (i < clampedCount - 1) {
-          await Future.delayed(animation.duration);
-        }
-      }
-    } else {
+    for (int i = 0; i < clampedCount; i++) {
       unawaited(unityBridge.playAnimation(animation.animationIndex));
+      if (i < clampedCount - 1) {
+        await Future.delayed(animation.duration);
+      }
     }
   }
 
-  Future<String> _handleCreateCalendarEvent(FunctionCallResponse call) async {
+  Future<Map<String, dynamic>> _handleCreateCalendarEvent(
+    FunctionCallResponse call,
+  ) async {
     final calendarService = googleCalendarService;
     final authService = googleAuthService;
 
     if (calendarService == null ||
         authService == null ||
         !authService.isSignedIn) {
-      return call.args['response_text'] as String? ??
-          'Sorry, I couldn\'t create the event. Please sign in to Google Calendar first.';
+      return {'error': 'Google Calendar not available. Please sign in first.'};
     }
 
     try {
@@ -78,16 +80,14 @@ class FunctionCallHandler {
       final endDateStr = call.args['end_date'] as String?;
       final isAllDay = call.args['is_all_day'] as bool? ?? false;
       final location = call.args['location'] as String?;
-      final responseText = call.args['response_text'] as String?;
 
       if (title == null || startDateStr == null) {
-        return responseText ??
-            'Sorry, I need at least a title and date to create an event.';
+        return {'error': 'Missing required fields: title and start_date'};
       }
 
       final startTime = DateTime.tryParse(startDateStr);
       if (startTime == null) {
-        return responseText ?? 'Sorry, I couldn\'t understand the date format.';
+        return {'error': 'Invalid date format: $startDateStr'};
       }
 
       final endTime = _calculateEndTime(
@@ -106,14 +106,19 @@ class FunctionCallHandler {
       );
 
       if (result.isSuccess) {
-        return responseText ?? 'I\'ve added "$title" to your calendar.';
+        return {
+          'status': 'success',
+          'message': 'Event "$title" created',
+          'title': title,
+          'start_date': startDateStr,
+          if (endDateStr != null) 'end_date': endDateStr,
+          if (location != null) 'location': location,
+        };
       } else {
-        return responseText ??
-            'Sorry, I couldn\'t create the event: ${result.error}';
+        return {'error': 'Failed to create event: ${result.error}'};
       }
     } catch (e) {
-      return call.args['response_text'] as String? ??
-          'Sorry, something went wrong while creating the event.';
+      return {'error': 'Error creating calendar event: $e'};
     }
   }
 

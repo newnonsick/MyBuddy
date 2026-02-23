@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 
@@ -185,7 +186,8 @@ class LlmService {
     if (history.isEmpty) return const <Message>[];
     final turns = history.where((m) {
       if (m.hasImage) return true;
-      if (m.type != MessageType.text) return false;
+      if (m.type != MessageType.text || m.type != MessageType.toolResponse)
+        return false;
 
       if (!m.isUser) {
         final t = m.text.trimLeft();
@@ -213,7 +215,7 @@ class LlmService {
     // if (s == _lastSystemText) return;
 
     final history = chat.fullHistory;
-    const maxReplayMessages = 20;
+    const maxReplayMessages = 100;
     final replayTail = _tailConversation(
       history,
       maxMessages: maxReplayMessages,
@@ -275,6 +277,8 @@ class LlmService {
     return cleaned;
   }
 
+  static const int _maxFunctionCallDepth = 10;
+
   Future<String> generateChat({
     String? systemText,
     required String userText,
@@ -287,32 +291,73 @@ class LlmService {
         await _ensureLatestSystemOnTop(chat, systemText ?? '');
         await chat.addQueryChunk(Message.text(text: userText, isUser: true));
 
-        final buffer = StringBuffer();
-
-        await for (final response in chat.generateChatResponseAsync()) {
-          if (response is TextResponse) {
-            buffer.write(response.token);
-          } else if (response is FunctionCallResponse) {
-            final textResponse = await _functionCallHandler.handle(response);
-            buffer.write(textResponse);
-          }
-        }
-
-        final text = buffer.toString();
-        final cleanedResponse = _cleanResponse(text);
-
-        return _processJsonFunctionCalls(cleanedResponse);
+        return _generateAndHandleFunctionCalls(chat, depth: 0);
       });
     });
   }
 
-  Future<String> _processJsonFunctionCalls(String response) async {
+  Future<String> _generateAndHandleFunctionCalls(
+    InferenceChat chat, {
+    required int depth,
+  }) async {
+    if (depth >= _maxFunctionCallDepth) {
+      return 'Maximum function call depth reached.';
+    }
+
+    final buffer = StringBuffer();
+    FunctionCallResponse? pendingFunctionCall;
+
+    await for (final response in chat.generateChatResponseAsync()) {
+      debugPrint(
+        'Received response chunk: $response type: ${response.runtimeType}',
+      );
+      if (response is TextResponse) {
+        buffer.write(response.token);
+      } else if (response is FunctionCallResponse) {
+        pendingFunctionCall = response;
+      }
+    }
+
+    if (pendingFunctionCall != null) {
+      return _executeFunctionCallAndContinue(
+        chat,
+        pendingFunctionCall,
+        depth: depth,
+      );
+    }
+
+    final text = buffer.toString();
+    final cleanedResponse = _cleanResponse(text);
+
+    return _processJsonFunctionCalls(chat, cleanedResponse, depth: depth);
+  }
+
+  Future<String> _executeFunctionCallAndContinue(
+    InferenceChat chat,
+    FunctionCallResponse functionCall, {
+    required int depth,
+  }) async {
+    final toolResponse = await _functionCallHandler.handle(functionCall);
+
+    final toolMessage = Message.toolResponse(
+      toolName: functionCall.name,
+      response: toolResponse,
+    );
+    await chat.addQueryChunk(toolMessage);
+
+    return _generateAndHandleFunctionCalls(chat, depth: depth + 1);
+  }
+
+  Future<String> _processJsonFunctionCalls(
+    InferenceChat chat,
+    String response, {
+    required int depth,
+  }) async {
     final blocks = extractJsonBlocks(response);
     if (blocks.isEmpty) {
       return response;
     }
 
-    final results = StringBuffer();
     for (final block in blocks) {
       final functionCall = FunctionCallParser.parse(
         block,
@@ -320,12 +365,10 @@ class LlmService {
       );
       if (functionCall == null) continue;
 
-      final textResponse = await _functionCallHandler.handle(functionCall);
-      results.writeln(textResponse);
+      return _executeFunctionCallAndContinue(chat, functionCall, depth: depth);
     }
 
-    final result = results.toString().trim();
-    return result.isNotEmpty ? result : response;
+    return response;
   }
 
   Future<String> extractMemoryFromChat(String currentMemoryJson) async {

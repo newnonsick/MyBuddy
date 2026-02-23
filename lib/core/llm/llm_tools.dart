@@ -6,28 +6,31 @@ import '../google/google_calendar_service.dart';
 abstract final class LlmTools {
   static const Tool animateCharacter = Tool(
     name: 'animate_character',
-    description:
-        'Makes the character perform a specified animation. The animation name should be one of the following: jump, spin, clap, thankful, greet, dance, chicken_dance, think.',
+    description: 'Makes the character perform a specified animation.',
     parameters: {
       'type': 'object',
       'properties': {
         'animation': {
           'type': 'string',
-          'description':
-              'Animation to perform. Choose one of: jump, spin, clap, thankful, greet, dance, chicken_dance, think.',
+          'description': 'Animation to perform.',
+          'enum': [
+            'jump',
+            'spin',
+            'clap',
+            'thankful',
+            'greet',
+            'dance',
+            'chicken_dance',
+            'think',
+          ],
         },
         'animate_count': {
           'type': 'int',
           'description':
               'Number of times to perform the animation (only for certain animations). Default is 1.',
         },
-        'response_text': {
-          'type': 'string',
-          'description':
-              "Text response that responds to the user's input with empathy and relevance",
-        },
-        'required': ['animation', 'animate_count', 'response_text'],
       },
+      'required': ['animation', 'animate_count'],
     },
   );
 
@@ -64,13 +67,8 @@ abstract final class LlmTools {
           'type': 'string',
           'description': 'Optional location for the event.',
         },
-        'response_text': {
-          'type': 'string',
-          'description':
-              'A friendly confirmation message to tell the user about the created event.',
-        },
       },
-      'required': ['title', 'start_date', 'response_text'],
+      'required': ['title', 'start_date'],
     },
   );
 
