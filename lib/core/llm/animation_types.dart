@@ -27,21 +27,21 @@ enum CharacterAnimation {
     if (name == null) return null;
 
     switch (name.toLowerCase().trim()) {
-      case 'jump':
+      case 'jumping':
         return CharacterAnimation.jump;
-      case 'spin':
+      case 'spinning':
         return CharacterAnimation.spin;
-      case 'clap':
+      case 'clapping':
         return CharacterAnimation.clap;
       case 'thankful':
         return CharacterAnimation.thankful;
-      case 'greet':
+      case 'greeting':
         return CharacterAnimation.greet;
-      case 'dance':
+      case 'dancing':
         return CharacterAnimation.randomDance();
       case 'chicken_dance':
         return CharacterAnimation.chickenDance;
-      case 'think':
+      case 'thinking':
         return CharacterAnimation.think;
       default:
         return CharacterAnimation.thankful; // Default fallback

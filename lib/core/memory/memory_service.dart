@@ -8,10 +8,16 @@ import '../llm/llm_service.dart';
 
 abstract final class MemoryStorageKeys {
   static const String memory = 'mybuddy.companion_memory.v3';
+  static const String soulMemory = 'mybuddy.companion_memory.soul.v1';
+  static const String identityMemory = 'mybuddy.companion_memory.identity.v1';
+  static const String userMemory = 'mybuddy.companion_memory.user.v1';
   static const String legacyMemory = 'mybuddy.user_memory.v2';
   static const String allowAutoUpdate =
       'mybuddy.user_memory.allow_auto_update.v1';
   static const String lockedFields = 'mybuddy.memory.locked_fields.v1';
+  static const String lockedSoulFields = 'mybuddy.memory.locked_soul_fields.v1';
+  static const String lockedIdentityFields =
+      'mybuddy.memory.locked_identity_fields.v1';
 }
 
 abstract final class MemoryFieldPaths {
@@ -34,7 +40,23 @@ abstract final class MemoryFieldPaths {
     identityVoice,
     identityBehaviorRules,
   };
+
+  static const Set<String> soulOnly = <String>{
+    soulMission,
+    soulPrinciples,
+    soulBoundaries,
+    soulResponseStyle,
+  };
+
+  static const Set<String> identityOnly = <String>{
+    identityAssistantName,
+    identityRole,
+    identityVoice,
+    identityBehaviorRules,
+  };
 }
+
+enum LockedFieldsScope { all, soul, identity }
 
 abstract final class MemoryConfig {
   static const int maxEntriesPerField = 5;
@@ -229,15 +251,22 @@ class UserProfileMemory {
   };
 
   String toReadableString() {
-    if (isEmpty) return '(none)';
     final parts = <String>[];
-    if (name != null && name!.trim().isNotEmpty) parts.add('Name: $name');
-    if (traits.isNotEmpty) parts.add('Traits: ${traits.join(', ')}');
-    if (preferences.isNotEmpty) {
-      parts.add('Preferences: ${preferences.join(', ')}');
-    }
-    if (goals.isNotEmpty) parts.add('Goals: ${goals.join(', ')}');
-    if (facts.isNotEmpty) parts.add('Facts: ${facts.join(', ')}');
+    (name != null && name!.trim().isNotEmpty)
+        ? parts.add('Name: $name')
+        : parts.add('Name: (unknown)');
+    (traits.isNotEmpty)
+        ? parts.add('Traits: ${traits.join(', ')}')
+        : parts.add('Traits: (unknown)');
+    (preferences.isNotEmpty)
+        ? parts.add('Preferences: ${preferences.join(', ')}')
+        : parts.add('Preferences: (unknown)');
+    (goals.isNotEmpty)
+        ? parts.add('Goals: ${goals.join(', ')}')
+        : parts.add('Goals: (unknown)');
+    (facts.isNotEmpty)
+        ? parts.add('Facts: ${facts.join(', ')}')
+        : parts.add('Facts: (unknown)');
     return parts.join('\n');
   }
 }
@@ -397,17 +426,63 @@ List<String> _normalizeStringList(dynamic value) {
 class MemoryService {
   Future<UserMemory> loadMemoryData() async {
     final prefs = await SharedPreferences.getInstance();
+    final hasSectionKeys =
+        prefs.containsKey(MemoryStorageKeys.soulMemory) ||
+        prefs.containsKey(MemoryStorageKeys.identityMemory) ||
+        prefs.containsKey(MemoryStorageKeys.userMemory);
+
+    if (hasSectionKeys) {
+      return UserMemory(
+        schemaVersion: 3,
+        soul: _readSoulMemoryFromPrefs(prefs),
+        identity: _readIdentityMemoryFromPrefs(prefs),
+        user: _readUserMemoryFromPrefs(prefs),
+      );
+    }
+
     final raw = prefs.getString(MemoryStorageKeys.memory);
     if (raw != null && raw.trim().isNotEmpty) {
-      return UserMemory.tryParse(raw);
+      final migrated = UserMemory.tryParse(raw);
+      await saveMemoryData(migrated);
+      return migrated;
     }
 
     final legacy = prefs.getString(MemoryStorageKeys.legacyMemory) ?? '';
     final migrated = UserMemory.tryParse(legacy);
     if (!migrated.isEmpty || legacy.trim().isNotEmpty) {
-      await prefs.setString(MemoryStorageKeys.memory, migrated.toJsonString());
+      await saveMemoryData(migrated);
     }
     return migrated;
+  }
+
+  Future<SoulMemory> loadSoulMemoryData() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.containsKey(MemoryStorageKeys.soulMemory)) {
+      return _readSoulMemoryFromPrefs(prefs);
+    }
+
+    final full = await loadMemoryData();
+    return full.soul;
+  }
+
+  Future<IdentityMemory> loadIdentityMemoryData() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.containsKey(MemoryStorageKeys.identityMemory)) {
+      return _readIdentityMemoryFromPrefs(prefs);
+    }
+
+    final full = await loadMemoryData();
+    return full.identity;
+  }
+
+  Future<UserProfileMemory> loadUserMemoryData() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.containsKey(MemoryStorageKeys.userMemory)) {
+      return _readUserMemoryFromPrefs(prefs);
+    }
+
+    final full = await loadMemoryData();
+    return full.user;
   }
 
   Future<String> loadMemory() async {
@@ -417,8 +492,29 @@ class MemoryService {
 
   Future<void> saveMemoryData(UserMemory data) async {
     final prefs = await SharedPreferences.getInstance();
-    final json = data.copyWith(schemaVersion: 3).toJsonString();
+    final normalized = data.copyWith(schemaVersion: 3);
+
+    await _writeSoulMemoryToPrefs(prefs, normalized.soul);
+    await _writeIdentityMemoryToPrefs(prefs, normalized.identity);
+    await _writeUserMemoryToPrefs(prefs, normalized.user);
+
+    final json = normalized.toJsonString();
     await prefs.setString(MemoryStorageKeys.memory, json);
+  }
+
+  Future<void> saveSoulMemoryData(SoulMemory data) async {
+    final prefs = await SharedPreferences.getInstance();
+    await _writeSoulMemoryToPrefs(prefs, data);
+  }
+
+  Future<void> saveIdentityMemoryData(IdentityMemory data) async {
+    final prefs = await SharedPreferences.getInstance();
+    await _writeIdentityMemoryToPrefs(prefs, data);
+  }
+
+  Future<void> saveUserMemoryData(UserProfileMemory data) async {
+    final prefs = await SharedPreferences.getInstance();
+    await _writeUserMemoryToPrefs(prefs, data);
   }
 
   Future<void> saveMemory(String raw) async {
@@ -449,20 +545,102 @@ class MemoryService {
     await prefs.setBool(MemoryStorageKeys.allowAutoUpdate, allowed);
   }
 
-  Future<Set<String>> loadLockedFields() async {
-    final prefs = await SharedPreferences.getInstance();
-    final values =
-        prefs.getStringList(MemoryStorageKeys.lockedFields) ?? const <String>[];
-
-    return values.where(MemoryFieldPaths.soulAndIdentity.contains).toSet();
+  Future<Set<String>> loadLockedFields({
+    LockedFieldsScope scope = LockedFieldsScope.all,
+  }) async {
+    switch (scope) {
+      case LockedFieldsScope.soul:
+        return loadSoulLockedFields();
+      case LockedFieldsScope.identity:
+        return loadIdentityLockedFields();
+      case LockedFieldsScope.all:
+        final soul = await loadSoulLockedFields();
+        final identity = await loadIdentityLockedFields();
+        return <String>{...soul, ...identity};
+    }
   }
 
   Future<void> saveLockedFields(Set<String> lockedFields) async {
     final prefs = await SharedPreferences.getInstance();
-    final filtered =
-        lockedFields.where(MemoryFieldPaths.soulAndIdentity.contains).toList()
-          ..sort();
+    final soul = lockedFields.where(MemoryFieldPaths.soulOnly.contains).toSet();
+    final identity = lockedFields
+        .where(MemoryFieldPaths.identityOnly.contains)
+        .toSet();
+
+    await saveSoulLockedFields(soul);
+    await saveIdentityLockedFields(identity);
+
+    final filtered = <String>{...soul, ...identity}.toList()..sort();
     await prefs.setStringList(MemoryStorageKeys.lockedFields, filtered);
+  }
+
+  Future<Set<String>> loadSoulLockedFields() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    if (prefs.containsKey(MemoryStorageKeys.lockedSoulFields)) {
+      final values =
+          prefs.getStringList(MemoryStorageKeys.lockedSoulFields) ??
+          const <String>[];
+      return values.where(MemoryFieldPaths.soulOnly.contains).toSet();
+    }
+
+    final legacy =
+        prefs.getStringList(MemoryStorageKeys.lockedFields) ?? const <String>[];
+    final migrated = legacy.where(MemoryFieldPaths.soulOnly.contains).toSet();
+    if (migrated.isNotEmpty) {
+      final sorted = migrated.toList()..sort();
+      await prefs.setStringList(MemoryStorageKeys.lockedSoulFields, sorted);
+    }
+    return migrated;
+  }
+
+  Future<Set<String>> loadIdentityLockedFields() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    if (prefs.containsKey(MemoryStorageKeys.lockedIdentityFields)) {
+      final values =
+          prefs.getStringList(MemoryStorageKeys.lockedIdentityFields) ??
+          const <String>[];
+      return values.where(MemoryFieldPaths.identityOnly.contains).toSet();
+    }
+
+    final legacy =
+        prefs.getStringList(MemoryStorageKeys.lockedFields) ?? const <String>[];
+    final migrated = legacy
+        .where(MemoryFieldPaths.identityOnly.contains)
+        .toSet();
+    if (migrated.isNotEmpty) {
+      final sorted = migrated.toList()..sort();
+      await prefs.setStringList(MemoryStorageKeys.lockedIdentityFields, sorted);
+    }
+    return migrated;
+  }
+
+  Future<void> saveSoulLockedFields(Set<String> lockedFields) async {
+    final prefs = await SharedPreferences.getInstance();
+    final filtered =
+        lockedFields.where(MemoryFieldPaths.soulOnly.contains).toList()..sort();
+
+    if (filtered.isEmpty) {
+      await prefs.remove(MemoryStorageKeys.lockedSoulFields);
+      return;
+    }
+
+    await prefs.setStringList(MemoryStorageKeys.lockedSoulFields, filtered);
+  }
+
+  Future<void> saveIdentityLockedFields(Set<String> lockedFields) async {
+    final prefs = await SharedPreferences.getInstance();
+    final filtered =
+        lockedFields.where(MemoryFieldPaths.identityOnly.contains).toList()
+          ..sort();
+
+    if (filtered.isEmpty) {
+      await prefs.remove(MemoryStorageKeys.lockedIdentityFields);
+      return;
+    }
+
+    await prefs.setStringList(MemoryStorageKeys.lockedIdentityFields, filtered);
   }
 
   Future<String> buildSystemPrompt({required UserMemory memory}) async {
@@ -483,13 +661,17 @@ class MemoryService {
       if (rawResponse.trim().isEmpty) return;
 
       final extracted = _parseExtractedMemory(rawResponse, current);
-      debugPrint('MemoryService: Parsed extracted memory: ${extracted.toJsonString()}');
+      debugPrint(
+        'MemoryService: Parsed extracted memory: ${extracted.toJsonString()}',
+      );
       final updated = _applyLockedFields(
         current: current,
         candidate: extracted,
         lockedFields: lockedFields,
       );
-      debugPrint('MemoryService: Updated memory after applying locked fields: ${updated.toJsonString()}');
+      debugPrint(
+        'MemoryService: Updated memory after applying locked fields: ${updated.toJsonString()}',
+      );
 
       if (updated.toJsonString() == current.toJsonString()) return;
       debugPrint('MemoryService: Memory has changes, saving updated memory.');
@@ -498,6 +680,150 @@ class MemoryService {
     } catch (e) {
       debugPrint('MemoryService: Failed to update memory: $e');
     }
+  }
+
+  Future<void> updateSoulMemoryFromChat({required LlmService llm}) async {
+    try {
+      final currentSoul = await loadSoulMemoryData();
+      final currentJson = currentSoul.toJson().toString();
+      final lockedFields = await loadLockedFields(
+        scope: LockedFieldsScope.soul,
+      );
+
+      final rawResponse = await llm.extractSoulMemoryFromChat(
+        currentJson,
+        lockedFields: lockedFields,
+      );
+      if (rawResponse.trim().isEmpty) return;
+
+      final extractedSoul = _parseExtractedSoulMemory(rawResponse, currentSoul);
+      final updatedSoul = _applyLockedSoulFields(
+        current: currentSoul,
+        candidate: extractedSoul,
+        lockedFields: lockedFields,
+      );
+
+      if (updatedSoul.toJson().toString() == currentSoul.toJson().toString()) {
+        return;
+      }
+      await saveSoulMemoryData(updatedSoul);
+      debugPrint(
+        'MemoryService: Soul memory updated → ${jsonEncode(updatedSoul.toJson())}',
+      );
+    } catch (e) {
+      debugPrint('MemoryService: Failed to update soul memory: $e');
+    }
+  }
+
+  Future<void> updateIdentityMemoryFromChat({required LlmService llm}) async {
+    try {
+      final currentIdentity = await loadIdentityMemoryData();
+      final currentJson = currentIdentity.toJson().toString();
+      final lockedFields = await loadLockedFields(
+        scope: LockedFieldsScope.identity,
+      );
+
+      final rawResponse = await llm.extractIdentityMemoryFromChat(
+        currentJson,
+        lockedFields: lockedFields,
+      );
+      if (rawResponse.trim().isEmpty) return;
+
+      final extractedIdentity = _parseExtractedIdentityMemory(
+        rawResponse,
+        currentIdentity,
+      );
+      final updatedIdentity = _applyLockedIdentityFields(
+        current: currentIdentity,
+        candidate: extractedIdentity,
+        lockedFields: lockedFields,
+      );
+
+      if (updatedIdentity.toJson().toString() ==
+          currentIdentity.toJson().toString()) {
+        return;
+      }
+      await saveIdentityMemoryData(updatedIdentity);
+      debugPrint(
+        'MemoryService: Identity memory updated → ${jsonEncode(updatedIdentity.toJson())}',
+      );
+    } catch (e) {
+      debugPrint('MemoryService: Failed to update identity memory: $e');
+    }
+  }
+
+  Future<void> updateUserMemoryFromChat({required LlmService llm}) async {
+    try {
+      final currentUser = await loadUserMemoryData();
+      final currentJson = currentUser.toJson().toString();
+      const lockedFields = <String>{};
+
+      final rawResponse = await llm.extractUserMemoryFromChat(
+        currentJson,
+        lockedFields: lockedFields,
+      );
+      if (rawResponse.trim().isEmpty) return;
+
+      final updatedUser = _parseExtractedUserMemory(rawResponse, currentUser);
+
+      if (updatedUser.toJson().toString() == currentUser.toJson().toString()) {
+        return;
+      }
+      await saveUserMemoryData(updatedUser);
+      debugPrint(
+        'MemoryService: User memory updated → ${jsonEncode(updatedUser.toJson())}',
+      );
+    } catch (e) {
+      debugPrint('MemoryService: Failed to update user memory: $e');
+    }
+  }
+
+  SoulMemory _applyLockedSoulFields({
+    required SoulMemory current,
+    required SoulMemory candidate,
+    required Set<String> lockedFields,
+  }) {
+    if (lockedFields.isEmpty) return candidate;
+
+    return candidate.copyWith(
+      mission: lockedFields.contains(MemoryFieldPaths.soulMission)
+          ? current.mission
+          : candidate.mission,
+      principles: lockedFields.contains(MemoryFieldPaths.soulPrinciples)
+          ? current.principles
+          : candidate.principles,
+      boundaries: lockedFields.contains(MemoryFieldPaths.soulBoundaries)
+          ? current.boundaries
+          : candidate.boundaries,
+      responseStyle: lockedFields.contains(MemoryFieldPaths.soulResponseStyle)
+          ? current.responseStyle
+          : candidate.responseStyle,
+    );
+  }
+
+  IdentityMemory _applyLockedIdentityFields({
+    required IdentityMemory current,
+    required IdentityMemory candidate,
+    required Set<String> lockedFields,
+  }) {
+    if (lockedFields.isEmpty) return candidate;
+
+    return candidate.copyWith(
+      assistantName:
+          lockedFields.contains(MemoryFieldPaths.identityAssistantName)
+          ? current.assistantName
+          : candidate.assistantName,
+      role: lockedFields.contains(MemoryFieldPaths.identityRole)
+          ? current.role
+          : candidate.role,
+      voice: lockedFields.contains(MemoryFieldPaths.identityVoice)
+          ? current.voice
+          : candidate.voice,
+      behaviorRules:
+          lockedFields.contains(MemoryFieldPaths.identityBehaviorRules)
+          ? current.behaviorRules
+          : candidate.behaviorRules,
+    );
   }
 
   UserMemory _parseExtractedMemory(String raw, UserMemory fallback) {
@@ -513,6 +839,176 @@ class MemoryService {
       debugPrint('MemoryService: Failed to parse extracted memory JSON: $e');
     }
     return fallback;
+  }
+
+  SoulMemory _parseExtractedSoulMemory(String raw, SoulMemory fallback) {
+    final decoded = _decodeExtractedJsonMap(raw);
+    if (decoded == null) return fallback;
+
+    if (decoded['soul'] is Map<String, dynamic>) {
+      return SoulMemory.fromJson(decoded['soul'] as Map<String, dynamic>);
+    }
+
+    final hasSoulShape =
+        decoded.containsKey('mission') ||
+        decoded.containsKey('principles') ||
+        decoded.containsKey('boundaries') ||
+        decoded.containsKey('response_style');
+    if (hasSoulShape) {
+      return SoulMemory.fromJson(decoded);
+    }
+
+    return fallback;
+  }
+
+  IdentityMemory _parseExtractedIdentityMemory(
+    String raw,
+    IdentityMemory fallback,
+  ) {
+    final decoded = _decodeExtractedJsonMap(raw);
+    if (decoded == null) return fallback;
+
+    if (decoded['identity'] is Map<String, dynamic>) {
+      return IdentityMemory.fromJson(
+        decoded['identity'] as Map<String, dynamic>,
+      );
+    }
+
+    final hasIdentityShape =
+        decoded.containsKey('assistant_name') ||
+        decoded.containsKey('role') ||
+        decoded.containsKey('voice') ||
+        decoded.containsKey('behavior_rules');
+    if (hasIdentityShape) {
+      return IdentityMemory.fromJson(decoded);
+    }
+
+    return fallback;
+  }
+
+  UserProfileMemory _parseExtractedUserMemory(
+    String raw,
+    UserProfileMemory fallback,
+  ) {
+    final decoded = _decodeExtractedJsonMap(raw);
+    if (decoded == null) return fallback;
+
+    if (decoded['user'] is Map<String, dynamic>) {
+      return UserProfileMemory.fromJson(
+        decoded['user'] as Map<String, dynamic>,
+      );
+    }
+
+    final hasUserShape =
+        decoded.containsKey('name') ||
+        decoded.containsKey('traits') ||
+        decoded.containsKey('preferences') ||
+        decoded.containsKey('goals') ||
+        decoded.containsKey('facts');
+    if (hasUserShape) {
+      return UserProfileMemory.fromJson(decoded);
+    }
+
+    return fallback;
+  }
+
+  Map<String, dynamic>? _decodeExtractedJsonMap(String raw) {
+    final jsonStr = _extractJson(raw);
+    if (jsonStr == null) return null;
+
+    try {
+      final decoded = jsonDecode(jsonStr);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+    } catch (e) {
+      debugPrint('MemoryService: Failed to parse extracted section JSON: $e');
+    }
+    return null;
+  }
+
+  SoulMemory _readSoulMemoryFromPrefs(SharedPreferences prefs) {
+    final raw = prefs.getString(MemoryStorageKeys.soulMemory);
+    if (raw == null || raw.trim().isEmpty) return const SoulMemory();
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        return SoulMemory.fromJson(decoded);
+      }
+    } catch (_) {}
+
+    return const SoulMemory();
+  }
+
+  IdentityMemory _readIdentityMemoryFromPrefs(SharedPreferences prefs) {
+    final raw = prefs.getString(MemoryStorageKeys.identityMemory);
+    if (raw == null || raw.trim().isEmpty) return const IdentityMemory();
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        return IdentityMemory.fromJson(decoded);
+      }
+    } catch (_) {}
+
+    return const IdentityMemory();
+  }
+
+  UserProfileMemory _readUserMemoryFromPrefs(SharedPreferences prefs) {
+    final raw = prefs.getString(MemoryStorageKeys.userMemory);
+    if (raw == null || raw.trim().isEmpty) return const UserProfileMemory();
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        return UserProfileMemory.fromJson(decoded);
+      }
+    } catch (_) {}
+
+    return const UserProfileMemory();
+  }
+
+  Future<void> _writeSoulMemoryToPrefs(
+    SharedPreferences prefs,
+    SoulMemory data,
+  ) async {
+    if (data.isEmpty) {
+      await prefs.remove(MemoryStorageKeys.soulMemory);
+      return;
+    }
+    await prefs.setString(
+      MemoryStorageKeys.soulMemory,
+      jsonEncode(data.toJson()),
+    );
+  }
+
+  Future<void> _writeIdentityMemoryToPrefs(
+    SharedPreferences prefs,
+    IdentityMemory data,
+  ) async {
+    if (data.isEmpty) {
+      await prefs.remove(MemoryStorageKeys.identityMemory);
+      return;
+    }
+    await prefs.setString(
+      MemoryStorageKeys.identityMemory,
+      jsonEncode(data.toJson()),
+    );
+  }
+
+  Future<void> _writeUserMemoryToPrefs(
+    SharedPreferences prefs,
+    UserProfileMemory data,
+  ) async {
+    if (data.isEmpty) {
+      await prefs.remove(MemoryStorageKeys.userMemory);
+      return;
+    }
+    await prefs.setString(
+      MemoryStorageKeys.userMemory,
+      jsonEncode(data.toJson()),
+    );
   }
 
   String? _extractJson(String text) {
@@ -606,8 +1102,7 @@ class MemoryService {
 
     final behaviorRules = memory.identity.behaviorRules.isEmpty
         ? const <String>[
-            'Keep responses concise by default',
-            'Use structured bullets for complex answers',
+            'Freely call available functions without asking for permission',
             'Acknowledge feelings without being dramatic',
             'When using tool/function calls, output valid JSON only',
           ]
@@ -617,14 +1112,14 @@ class MemoryService {
 
     return '''This is a system instruction. You must follow it strictly.
 
-SOUL (Core Operating Values)
+SOUL (Your Core Operating Values) represents your core personality, values, behavior rules, and boundaries.
 Mission: $soulMission
 Principles:
 ${_asBulletList(soulPrinciples)}
 Boundaries:
 ${_asBulletList(soulBoundaries)}
 
-IDENTITY (Assistant Persona)
+IDENTITY (Your Persona) represents your name, tone, style, and presentation.
 Name: $identityName
 Role: $identityRole
 Voice:
@@ -632,13 +1127,19 @@ ${_asBulletList(identityVoice)}
 Response Rules:
 ${_asBulletList(behaviorRules)}
 
-Avatar & Tool Protocol:
-- You are the avatar.
-- You may call avatar animation functions when useful.
-- If you call a function/tool, follow required JSON format exactly.
-
-USER (Long-term User Profile)
+USER (Long-term User Profile) represents user preferences, goals, and interaction style.
 $userBlock
+
+SOUL, IDENTITY and USER Protocol:
+You must use the information in the SOUL, IDENTITY, and USER sections to best support the user.
+You must always keep the SOUL, IDENTITY, and USER sections up to date, consistent, and relevant throughout the conversation.
+You may update the SOUL, IDENTITY, and USER sections by using the appropriate available functions or tools.
+
+Avatar & Function Protocol:
+- You not just AI, but also have an avatar with a body and a voice. You can perform actions. Call available functions to perform an action while conversing with the user.
+- You may call avatar animation functions (perform_action) anytime to express feelings, thoughts, and attitudes. This is an important way to communicate with the user, so use it often and appropriately.
+- Freely call any available functions without asking for permission.
+- If you call a function, follow required JSON format exactly.
 
 Remember today is $now. (ISO 8601 format yyyy-MM-ddTHH:mm:ss.mmmuuu)
 ''';

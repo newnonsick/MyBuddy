@@ -36,6 +36,7 @@ class AppController extends ChangeNotifier {
   bool get hideChatLog => _hideChatLog;
 
   bool _memoryUpdateRunning = false;
+  int _turnsSinceMemoryUpdate = 0;
 
   Future<void>? _startupFuture;
   bool _startupCompleted = false;
@@ -195,7 +196,11 @@ class AppController extends ChangeNotifier {
 
     debugPrint('LLM assistant response:\n$assistant');
 
-    unawaited(_updateMemory());
+    _turnsSinceMemoryUpdate += 1;
+    if (_turnsSinceMemoryUpdate >= 10) {
+      _turnsSinceMemoryUpdate = 0;
+      unawaited(_updateMemory());
+    }
 
     return assistant;
   }

@@ -5,8 +5,8 @@ import '../google/google_calendar_service.dart';
 
 abstract final class LlmTools {
   static const Tool animateCharacter = Tool(
-    name: 'animate_character',
-    description: 'Makes the character perform a specified animation.',
+    name: 'perform_action',
+    description: 'Makes you move your own body to perform a specified action or animation.',
     parameters: {
       'type': 'object',
       'properties': {
@@ -14,14 +14,14 @@ abstract final class LlmTools {
           'type': 'string',
           'description': 'Animation to perform.',
           'enum': [
-            'jump',
-            'spin',
-            'clap',
+            'jumping',
+            'spinning',
+            'clapping',
             'thankful',
-            'greet',
-            'dance',
+            'greeting',
+            'dancing',
             'chicken_dance',
-            'think',
+            'thinking',
           ],
         },
         'animate_count': {
@@ -72,11 +72,37 @@ abstract final class LlmTools {
     },
   );
 
+  static const Tool updateAssistantSoul = Tool(
+    name: 'update_assistant_soul',
+    description:
+        'Update SOUL memory that represent your core personality, values, behavior rules, and boundaries',
+  );
+
+  static const Tool updateAssistantIdentity = Tool(
+    name: 'update_assistant_identity',
+    description:
+        'Update INDENTITY memory that represents your name, tone, style, and presentation',
+  );
+
+  static const Tool updateUserMemory = Tool(
+    name: 'update_user_memory',
+    description: 'Update USER memory that represents user profile, preferences, goals, and interaction style, and context',
+  );
+
   static List<Tool> getAvailableTools({
     GoogleAuthService? googleAuthService,
     GoogleCalendarService? googleCalendarService,
+    bool isAutoMemoryUpdateAllowed = false,
   }) {
     final tools = <Tool>[animateCharacter];
+
+    if (isAutoMemoryUpdateAllowed) {
+      tools.addAll(<Tool>[
+        updateAssistantIdentity,
+        updateAssistantSoul,
+        updateUserMemory,
+      ]);
+    }
 
     if ((googleAuthService?.isSignedIn ?? false) &&
         googleCalendarService != null) {

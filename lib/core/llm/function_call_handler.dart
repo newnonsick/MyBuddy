@@ -23,7 +23,7 @@ class FunctionCallHandler {
 
   Future<Map<String, dynamic>> handle(FunctionCallResponse functionCall) async {
     switch (functionCall.name) {
-      case 'animate_character':
+      case 'perform_action':
         return _handleAnimateCharacter(functionCall);
       case 'create_calendar_event':
         return _handleCreateCalendarEvent(functionCall);
