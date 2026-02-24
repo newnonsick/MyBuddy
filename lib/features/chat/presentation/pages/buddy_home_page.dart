@@ -98,6 +98,7 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
     final memoryService = ref.read(memoryServiceProvider);
     final currentMemory = await memoryService.loadMemoryData();
     final autoUpdate = await memoryService.isAutoUpdateAllowed();
+    final lockedFields = await memoryService.loadLockedFields();
 
     if (!mounted) return;
 
@@ -108,6 +109,7 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
       builder: (_) => MemoryEditorSheet(
         initialMemory: currentMemory,
         initialAutoUpdate: autoUpdate,
+        initialLockedFields: lockedFields,
         memoryService: memoryService,
       ),
     );

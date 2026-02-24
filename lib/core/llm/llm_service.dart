@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +8,7 @@ import 'package:flutter_gemma/flutter_gemma.dart';
 import '../../shared/utils/json_extractor.dart';
 import '../google/google_auth_service.dart';
 import '../google/google_calendar_service.dart';
+import '../memory/memory_service.dart';
 import '../unity/unity_bridge.dart';
 import 'function_call_handler.dart';
 import 'llm_tools.dart';
@@ -25,11 +27,13 @@ class LlmService {
     this.supportsFunctionCalls = false,
     this.modelFileType = ModelFileType.task,
     required this.unityBridge,
+    required this.memoryService,
     this.googleAuthService,
     this.googleCalendarService,
   });
 
-  factory LlmService.dummy() => LlmService(unityBridge: UnityBridge());
+  factory LlmService.dummy() =>
+      LlmService(unityBridge: UnityBridge(), memoryService: MemoryService());
 
   ModelType modelType;
   PreferredBackend preferredBackend;
@@ -44,6 +48,7 @@ class LlmService {
   ModelFileType modelFileType;
 
   final UnityBridge unityBridge;
+  final MemoryService memoryService;
   final GoogleAuthService? googleAuthService;
   final GoogleCalendarService? googleCalendarService;
 
@@ -51,9 +56,11 @@ class LlmService {
   InferenceChat? _chat;
   Future<void> _pending = Future<void>.value();
   bool _initialized = false;
+  static final Object _enqueueZoneKey = Object();
 
   late final FunctionCallHandler _functionCallHandler = FunctionCallHandler(
     unityBridge: unityBridge,
+    memoryService: memoryService,
     googleAuthService: googleAuthService,
     googleCalendarService: googleCalendarService,
   );
@@ -72,8 +79,23 @@ class LlmService {
     _initialized = true;
   }
 
-  Future<T> _enqueue<T>(Future<T> Function() action) {
-    final future = _pending.then((_) => action());
+  Future<T> _enqueue<T>(
+    Future<T> Function() action, {
+    bool forceQueued = false,
+  }) {
+    final isNested = !forceQueued && Zone.current[_enqueueZoneKey] == true;
+    if (isNested) {
+      return action();
+    }
+
+    final future = _pending
+        .then(
+          (_) => runZoned<Future<T>>(
+            action,
+            zoneValues: <Object?, Object?>{_enqueueZoneKey: true},
+          ),
+        )
+        .then((value) => value);
     _pending = future.then((_) {}, onError: (_) {});
     return future;
   }
@@ -173,10 +195,51 @@ class LlmService {
       supportsFunctionCalls: supportsFunctionCalls,
       isThinking: isThinking,
       modelType: modelType,
-      tools: _tools,
+      tools: const <Tool>[],
     );
     _chat = chat;
     return chat;
+  }
+
+  String _buildToolsSystemInstruction() {
+    if (!supportsFunctionCalls || _tools.isEmpty) return '';
+
+    final buffer = StringBuffer();
+    buffer.writeln(
+      'You have access to functions and freely call any available function without asking for permission.',
+    );
+    buffer.writeln(
+      'When you do need to call a function, respond with ONLY the JSON in this format: {"name": <function_name>, "parameters": {<argument>: <value>}}',
+    );
+    buffer.writeln(
+      'Example: {"name": "animate_character", "parameters": {"animation": "jump", "animate_count": 2}}',
+    );
+    buffer.writeln(
+      'You must always ensure that the JSON output is valid and follows the correct format.',
+    );
+    buffer.writeln(
+      'After a function is executed, you will receive its result as a tool response. Based on that result, you may call the same function again, call a different function, or provide a helpful natural language message to the user about what was accomplished. Do NOT include the function response verbatim — summarize the outcome naturally.',
+    );
+    buffer.writeln('<tool_code>');
+    for (final tool in _tools) {
+      buffer.writeln(
+        jsonEncode(<String, Object?>{
+          'name': tool.name,
+          'description': tool.description,
+          'parameters': tool.parameters,
+        }),
+      );
+    }
+    buffer.writeln('</tool_code>');
+    return buffer.toString().trim();
+  }
+
+  String _composeSystemText(String systemText) {
+    final base = systemText.trim();
+    final toolsInstruction = _buildToolsSystemInstruction();
+    if (toolsInstruction.isEmpty) return base;
+    if (base.isEmpty) return toolsInstruction;
+    return '$base\n\n$toolsInstruction';
   }
 
   List<Message> _tailConversation(
@@ -186,8 +249,10 @@ class LlmService {
     if (history.isEmpty) return const <Message>[];
     final turns = history.where((m) {
       if (m.hasImage) return true;
-      if (m.type != MessageType.text || m.type != MessageType.toolResponse)
+      if (m.type != MessageType.text) {
+        // && m.type != MessageType.toolResponse
         return false;
+      }
 
       if (!m.isUser) {
         final t = m.text.trimLeft();
@@ -201,9 +266,8 @@ class LlmService {
       return true;
     }).toList();
 
-    // if (turns.length <= maxMessages) return turns;
-    // return turns.sublist(turns.length - maxMessages);
-    return turns;
+    if (turns.length <= maxMessages) return turns;
+    return turns.sublist(turns.length - maxMessages);
   }
 
   Future<void> _ensureLatestSystemOnTop(
@@ -215,7 +279,7 @@ class LlmService {
     // if (s == _lastSystemText) return;
 
     final history = chat.fullHistory;
-    const maxReplayMessages = 100;
+    const maxReplayMessages = 26;
     final replayTail = _tailConversation(
       history,
       maxMessages: maxReplayMessages,
@@ -287,8 +351,9 @@ class LlmService {
       return _withRecovery(() async {
         final model = await _ensureModel();
         final chat = await _ensureChat(model);
+        final composedSystemText = _composeSystemText(systemText ?? '');
 
-        await _ensureLatestSystemOnTop(chat, systemText ?? '');
+        await _ensureLatestSystemOnTop(chat, composedSystemText);
         await chat.addQueryChunk(Message.text(text: userText, isUser: true));
 
         return _generateAndHandleFunctionCalls(chat, depth: 0);
@@ -371,32 +436,44 @@ class LlmService {
     return response;
   }
 
-  Future<String> extractMemoryFromChat(String currentMemoryJson) async {
+  Future<String> extractMemoryFromChat(
+    String currentMemoryJson, {
+    Set<String> lockedFields = const <String>{},
+  }) async {
     return _enqueue(() async {
       return _withRecovery(() async {
-        final chat = _chat;
-        if (chat == null) return '';
-
-        final history = chat.fullHistory;
-        if (history.length < 2) return '';
-
-        final conversationText = _formatHistoryForMemory(history);
-        if (conversationText.isEmpty) return '';
-
-        final prompt = _buildMemoryPrompt(conversationText, currentMemoryJson);
-
         final model = await _ensureModel();
-        final session = await model.createSession(
+        final chat = await _ensureChat(model);
+        final history = chat.fullHistory;
+        final conversationText = _formatHistoryForMemory(history);
+        if (conversationText.isEmpty) {
+          return '';
+        }
+
+        final prompt = _buildMemoryPrompt(
+          conversationText,
+          currentMemoryJson,
+          lockedFields,
+        );
+        final memoryChat = await model.createSession(
           temperature: 0.2,
           randomSeed: randomSeed,
           topK: 1,
+          topP: topP,
         );
         try {
-          await session.addQueryChunk(Message.text(text: prompt, isUser: true));
-          final response = await session.getResponse();
-          return _cleanResponse(response);
+          await memoryChat.addQueryChunk(
+            Message.text(text: prompt, isUser: true),
+          );
+          final responseBuffer = StringBuffer();
+          await for (final chunk in memoryChat.getResponseAsync()) {
+            debugPrint('Memory extraction chunk: $chunk');
+            responseBuffer.write(chunk);
+          }
+          final fullResponse = responseBuffer.toString();
+          return _cleanResponse(fullResponse);
         } finally {
-          await session.close();
+          await memoryChat.close();
         }
       });
     });
@@ -404,7 +481,6 @@ class LlmService {
 
   static String _formatHistoryForMemory(List<Message> history) {
     const maxMessages = 20;
-    const maxCharsPerMessage = 200;
 
     final filtered = history.where((m) {
       if (m.hasImage) return false;
@@ -426,16 +502,20 @@ class LlmService {
     final buffer = StringBuffer();
     for (final m in recent) {
       final role = m.isUser ? 'User' : 'Assistant';
-      var text = m.text.trim();
-      if (text.length > maxCharsPerMessage) {
-        text = '${text.substring(0, maxCharsPerMessage)}…';
-      }
+      final text = m.text.trim();
       buffer.writeln('$role: $text');
     }
     return buffer.toString().trim();
   }
 
-  static String _buildMemoryPrompt(String conversation, String currentMemory) {
+  static String _buildMemoryPrompt(
+    String conversation,
+    String currentMemory,
+    Set<String> lockedFields,
+  ) {
+    final locked = lockedFields.toList()..sort();
+    final lockedText = locked.isEmpty ? '(none)' : locked.join(', ');
+
     return '<conversation>\n'
         '$conversation\n'
         '</conversation>\n'
@@ -444,19 +524,28 @@ class LlmService {
         '$currentMemory\n'
         '</current_memory>\n'
         '\n'
-        'TASK: Extract and update stable personal facts about "User" from the <conversation>'
-        'Merge them into <current_memory>.\n'
+        '<locked_fields>\n'
+        '$lockedText\n'
+        '</locked_fields>\n'
+        '\n'
+        'TASK: Update three memory layers from the <conversation> and merge into <current_memory>.\n'
+        '- soul: stable assistant operating values explicitly requested by user.\n'
+        '- identity: assistant persona details explicitly requested by user.\n'
+        '- user: stable, long-term user facts/preferences/goals.\n'
         '\n'
         'Output ONLY valid JSON, no explanation, no markdown:\n'
-        '{"name":string|null,"traits":[string],"preferences":[string],'
-        '"goals":[string],"facts":[string]}\n'
+        '{"schema_version":3,'
+        '"soul":{"mission":string|null,"principles":[string],"boundaries":[string],"response_style":[string]},'
+        '"identity":{"assistant_name":string|null,"role":string|null,"voice":[string],"behavior_rules":[string]},'
+        '"user":{"name":string|null,"traits":[string],"preferences":[string],"goals":[string],"facts":[string]}}\n'
         '\n'
         'RULES:\n'
-        '- ≤8 words per entry, max 5 per array\n'
-        '- Only long-term, stable personal information\n'
-        '- Preserve unchanged existing entries\n'
-        '- Replace contradicted entries\n'
-        '- Ignore small talk, greetings, ephemeral details\n'
+        '- Keep text concise and stable (max 5 entries per array).\n'
+        '- Preserve unchanged existing entries whenever not contradicted.\n'
+        '- Replace contradicted entries with newer explicit user intent.\n'
+        '- Ignore one-off requests, greetings, and transient details.\n'
+        '- Do not mutate soul/identity unless user explicitly asks to change assistant behavior/persona.\n'
+        '- Fields listed in <locked_fields> are immutable: copy them exactly from <current_memory>.\n'
         '- Important: You Must NOT infer or guess missing information\n'
         '- Important: Do not make assumptions, random guesses, or fabricated information. Any predictions or inferences about the user\'s actions or behavior should be strictly based on the information given by the user.\n';
   }

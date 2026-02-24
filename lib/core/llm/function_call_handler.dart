@@ -4,17 +4,20 @@ import 'package:flutter_gemma/flutter_gemma.dart';
 
 import '../google/google_auth_service.dart';
 import '../google/google_calendar_service.dart';
+import '../memory/memory_service.dart';
 import '../unity/unity_bridge.dart';
 import 'animation_types.dart';
 
 class FunctionCallHandler {
   FunctionCallHandler({
     required this.unityBridge,
+    required this.memoryService,
     this.googleAuthService,
     this.googleCalendarService,
   });
 
   final UnityBridge unityBridge;
+  final MemoryService memoryService;
   final GoogleAuthService? googleAuthService;
   final GoogleCalendarService? googleCalendarService;
 

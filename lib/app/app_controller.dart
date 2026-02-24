@@ -35,6 +35,8 @@ class AppController extends ChangeNotifier {
   bool _hideChatLog = false;
   bool get hideChatLog => _hideChatLog;
 
+  bool _memoryUpdateRunning = false;
+
   Future<void>? _startupFuture;
   bool _startupCompleted = false;
 
@@ -203,9 +205,25 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> _updateMemory() async {
-    final allowed = await memory.isAutoUpdateAllowed();
-    if (!allowed) return;
+    if (_memoryUpdateRunning) {
+      return;
+    }
 
-    await memory.updateMemoryFromChat(llm: llm);
+    final allowed = await memory.isAutoUpdateAllowed();
+    if (!allowed) {
+      return;
+    }
+
+    _memoryUpdateRunning = true;
+    try {
+      await memory.updateMemoryFromChat(llm: llm);
+    } finally {
+      _memoryUpdateRunning = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
   }
 }

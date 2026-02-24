@@ -56,11 +56,13 @@ final overlayServiceProvider = ChangeNotifierProvider<OverlayService>((ref) {
 
 final llmServiceProvider = Provider<LlmService>((ref) {
   final unityBridge = ref.read(unityBridgeProvider);
+  final memoryService = ref.read(memoryServiceProvider);
   final googleAuthService = ref.read(googleAuthServiceProvider);
   final googleCalendarService = ref.read(googleCalendarServiceProvider);
 
   return LlmService(
     unityBridge: unityBridge,
+    memoryService: memoryService,
     googleAuthService: googleAuthService,
     googleCalendarService: googleCalendarService,
   );
