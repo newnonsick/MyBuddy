@@ -114,12 +114,18 @@ class OverlayChatRelay {
     }
 
     try {
-      final text = await sttService.transcribe(
-        modelPath: modelPath,
-        audioPath: audioPath,
-        lang: lang,
-        isTranslate: isTranslate,
-      );
+      appController.beginTranscribing();
+      String? text;
+      try {
+        text = await sttService.transcribe(
+          modelPath: modelPath,
+          audioPath: audioPath,
+          lang: lang,
+          isTranslate: isTranslate,
+        );
+      } finally {
+        appController.endTranscribing();
+      }
       debugPrint(
         'OverlayChatRelay: STT result: '
         '${text != null ? text.substring(0, text.length.clamp(0, 80)) : 'null'}',

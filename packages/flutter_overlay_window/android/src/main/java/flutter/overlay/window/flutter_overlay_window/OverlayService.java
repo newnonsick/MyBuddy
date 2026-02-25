@@ -15,6 +15,8 @@ import android.graphics.Point;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.TypedValue;
@@ -73,6 +75,18 @@ public class OverlayService extends Service implements View.OnTouchListener {
     private Timer mTrayAnimationTimer;
     private TrayAnimationTimerTask mTrayTimerTask;
 
+    private android.widget.FrameLayout trashView;
+    private WindowManager.LayoutParams trashParams;
+    private boolean isTrashVisible = false;
+    private boolean overTrash = false;
+
+    // --- Messenger-style trash snap, vibration & magnetic pull ---
+    private static final int VIBRATION_DURATION_MS = 20;
+    private static final float TRASH_DAMPING_MIN = 0.15f;
+    private static final float TRASH_ACTIVE_SCALE = 1.3f;
+    private boolean hasVibratedForTrash = false;
+    private Vibrator vibrator;
+
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
@@ -83,6 +97,15 @@ public class OverlayService extends Service implements View.OnTouchListener {
     @Override
     public void onDestroy() {
         Log.d("OverLay", "Destroying the overlay window service");
+        if (trashView != null && windowManager != null) {
+            trashView.animate().cancel();
+            try {
+                windowManager.removeView(trashView);
+            } catch (IllegalArgumentException e) {
+                Log.w("OverLay", "trashView was not attached to window manager");
+            }
+            trashView = null;
+        }
         if (windowManager != null) {
             windowManager.removeView(flutterView);
             windowManager = null;
@@ -104,7 +127,7 @@ public class OverlayService extends Service implements View.OnTouchListener {
         int startY = intent.getIntExtra("startY", OverlayConstants.DEFAULT_XY);
         boolean isCloseWindow = intent.getBooleanExtra(INTENT_EXTRA_IS_CLOSE_WINDOW, false);
         if (isCloseWindow) {
-            if (windowManager != null) {
+            if (windowManager != null && flutterView != null) {
                 windowManager.removeView(flutterView);
                 windowManager = null;
                 flutterView.detachFromFlutterEngine();
@@ -113,7 +136,7 @@ public class OverlayService extends Service implements View.OnTouchListener {
             isRunning = false;
             return START_STICKY;
         }
-        if (windowManager != null) {
+        if (windowManager != null && flutterView != null) {
             windowManager.removeView(flutterView);
             windowManager = null;
             flutterView.detachFromFlutterEngine();
@@ -192,6 +215,7 @@ public class OverlayService extends Service implements View.OnTouchListener {
         flutterView.setOnTouchListener(this);
         windowManager.addView(flutterView, params);
         moveOverlay(dx, dy, null);
+        initTrashView();
         return START_STICKY;
     }
 
@@ -327,6 +351,7 @@ public class OverlayService extends Service implements View.OnTouchListener {
 
     @Override
     public void onCreate() {
+        mResources = getApplicationContext().getResources();
         // Get the cached FlutterEngine
         FlutterEngine flutterEngine = FlutterEngineCache.getInstance().get(OverlayConstants.CACHED_TAG);
 
@@ -379,7 +404,53 @@ public class OverlayService extends Service implements View.OnTouchListener {
         } else {
             startForeground(OverlayConstants.NOTIFICATION_ID, notification);
         }
+        vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
         instance = this;
+    }
+
+    private void sendCloseToFlutter() {
+        if (overlayMessageChannel != null) {
+            overlayMessageChannel.send("{\"type\":\"close_overlay\"}");
+        }
+    }
+
+    private void initTrashView() {
+        if (trashView != null && trashView.isAttachedToWindow()) {
+            return; // already initialized
+        }
+        trashView = new android.widget.FrameLayout(this);
+        trashView.setVisibility(View.GONE);
+        
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        bg.setColor(Color.parseColor("#99161618")); 
+        bg.setStroke(dpToPx(1), Color.parseColor("#44FFFFFF"));
+        trashView.setBackground(bg);
+        
+        android.widget.TextView textView = new android.widget.TextView(this);
+        textView.setText("✕");
+        textView.setTextColor(Color.WHITE);
+        textView.setTextSize(24);
+        textView.setGravity(Gravity.CENTER);
+        android.widget.FrameLayout.LayoutParams textParams = new android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT, android.widget.FrameLayout.LayoutParams.MATCH_PARENT);
+        trashView.addView(textView, textParams);
+
+        int size = dpToPx(60);
+        trashParams = new WindowManager.LayoutParams(
+                size, size,
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                        : WindowManager.LayoutParams.TYPE_PHONE,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT);
+        trashParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        trashParams.y = dpToPx(50); 
+        trashParams.x = 0; 
+        
+        if (windowManager != null) {
+            windowManager.addView(trashView, trashParams);
+        }
     }
 
     private void createNotificationChannel() {
@@ -429,6 +500,18 @@ public class OverlayService extends Service implements View.OnTouchListener {
                     dragging = false;
                     lastX = event.getRawX();
                     lastY = event.getRawY();
+                    hasVibratedForTrash = false;
+
+                    if (params.height <= dpToPx(200) && trashView != null) {
+                        trashView.setVisibility(View.VISIBLE);
+                        trashView.setAlpha(0f);
+                        if (windowManager != null) {
+                            windowManager.updateViewLayout(trashView, trashParams);
+                        }
+                        trashView.animate().alpha(1f).setDuration(200).start();
+                        isTrashVisible = true;
+                    }
+                    overTrash = false;
                     break;
                 case MotionEvent.ACTION_MOVE:
                     if (!canDragThisTouch) return false;
@@ -439,22 +522,131 @@ public class OverlayService extends Service implements View.OnTouchListener {
                     }
                     lastX = event.getRawX();
                     lastY = event.getRawY();
-                    boolean invertX = WindowSetup.gravity == (Gravity.TOP | Gravity.RIGHT)
-                            || WindowSetup.gravity == (Gravity.CENTER | Gravity.RIGHT)
-                            || WindowSetup.gravity == (Gravity.BOTTOM | Gravity.RIGHT);
-                    boolean invertY = WindowSetup.gravity == (Gravity.BOTTOM | Gravity.LEFT)
-                            || WindowSetup.gravity == Gravity.BOTTOM
-                            || WindowSetup.gravity == (Gravity.BOTTOM | Gravity.RIGHT);
-                    int xx = params.x + ((int) dx * (invertX ? -1 : 1));
-                    int yy = params.y + ((int) dy * (invertY ? -1 : 1));
-                    
-                    // Prevent horizontal dragging in expanded mode (height > 200dp)
-                    if (params.height > dpToPx(200)) {
-                        xx = 0;
+
+                    if (!isTrashVisible && params.height <= dpToPx(200) && trashView != null) {
+                        trashView.setVisibility(View.VISIBLE);
+                        trashView.setAlpha(0f);
+                        if (windowManager != null) {
+                            windowManager.updateViewLayout(trashView, trashParams);
+                        }
+                        trashView.animate().alpha(1f).setDuration(200).start();
+                        isTrashVisible = true;
                     }
-                    
-                    params.x = xx;
-                    params.y = yy;
+
+                    // --- Trash proximity detection with magnetic pull ---
+                    int trashSnapRadius = dpToPx(70);
+                    int trashEscapeRadius = dpToPx(100);
+
+                    // Get the ACTUAL trash center in screen coordinates
+                    // (using getLocationOnScreen avoids coordinate system mismatches
+                    //  between overlay gravity, trash gravity, and raw touch coords)
+                    int trashScreenCenterX = szWindow.x / 2; // fallback
+                    int trashScreenCenterY = szWindow.y;      // fallback
+                    if (isTrashVisible && trashView != null) {
+                        int[] trashLoc = new int[2];
+                        trashView.getLocationOnScreen(trashLoc);
+                        trashScreenCenterX = trashLoc[0] + trashView.getWidth() / 2;
+                        trashScreenCenterY = trashLoc[1] + trashView.getHeight() / 2;
+                    }
+
+                    if (isTrashVisible && trashView != null) {
+                        float dxT = event.getRawX() - trashScreenCenterX;
+                        float dyT = event.getRawY() - trashScreenCenterY;
+                        double distToTrash = Math.hypot(dxT, dyT);
+
+                        if (overTrash) {
+                            // Already over trash — require larger escape radius to break free
+                            if (distToTrash >= trashEscapeRadius) {
+                                // Escaped the magnetic pull
+                                overTrash = false;
+                                hasVibratedForTrash = false;
+
+                                // Reset dx/dy and lastX/lastY to prevent the damping-
+                                // corrupted values from flinging the overlay off-screen
+                                dx = 0;
+                                dy = 0;
+                                lastX = event.getRawX();
+                                lastY = event.getRawY();
+
+                                // Restore trash circle scale with animation
+                                trashView.animate().cancel();
+                                trashView.animate()
+                                        .scaleX(1.0f).scaleY(1.0f)
+                                        .setDuration(150)
+                                        .start();
+                            }
+                        } else {
+                            // Not yet over trash — check snap radius
+                            if (distToTrash < trashSnapRadius) {
+                                overTrash = true;
+
+                                // Haptic vibration on entry
+                                if (!hasVibratedForTrash) {
+                                    triggerHapticFeedback();
+                                    hasVibratedForTrash = true;
+                                }
+
+                                // Animate trash circle scale up
+                                trashView.animate().cancel();
+                                trashView.animate()
+                                        .scaleX(TRASH_ACTIVE_SCALE).scaleY(TRASH_ACTIVE_SCALE)
+                                        .setDuration(200)
+                                        .start();
+                            }
+                        }
+                    }
+
+                    if (overTrash) {
+                        // Snap overlay toward trash center using screen-coord deltas.
+                        // This works regardless of overlay gravity because we compute
+                        // the delta between current screen position and target screen
+                        // position, then apply that delta to the layout params.
+                        int[] overlayLoc = new int[2];
+                        flutterView.getLocationOnScreen(overlayLoc);
+                        int overlayCenterScreenX = overlayLoc[0] + flutterView.getWidth() / 2;
+                        int overlayCenterScreenY = overlayLoc[1] + flutterView.getHeight() / 2;
+
+                        int snapDeltaX = trashScreenCenterX - overlayCenterScreenX;
+                        int snapDeltaY = trashScreenCenterY - overlayCenterScreenY;
+
+                        // Fast lerp with hard-snap: move 50% of remaining distance
+                        // per frame, and lock to exact center when within 3px
+                        float lerpFactor = 0.5f;
+                        int moveX = (Math.abs(snapDeltaX) < 3) ? snapDeltaX : (int) (snapDeltaX * lerpFactor);
+                        int moveY = (Math.abs(snapDeltaY) < 3) ? snapDeltaY : (int) (snapDeltaY * lerpFactor);
+                        params.x += moveX;
+                        params.y += moveY;
+
+                        // Apply magnetic damping: resist finger movement away from trash
+                        // so the user can't casually drag it out
+                        float fingerDxFromTrash = event.getRawX() - trashScreenCenterX;
+                        float fingerDyFromTrash = event.getRawY() - trashScreenCenterY;
+                        double fingerDist = Math.hypot(fingerDxFromTrash, fingerDyFromTrash);
+                        if (fingerDist > 0 && fingerDist < trashEscapeRadius) {
+                            float dampingFactor = (float) (TRASH_DAMPING_MIN + (1.0f - TRASH_DAMPING_MIN) * (fingerDist / trashEscapeRadius));
+                            lastX = trashScreenCenterX + fingerDxFromTrash * dampingFactor;
+                            lastY = trashScreenCenterY + fingerDyFromTrash * dampingFactor;
+                        }
+                    } else {
+
+                        boolean invertX = WindowSetup.gravity == (Gravity.TOP | Gravity.RIGHT)
+                                || WindowSetup.gravity == (Gravity.CENTER | Gravity.RIGHT)
+                                || WindowSetup.gravity == (Gravity.BOTTOM | Gravity.RIGHT);
+                        boolean invertY = WindowSetup.gravity == (Gravity.BOTTOM | Gravity.LEFT)
+                                || WindowSetup.gravity == Gravity.BOTTOM
+                                || WindowSetup.gravity == (Gravity.BOTTOM | Gravity.RIGHT);
+                        int xx = params.x + ((int) dx * (invertX ? -1 : 1));
+                        int yy = params.y + ((int) dy * (invertY ? -1 : 1));
+
+                        // Prevent horizontal dragging in expanded mode (height > 200dp)
+                        if (params.height > dpToPx(200)) {
+                            xx = 0;
+                        }
+
+                        params.x = xx;
+                        params.y = yy;
+                    }
+
                     if (windowManager != null) {
                         windowManager.updateViewLayout(flutterView, params);
                     }
@@ -464,6 +656,33 @@ public class OverlayService extends Service implements View.OnTouchListener {
                 case MotionEvent.ACTION_CANCEL:
                     if (!canDragThisTouch) return false;
                     lastYPosition = params.y;
+
+                    if (overTrash) {
+                        if (isTrashVisible && trashView != null) {
+                            trashView.animate()
+                                    .alpha(0f).scaleX(1.0f).scaleY(1.0f)
+                                    .setDuration(200)
+                                    .withEndAction(() -> {
+                                        if (trashView != null) trashView.setVisibility(View.GONE);
+                                    }).start();
+                            isTrashVisible = false;
+                        }
+                        overTrash = false;
+                        hasVibratedForTrash = false;
+                        sendCloseToFlutter();
+                        return true;
+                    }
+
+                    if (isTrashVisible && trashView != null) {
+                        trashView.animate()
+                                .alpha(0f).scaleX(1.0f).scaleY(1.0f)
+                                .setDuration(200)
+                                .withEndAction(() -> {
+                                    if (trashView != null) trashView.setVisibility(View.GONE);
+                                }).start();
+                        isTrashVisible = false;
+                    }
+
                     // Only start snap animation if the user actually dragged.
                     // A simple tap (no drag) must not trigger the animation,
                     // because the Dart-side expand/collapse flow that follows
@@ -485,6 +704,19 @@ public class OverlayService extends Service implements View.OnTouchListener {
             return false;
         }
         return false;
+    }
+
+    private void triggerHapticFeedback() {
+        if (vibrator == null || !vibrator.hasVibrator()) return;
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createOneShot(VIBRATION_DURATION_MS, VibrationEffect.DEFAULT_AMPLITUDE));
+            } else {
+                vibrator.vibrate(VIBRATION_DURATION_MS);
+            }
+        } catch (Exception e) {
+            Log.w("OverlayService", "Vibration failed: " + e.getMessage());
+        }
     }
 
     private class TrayAnimationTimerTask extends TimerTask {

@@ -103,6 +103,12 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     try {
       final map = jsonDecode(payload);
       if (map is! Map<String, dynamic>) return;
+
+      if (map['type'] == 'close_overlay') {
+        _closeOverlay();
+        return;
+      }
+
       if (map['type'] != 'overlay_config') return;
 
       final mode = OverlayUiModeX.fromStorage(map['mode'] as String?);
@@ -147,27 +153,52 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     }
 
     final app = ref.watch(appControllerProvider);
-    if (_collapsed) {
-      return Material(
-        color: Colors.transparent,
-        child: SafeArea(
-          child: Align(
-            alignment: Alignment.center,
-            child: Padding(
-              padding: const EdgeInsets.all(4),
-              child: _buildCollapsedBubble(),
-            ),
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      switchInCurve: Curves.easeOutBack,
+      switchOutCurve: Curves.easeIn,
+      transitionBuilder: (child, animation) {
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.94, end: 1.0).animate(animation),
+            child: child,
+          ),
+        );
+      },
+      child: _collapsed
+          ? _buildCollapsedState(app, key: const ValueKey('collapsed'))
+          : _buildExpandedState(app, context, key: const ValueKey('expanded')),
+    );
+  }
+
+  Widget _buildCollapsedState(AppController app, {required Key key}) {
+    return Material(
+      key: key,
+      color: Colors.transparent,
+      child: SafeArea(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          alignment: _collapsedOnLeft ? Alignment.centerLeft : Alignment.centerRight,
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: _buildCollapsedBubble(app),
           ),
         ),
-      );
-    }
+      ),
+    );
+  }
 
+  Widget _buildExpandedState(AppController app, BuildContext context, {required Key key}) {
     final viewInsetBottom = MediaQuery.viewInsetsOf(context).bottom;
     final bottomInset = _mode == OverlayUiMode.minimal
         ? 8.0
         : 8.0 + viewInsetBottom;
 
     return Material(
+      key: key,
       color: Colors.transparent,
       child: SafeArea(
         child: AnimatedPadding(
@@ -289,53 +320,86 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     );
   }
 
-  Widget _buildCollapsedBubble() {
-    final glowColor = _session.recording
-        ? Colors.redAccent
-        : (_session.sending
-              ? Theme.of(context).colorScheme.primary
-              : Colors.white);
+  Widget _buildCollapsedBubble(AppController app) {
+    final isProcessing = _session.sending || app.generatingResponse;
+    final isRecording = _session.recording;
+
+    Color iconColor;
+    Color glowColor;
+
+    if (isRecording) {
+      iconColor = const Color(0xFFE57373); // Muted elegant red
+      glowColor = iconColor.withValues(alpha: 0.15);
+    } else if (isProcessing) {
+      iconColor = Theme.of(context).colorScheme.primary;
+      glowColor = iconColor.withValues(alpha: 0.15);
+    } else {
+      iconColor = Colors.white.withValues(alpha: 0.85);
+      glowColor = Colors.transparent;
+    }
+
+    final scale = isRecording ? 1.05 : 1.0;
 
     return GestureDetector(
       onTap: _expandFromBubble,
       onLongPress: _closeOverlay,
-      child: Container(
-        width: 64,
-        height: 64,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+        width: 58,
+        height: 58,
+        transform: Matrix4.identity()..scale(scale, scale),
+        transformAlignment: Alignment.center,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: Colors.black.withValues(alpha: 0.35),
+          color: const Color(0xFF161618).withValues(alpha: 0.80),
           border: Border.all(
-            color: glowColor.withValues(alpha: 0.85),
-            width: 1.4,
+            color: Colors.white.withValues(alpha: 0.10),
+            width: 0.8,
           ),
           boxShadow: [
             BoxShadow(
-              color: glowColor.withValues(alpha: 0.2),
-              blurRadius: 14,
-              spreadRadius: 1,
+              color: glowColor,
+              blurRadius: 20,
+              spreadRadius: 2,
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.25),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            const Icon(Icons.smart_toy_rounded, size: 28, color: Colors.white),
-            Positioned(
-              right: 10,
-              bottom: 10,
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _session.sending
-                      ? Colors.orangeAccent
-                      : Theme.of(context).colorScheme.primary,
-                ),
-              ),
-            ),
-          ],
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          switchInCurve: Curves.easeOutBack,
+          switchOutCurve: Curves.easeIn,
+          transitionBuilder: (child, animation) {
+            return FadeTransition(
+              opacity: animation,
+              child: ScaleTransition(scale: animation, child: child),
+            );
+          },
+          child: isRecording
+              ? Icon(
+                  Icons.graphic_eq_rounded,
+                  key: const ValueKey('recording'),
+                  size: 24,
+                  color: iconColor,
+                )
+              : isProcessing
+                  ? Icon(
+                      Icons.lens_blur_rounded,
+                      key: const ValueKey('processing'),
+                      size: 24,
+                      color: iconColor,
+                    )
+                  : Icon(
+                      Icons.blur_on_rounded,
+                      key: const ValueKey('idle'),
+                      size: 24,
+                      color: iconColor,
+                    ),
         ),
       ),
     );
@@ -343,18 +407,49 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
 
   Widget _buildMinimalPreview({required bool compact}) {
     final latest = _session.chat.isEmpty ? null : _session.chat.last;
+    final isUser = latest?.isUser ?? false;
 
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(compact ? 10 : 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(12),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 12 : 16,
+        vertical: compact ? 10 : 14,
       ),
-      child: Text(
-        latest?.text ?? 'Type or tap mic to start chatting',
-        maxLines: compact ? 2 : 3,
-        overflow: TextOverflow.ellipsis,
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1D).withValues(alpha: 0.40),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.06),
+          width: 0.8,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(
+              latest == null ? Icons.chat_bubble_outline_rounded : (isUser ? Icons.person_rounded : Icons.blur_on_rounded),
+              size: 14,
+              color: Colors.white.withValues(alpha: 0.4),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              latest?.text ?? 'Type or tap mic to start chatting...',
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.4,
+                color: Colors.white.withValues(alpha: 0.85),
+                fontWeight: FontWeight.w400,
+                letterSpacing: 0.2, // Adds a touch of elegance
+              ),
+              maxLines: compact ? 2 : 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -425,11 +520,13 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     required bool compact,
   }) {
     final stt = ref.watch(sttModelControllerProvider);
-    final canSend = app.llmInstalled && !_session.sending;
+    final isSending = _session.sending || app.generatingResponse;
+    final isTranscribing = _session.transcribing || app.transcribingAudio;
+    final canSend = app.llmInstalled && !isSending;
     final micEnabled =
         app.llmInstalled &&
-        !_session.sending &&
-        !_session.transcribing &&
+        !isSending &&
+        !isTranscribing &&
         stt.selectedInstalledModel != null;
 
     if (isNarrow || compact) {
@@ -461,7 +558,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
                   tooltip: _session.recording
                       ? 'Release to send'
                       : 'Hold to record',
-                  icon: _session.transcribing
+                  icon: isTranscribing
                       ? Icons.more_horiz
                       : (_session.recording
                             ? Icons.stop_rounded
@@ -471,8 +568,8 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
               ),
               const SizedBox(width: 8),
               GlassIconButton.pill(
-                tooltip: _session.sending ? 'Sending...' : 'Send',
-                icon: _session.sending
+                tooltip: isSending ? 'Sending...' : 'Send',
+                icon: isSending
                     ? Icons.more_horiz
                     : Icons.arrow_upward_rounded,
                 onPressed: canSend ? _onSend : null,
@@ -508,7 +605,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
           onPointerCancel: micEnabled ? (_) => _onMicHoldCancel() : null,
           child: GlassIconButton.pill(
             tooltip: _session.recording ? 'Release to send' : 'Hold to record',
-            icon: _session.transcribing
+            icon: isTranscribing
                 ? Icons.more_horiz
                 : (_session.recording ? Icons.stop_rounded : Icons.mic_rounded),
             onPressed: null,
@@ -516,8 +613,8 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
         ),
         const SizedBox(width: 6),
         GlassIconButton.pill(
-          tooltip: _session.sending ? 'Sending...' : 'Send',
-          icon: _session.sending
+          tooltip: isSending ? 'Sending...' : 'Send',
+          icon: isSending
               ? Icons.more_horiz
               : Icons.arrow_upward_rounded,
           onPressed: canSend ? _onSend : null,
@@ -528,8 +625,8 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
 
   String _statusText(AppController app) {
     if (_session.recording) return 'Listening... tap mic to send';
-    if (_session.transcribing) return 'Transcribing...';
-    if (_session.sending) return 'Generating response...';
+    if (_session.transcribing || app.transcribingAudio) return 'Transcribing...';
+    if (_session.sending || app.generatingResponse) return 'Generating response...';
     if (_session.speaking) return 'Speaking...';
     if (app.installingLlm) return 'Preparing model...';
     if (!app.llmInstalled) return 'Select model in settings';
@@ -899,10 +996,16 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
       minY,
       screenHeight - _bubbleSize - _bubbleEdgeInset,
     );
-    final targetY = (_lastExpandedPosition?.y ?? (screenHeight / 3))
+    final targetY = (_lastBubblePosition?.y ?? _lastExpandedPosition?.y ?? (screenHeight / 3))
         .clamp(minY, maxY)
         .toDouble();
 
+    // 1. Tell Flutter to show the collapsed bubble *before* we shrink the OS window.
+    // We animate it moving to the left/right side via the AnimatedContainer.
+    if (mounted) setState(() => _collapsed = true);
+    await Future<void>.delayed(const Duration(milliseconds: 150)); // let flutter animate first
+
+    // 2. Shrink the OS window.
     try {
       await FlutterOverlayWindow.moveOverlay(
         OverlayPosition(targetX, targetY),
@@ -917,8 +1020,6 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
       );
     } catch (_) {}
 
-    if (!mounted) return;
-    setState(() => _collapsed = true);
     _lastBubblePosition = OverlayPosition(targetX, targetY);
 
     await Future<void>.delayed(const Duration(milliseconds: 50));

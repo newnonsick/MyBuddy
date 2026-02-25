@@ -94,7 +94,12 @@ class ChatSessionController extends ChangeNotifier {
   }
 
   Future<void> startMicHold() async {
-    if (_sending || _transcribing || _recording) return;
+    if (_sending ||
+        _transcribing ||
+        _recording ||
+        _appController.generatingResponse) {
+      return;
+    }
 
     if (_speaking) {
       await stopSpeaking();
@@ -132,7 +137,12 @@ class ChatSessionController extends ChangeNotifier {
   }
 
   Future<void> endMicHoldAndSend() async {
-    if (_sending || _transcribing || !_recording) return;
+    if (_sending ||
+        _transcribing ||
+        !_recording ||
+        _appController.generatingResponse) {
+      return;
+    }
 
     final generation = _recordGeneration;
     final startedAt = _recordStartedAt;
@@ -175,12 +185,18 @@ class ChatSessionController extends ChangeNotifier {
         throw StateError('No STT model selected.');
       }
 
-      final text = await _sttService.transcribe(
-        modelPath: selected.localPath,
-        audioPath: audioPath,
-        lang: _sttModelController.selectedLanguage,
-        isTranslate: true,
-      );
+      _appController.beginTranscribing();
+      String? text;
+      try {
+        text = await _sttService.transcribe(
+          modelPath: selected.localPath,
+          audioPath: audioPath,
+          lang: _sttModelController.selectedLanguage,
+          isTranslate: true,
+        );
+      } finally {
+        _appController.endTranscribing();
+      }
 
       if (generation != _recordGeneration) return;
 
@@ -202,7 +218,7 @@ class ChatSessionController extends ChangeNotifier {
 
   Future<void> sendText(String rawText) async {
     final text = rawText.trim();
-    if (text.isEmpty || _sending) return;
+    if (text.isEmpty || _sending || _appController.generatingResponse) return;
 
     _sending = true;
     _chat.add(ChatLine.user(text));

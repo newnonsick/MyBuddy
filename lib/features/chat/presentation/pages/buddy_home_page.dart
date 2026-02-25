@@ -242,8 +242,12 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
 
   String _getStatusText(AppController controller) {
     if (_session.recording) return 'Listening… release to send';
-    if (_session.transcribing) return 'Transcribing…';
-    if (_session.sending) return 'Generating response…';
+    if (_session.transcribing || controller.transcribingAudio) {
+      return 'Transcribing…';
+    }
+    if (_session.sending || controller.generatingResponse) {
+      return 'Generating response…';
+    }
     if (controller.installingLlm) return 'Preparing model…';
     if (controller.llmInstalled) return 'MyBuddy';
     return 'Select a model in Settings';
@@ -280,19 +284,27 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
       builder: (_, _) => ChatTranscript(
         chat: _session.chat,
         scrollController: _scrollController,
-        sending: _session.sending,
+        sending: _session.sending || controller.generatingResponse,
         hideChatLog: controller.hideChatLog,
       ),
     );
   }
 
   Widget _buildComposer(AppController controller) {
-    final canSend = controller.llmInstalled && !_session.sending;
+    final globallyBusy = controller.generatingResponse;
+    final globallyTranscribing = controller.transcribingAudio;
+    final canSend =
+        controller.llmInstalled &&
+        !_session.sending &&
+        !globallyBusy &&
+        !globallyTranscribing;
     final stt = ref.watch(sttModelControllerProvider);
 
     final llmIdle =
         controller.llmInstalled &&
         !_session.sending &&
+        !globallyBusy &&
+        !globallyTranscribing &&
         !controller.installingLlm;
     final hasSttModel = stt.selectedInstalledModel != null;
     final micEnabled = llmIdle && hasSttModel;
@@ -300,12 +312,12 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
     return ChatComposer(
       textController: _textController,
       canSend: canSend,
-      sending: _session.sending,
+      sending: _session.sending || globallyBusy,
       speaking: _session.speaking,
       isModelReady: controller.llmInstalled,
       micEnabled: micEnabled,
       isRecording: _session.recording,
-      isTranscribing: _session.transcribing,
+      isTranscribing: _session.transcribing || globallyTranscribing,
       onMicHoldStart: () {
         unawaited(HapticFeedback.selectionClick());
         unawaited(_session.startMicHold());

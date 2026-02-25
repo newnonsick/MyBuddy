@@ -23,6 +23,7 @@ class OverlayService extends ChangeNotifier {
   bool _permissionGranted = false;
   bool _overlayActive = false;
   int _lifecycleTicket = 0;
+  AppLifecycleState _lastLifecycleState = AppLifecycleState.resumed;
 
   bool get isSupported => !kIsWeb && Platform.isAndroid;
   bool get permissionGranted => _permissionGranted;
@@ -139,14 +140,24 @@ class OverlayService extends ChangeNotifier {
   Future<void> onAppLifecycleChanged(AppLifecycleState state) async {
     if (!isSupported) return;
 
+    final bool isForegrounding = 
+        (_lastLifecycleState == AppLifecycleState.paused || 
+         _lastLifecycleState == AppLifecycleState.hidden ||
+         _lastLifecycleState == AppLifecycleState.detached) && 
+        state == AppLifecycleState.inactive;
+
+    _lastLifecycleState = state;
+
     final ticket = ++_lifecycleTicket;
 
-    if (state == AppLifecycleState.resumed) {
+    if (state == AppLifecycleState.resumed || isForegrounding) {
       try {
-        await FlutterOverlayWindow.closeOverlay();
+        await FlutterOverlayWindow.closeOverlay()
+            .timeout(const Duration(seconds: 2));
       } catch (_) {
-        // Ignore when no overlay is currently attached.
+        // Ignore when no overlay is currently attached or timed out.
       }
+      _overlayActive = false;
       await _refreshRuntimeState();
       notifyListeners();
       return;

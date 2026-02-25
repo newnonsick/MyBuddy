@@ -35,6 +35,12 @@ class AppController extends ChangeNotifier {
   bool _hideChatLog = false;
   bool get hideChatLog => _hideChatLog;
 
+  int _activeChatRequests = 0;
+  bool get generatingResponse => _activeChatRequests > 0;
+
+  int _activeTranscriptions = 0;
+  bool get transcribingAudio => _activeTranscriptions > 0;
+
   bool _memoryUpdateRunning = false;
   int _turnsSinceMemoryUpdate = 0;
   Timer? _memoryIdleTimer;
@@ -181,28 +187,44 @@ class AppController extends ChangeNotifier {
   }
 
   Future<String> chatOnce(String userText) async {
+    if (generatingResponse) {
+      throw StateError(
+        'Assistant is still generating a response. Please wait.',
+      );
+    }
+
+    _activeChatRequests += 1;
+    notifyListeners();
+
     final memoryData = await memory.loadMemoryData();
     final systemPrompt = await memory.buildSystemPrompt(memory: memoryData);
 
-    _conversation.add(_createMessage('user', userText));
-    notifyListeners();
+    try {
+      _conversation.add(_createMessage('user', userText));
+      notifyListeners();
 
-    final assistant = await llm.generateChat(
-      systemText: systemPrompt,
-      userText: userText,
-    );
+      final assistant = await llm.generateChat(
+        systemText: systemPrompt,
+        userText: userText,
+      );
 
-    _conversation.add(_createMessage('assistant', assistant));
-    notifyListeners();
+      _conversation.add(_createMessage('assistant', assistant));
+      notifyListeners();
 
-    debugPrint('LLM assistant response:\n$assistant');
+      debugPrint('LLM assistant response:\n$assistant');
 
-    unawaited(_handleMemoryTurnProgress());
+      unawaited(_handleMemoryTurnProgress());
 
-    return assistant;
+      return assistant;
+    } finally {
+      if (_activeChatRequests > 0) {
+        _activeChatRequests -= 1;
+      }
+      notifyListeners();
+    }
   }
 
-  Future<void> _handleMemoryTurnProgress() async{
+  Future<void> _handleMemoryTurnProgress() async {
     _turnsSinceMemoryUpdate += 1;
 
     if (_turnsSinceMemoryUpdate >= 5) {
@@ -227,6 +249,18 @@ class AppController extends ChangeNotifier {
 
   Map<String, String> _createMessage(String role, String text) {
     return <String, String>{'role': role, 'text': text};
+  }
+
+  void beginTranscribing() {
+    _activeTranscriptions += 1;
+    notifyListeners();
+  }
+
+  void endTranscribing() {
+    if (_activeTranscriptions > 0) {
+      _activeTranscriptions -= 1;
+    }
+    notifyListeners();
   }
 
   Future<void> _updateMemory() async {
