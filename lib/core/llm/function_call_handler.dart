@@ -37,6 +37,7 @@ class FunctionCallHandler {
   ) async {
     final animationName = call.args['animation'] as String?;
     final animateCount = call.args['animate_count'] as int? ?? 1;
+    final responseText = call.args['response_text'] as String?;
 
     final animation = CharacterAnimation.fromName(animationName);
     if (animation != null) {
@@ -44,6 +45,7 @@ class FunctionCallHandler {
       return {
         'status': 'success',
         'message': 'Animation "$animationName" played $animateCount time(s)',
+        if (responseText != null) 'response_text': responseText,
       };
     }
 
@@ -83,6 +85,7 @@ class FunctionCallHandler {
       final endDateStr = call.args['end_date'] as String?;
       final isAllDay = call.args['is_all_day'] as bool? ?? false;
       final location = call.args['location'] as String?;
+      final responseText = call.args['response_text'] as String?;
 
       if (title == null || startDateStr == null) {
         return {'error': 'Missing required fields: title and start_date'};
@@ -116,6 +119,7 @@ class FunctionCallHandler {
           'start_date': startDateStr,
           if (endDateStr != null) 'end_date': endDateStr,
           if (location != null) 'location': location,
+          if (responseText != null) 'response_text': responseText,
         };
       } else {
         return {'error': 'Failed to create event: ${result.error}'};

@@ -37,6 +37,7 @@ class AppController extends ChangeNotifier {
 
   bool _memoryUpdateRunning = false;
   int _turnsSinceMemoryUpdate = 0;
+  Timer? _memoryIdleTimer;
 
   Future<void>? _startupFuture;
   bool _startupCompleted = false;
@@ -196,13 +197,32 @@ class AppController extends ChangeNotifier {
 
     debugPrint('LLM assistant response:\n$assistant');
 
-    _turnsSinceMemoryUpdate += 1;
-    if (_turnsSinceMemoryUpdate >= 10) {
-      _turnsSinceMemoryUpdate = 0;
-      unawaited(_updateMemory());
-    }
+    unawaited(_handleMemoryTurnProgress());
 
     return assistant;
+  }
+
+  Future<void> _handleMemoryTurnProgress() async{
+    _turnsSinceMemoryUpdate += 1;
+
+    if (_turnsSinceMemoryUpdate >= 5) {
+      _memoryIdleTimer?.cancel();
+      _memoryIdleTimer = null;
+      _turnsSinceMemoryUpdate = 0;
+      Timer(const Duration(seconds: 3), () {
+        unawaited(_updateMemory());
+      });
+      return;
+    }
+
+    _memoryIdleTimer?.cancel();
+
+    const idleDuration = Duration(minutes: 1);
+
+    _memoryIdleTimer = Timer(idleDuration, () {
+      _turnsSinceMemoryUpdate = 0;
+      unawaited(_updateMemory());
+    });
   }
 
   Map<String, String> _createMessage(String role, String text) {
@@ -229,6 +249,8 @@ class AppController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _memoryIdleTimer?.cancel();
+    _memoryIdleTimer = null;
     super.dispose();
   }
 }

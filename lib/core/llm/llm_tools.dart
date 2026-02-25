@@ -6,7 +6,8 @@ import '../google/google_calendar_service.dart';
 abstract final class LlmTools {
   static const Tool animateCharacter = Tool(
     name: 'perform_action',
-    description: 'Makes you move your own body to perform a specified action or animation.',
+    description:
+        'Makes you move your own body to perform a specified action or animation.',
     parameters: {
       'type': 'object',
       'properties': {
@@ -29,8 +30,13 @@ abstract final class LlmTools {
           'description':
               'Number of times to perform the animation (only for certain animations). Default is 1.',
         },
+        'response_text': {
+          'type': 'string',
+          'description':
+              'Text response that responds to the user\'s input with empathy and relevance',
+        },
       },
-      'required': ['animation', 'animate_count'],
+      'required': ['animation', 'animate_count', 'response_text'],
     },
   );
 
@@ -67,8 +73,13 @@ abstract final class LlmTools {
           'type': 'string',
           'description': 'Optional location for the event.',
         },
+        'response_text': {
+          'type': 'string',
+          'description':
+              'Text response that responds to the user\'s input with empathy and relevance',
+        },
       },
-      'required': ['title', 'start_date'],
+      'required': ['title', 'start_date', 'response_text'],
     },
   );
 
@@ -76,17 +87,51 @@ abstract final class LlmTools {
     name: 'update_assistant_soul',
     description:
         'Update SOUL memory that represent your core personality, values, behavior rules, and boundaries',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'response_text': {
+          'type': 'string',
+          'description':
+              'Text response that responds to the user\'s input with empathy and relevance',
+        },
+      },
+      'required': ['response_text'],
+    },
   );
 
   static const Tool updateAssistantIdentity = Tool(
     name: 'update_assistant_identity',
     description:
         'Update INDENTITY memory that represents your name, tone, style, and presentation',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'response_text': {
+          'type': 'string',
+          'description':
+              'Text response that responds to the user\'s input with empathy and relevance',
+        },
+      },
+      'required': ['response_text'],
+    },
   );
 
   static const Tool updateUserMemory = Tool(
     name: 'update_user_memory',
-    description: 'Update USER memory that represents user profile, preferences, goals, and interaction style, and context',
+    description:
+        'Update USER memory that represents user profile, preferences, goals, and interaction style, and context',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'response_text': {
+          'type': 'string',
+          'description':
+              'Text response that responds to the user\'s input with empathy and relevance',
+        },
+      },
+      'required': ['response_text'],
+    },
   );
 
   static List<Tool> getAvailableTools({

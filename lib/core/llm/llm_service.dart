@@ -379,7 +379,7 @@ class LlmService {
   Future<String> _generateAndHandleFunctionCalls(
     InferenceChat chat, {
     required int depth,
-    required Message message,
+    required Message? message,
   }) async {
     if (depth >= _maxFunctionCallDepth) {
       return 'Maximum function call depth reached.';
@@ -388,30 +388,47 @@ class LlmService {
     final buffer = StringBuffer();
     FunctionCallResponse? pendingFunctionCall;
 
-    if (depth != 0) {
-      chat.close();
-      chat.session = await chat.sessionCreator!();
-    }
+    // if (depth != 0) {
+    //   chat.close();
+    //   chat.session = await chat.sessionCreator!();
+    // }
+    bool isMessageAdded = false;
 
-    debugPrint(
-      'in _generateAndHandleFunctionCalls Adding query chunk to chat: ${message.text}',
-    );
+    try {
 
-    await chat.addQueryChunk(message);
-
-    debugPrint(
-      'in _generateAndHandleFunctionCalls Starting to listen for response chunks...',
-    );
-
-    await for (final response in chat.generateChatResponseAsync()) {
-      debugPrint(
-        'Received response chunk: $response type: ${response.runtimeType}',
-      );
-      if (response is TextResponse) {
-        buffer.write(response.token);
-      } else if (response is FunctionCallResponse) {
-        pendingFunctionCall = response;
+      if (message != null) {
+        debugPrint(
+          'in _generateAndHandleFunctionCalls Adding query chunk to chat: ${message.text}',
+        );
+        await chat.addQueryChunk(message);
+        isMessageAdded = true;
       }
+
+      debugPrint(
+        'in _generateAndHandleFunctionCalls Starting to listen for response chunks...',
+      );
+
+      await for (final response in chat.generateChatResponseAsync()) {
+        debugPrint(
+          'Received response chunk: $response type: ${response.runtimeType}',
+        );
+        if (response is TextResponse) {
+          buffer.write(response.token);
+        } else if (response is FunctionCallResponse) {
+          pendingFunctionCall = response;
+        }
+      }
+    } catch (e) {
+      if (_isSessionNotCreatedError(e)) {
+        chat.close();
+        chat.session = await chat.sessionCreator!();
+        return _generateAndHandleFunctionCalls(
+          chat,
+          depth: depth,
+          message: isMessageAdded ? message : null,
+        );
+      }
+      rethrow;
     }
 
     if (pendingFunctionCall != null) {
@@ -435,35 +452,39 @@ class LlmService {
   }) async {
     final toolResponse = await _handleToolCall(functionCall);
 
+    final responseText = toolResponse['response_text'] as String?;
+    if (responseText != null && responseText.trim().isNotEmpty) {
+      return responseText.trim();
+    }
+
     final toolMessage = Message.toolResponse(
       toolName: functionCall.name,
       response: toolResponse,
     );
 
     return _generateAndHandleFunctionCalls(
-      chat,
-      depth: depth + 1,
-      message: toolMessage,
-    )
-    .onError(
-      (error, stackTrace) {
-        debugPrint(
-          'Error during function call execution: $error\nStackTrace: $stackTrace',
+          chat,
+          depth: depth + 1,
+          message: toolMessage,
+        )
+        .onError((error, stackTrace) {
+          debugPrint(
+            'Error during function call execution: $error\nStackTrace: $stackTrace',
+          );
+          return 'All done! How can I assist you today?';
+        })
+        .timeout(
+          const Duration(minutes: 1),
+          onTimeout: () {
+            return 'All done! How can I assist you today?';
+          },
         );
-        return 'All done! How can I assist you today?';
-      },
-    )
-    .timeout(
-      const Duration(minutes: 1),
-      onTimeout: () {
-        return 'All done! How can I assist you today?';
-      },
-    );
   }
 
   Future<Map<String, dynamic>> _handleToolCall(
     FunctionCallResponse functionCall,
   ) async {
+    final responseText = functionCall.args['response_text'] as String?;
     switch (functionCall.name) {
       case 'update_assistant_soul':
         await memoryService.updateSoulMemoryFromChat(llm: this);
@@ -471,6 +492,7 @@ class LlmService {
           'status': 'success',
           'message':
               'Assistant soul memory updated from recent chat context. It will take effect in future responses.',
+          if (responseText != null) 'response_text': responseText,
         };
       case 'update_assistant_identity':
         await memoryService.updateIdentityMemoryFromChat(llm: this);
@@ -478,6 +500,7 @@ class LlmService {
           'status': 'success',
           'message':
               'Assistant identity memory updated from recent chat context. It will take effect in future responses.',
+          if (responseText != null) 'response_text': responseText,
         };
       case 'update_user_memory':
         await memoryService.updateUserMemoryFromChat(llm: this);
@@ -485,6 +508,7 @@ class LlmService {
           'status': 'success',
           'message':
               'User memory updated from recent chat context. It will take effect in future responses.',
+          if (responseText != null) 'response_text': responseText,
         };
       default:
         return _functionCallHandler.handle(functionCall);
