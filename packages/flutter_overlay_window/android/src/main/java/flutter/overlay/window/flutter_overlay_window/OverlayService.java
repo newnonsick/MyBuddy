@@ -400,7 +400,7 @@ public class OverlayService extends Service implements View.OnTouchListener {
                             | android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(OverlayConstants.NOTIFICATION_ID, notification,
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_NONE);
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
         } else {
             startForeground(OverlayConstants.NOTIFICATION_ID, notification);
         }
@@ -597,25 +597,18 @@ public class OverlayService extends Service implements View.OnTouchListener {
                     }
 
                     if (overTrash) {
-                        // Snap overlay toward trash center using screen-coord deltas.
-                        // This works regardless of overlay gravity because we compute
-                        // the delta between current screen position and target screen
-                        // position, then apply that delta to the layout params.
-                        int[] overlayLoc = new int[2];
-                        flutterView.getLocationOnScreen(overlayLoc);
-                        int overlayCenterScreenX = overlayLoc[0] + flutterView.getWidth() / 2;
-                        int overlayCenterScreenY = overlayLoc[1] + flutterView.getHeight() / 2;
+                        // Compute target params.x/y to center the overlay window
+                        // on the trash circle. With TOP|LEFT gravity, params.x/y
+                        // ARE the screen coordinates of the view's top-left corner.
+                        int targetX = trashScreenCenterX - flutterView.getWidth() / 2;
+                        int targetY = trashScreenCenterY - flutterView.getHeight() / 2;
 
-                        int snapDeltaX = trashScreenCenterX - overlayCenterScreenX;
-                        int snapDeltaY = trashScreenCenterY - overlayCenterScreenY;
-
-                        // Fast lerp with hard-snap: move 50% of remaining distance
-                        // per frame, and lock to exact center when within 3px
-                        float lerpFactor = 0.5f;
-                        int moveX = (Math.abs(snapDeltaX) < 3) ? snapDeltaX : (int) (snapDeltaX * lerpFactor);
-                        int moveY = (Math.abs(snapDeltaY) < 3) ? snapDeltaY : (int) (snapDeltaY * lerpFactor);
-                        params.x += moveX;
-                        params.y += moveY;
+                        // Fast lerp with hard-snap: converge 50% per frame,
+                        // lock to exact position when within 2px
+                        int remainX = targetX - params.x;
+                        int remainY = targetY - params.y;
+                        params.x += (Math.abs(remainX) < 2) ? remainX : remainX / 2;
+                        params.y += (Math.abs(remainY) < 2) ? remainY : remainY / 2;
 
                         // Apply magnetic damping: resist finger movement away from trash
                         // so the user can't casually drag it out

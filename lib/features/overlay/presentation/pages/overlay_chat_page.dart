@@ -395,7 +395,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
                       color: iconColor,
                     )
                   : Icon(
-                      Icons.blur_on_rounded,
+                      Icons.smart_toy_rounded, //blur_on_rounded
                       key: const ValueKey('idle'),
                       size: 24,
                       color: iconColor,
@@ -429,7 +429,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
           Padding(
             padding: const EdgeInsets.only(top: 2),
             child: Icon(
-              latest == null ? Icons.chat_bubble_outline_rounded : (isUser ? Icons.person_rounded : Icons.blur_on_rounded),
+              latest == null ? Icons.chat_bubble_outline_rounded : (isUser ? Icons.person_rounded : Icons.smart_toy_rounded),
               size: 14,
               color: Colors.white.withValues(alpha: 0.4),
             ),
