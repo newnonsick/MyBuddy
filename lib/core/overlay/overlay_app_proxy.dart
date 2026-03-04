@@ -2,9 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../app/app_controller.dart';
+import '../audio/audio_recorder_service.dart';
 import '../stt/stt_service.dart';
 
 class OverlayAppProxy extends AppController {
@@ -17,6 +20,8 @@ class OverlayAppProxy extends AppController {
   StreamSubscription<dynamic>? _responseSubscription;
   final Map<String, Completer<String>> _chatPending = {};
   final Map<String, Completer<String?>> _sttPending = {};
+  final Map<String, Completer<String>> _recordingPending = {};
+  final Map<String, Completer<void>> _modelSwitchPending = {};
   bool _isListening = false;
 
   void startListening(Stream<dynamic> overlayStream) {
@@ -38,6 +43,10 @@ class OverlayAppProxy extends AppController {
         _handleChatResponse(map);
       } else if (type == 'stt_response') {
         _handleSttResponse(map);
+      } else if (type == 'recording_response') {
+        _handleRecordingResponse(map);
+      } else if (type == 'model_switch_response') {
+        _handleModelSwitchResponse(map);
       }
     } catch (e) {
       debugPrint('OverlayAppProxy: failed to parse response: $e');
@@ -82,6 +91,42 @@ class OverlayAppProxy extends AppController {
       completer.completeError(Exception(error));
     } else {
       completer.complete(map['text'] as String?);
+    }
+  }
+
+  void _handleRecordingResponse(Map<String, dynamic> map) {
+    final requestId = '${map['requestId'] ?? ''}';
+    final completer = _recordingPending.remove(requestId);
+    if (completer == null) {
+      debugPrint(
+        'OverlayAppProxy: no pending recording for requestId=$requestId',
+      );
+      return;
+    }
+
+    final error = map['error'] as String?;
+    if (error != null) {
+      completer.completeError(Exception(error));
+    } else {
+      completer.complete((map['path'] as String?) ?? '');
+    }
+  }
+
+  void _handleModelSwitchResponse(Map<String, dynamic> map) {
+    final requestId = '${map['requestId'] ?? ''}';
+    final completer = _modelSwitchPending.remove(requestId);
+    if (completer == null) {
+      debugPrint(
+        'OverlayAppProxy: no pending model_switch for requestId=$requestId',
+      );
+      return;
+    }
+
+    final error = map['error'] as String?;
+    if (error != null) {
+      completer.completeError(Exception(error));
+    } else {
+      completer.complete();
     }
   }
 
@@ -173,6 +218,90 @@ class OverlayAppProxy extends AppController {
     );
   }
 
+  Future<String> startRecording() async {
+    if (!_isListening) {
+      throw StateError('Overlay channel is not ready yet.');
+    }
+
+    final id = _createRequestId();
+    final completer = Completer<String>();
+    _recordingPending[id] = completer;
+
+    final payload = <String, Object>{
+      'type': 'recording_start_request',
+      'requestId': id,
+    };
+
+    debugPrint('OverlayAppProxy.startRecording: sending request id=$id');
+
+    try {
+      await FlutterOverlayWindow.shareData(jsonEncode(payload));
+    } catch (e) {
+      _recordingPending.remove(id);
+      debugPrint('OverlayAppProxy.startRecording: shareData failed: $e');
+      rethrow;
+    }
+
+    return completer.future.timeout(
+      const Duration(seconds: 10),
+      onTimeout: () {
+        _recordingPending.remove(id);
+        debugPrint('OverlayAppProxy.startRecording: timed out id=$id');
+        throw TimeoutException('Recording start timed out');
+      },
+    );
+  }
+
+  Future<String> stopRecording() async {
+    if (!_isListening) {
+      throw StateError('Overlay channel is not ready yet.');
+    }
+
+    final id = _createRequestId();
+    final completer = Completer<String>();
+    _recordingPending[id] = completer;
+
+    final payload = <String, Object>{
+      'type': 'recording_stop_request',
+      'requestId': id,
+    };
+
+    debugPrint('OverlayAppProxy.stopRecording: sending request id=$id');
+
+    try {
+      await FlutterOverlayWindow.shareData(jsonEncode(payload));
+    } catch (e) {
+      _recordingPending.remove(id);
+      debugPrint('OverlayAppProxy.stopRecording: shareData failed: $e');
+      rethrow;
+    }
+
+    return completer.future.timeout(
+      const Duration(seconds: 10),
+      onTimeout: () {
+        _recordingPending.remove(id);
+        debugPrint('OverlayAppProxy.stopRecording: timed out id=$id');
+        throw TimeoutException('Recording stop timed out');
+      },
+    );
+  }
+
+  Future<void> cancelRecording() async {
+    if (!_isListening) return;
+
+    final payload = <String, Object>{
+      'type': 'recording_cancel_request',
+    };
+
+    debugPrint('OverlayAppProxy.cancelRecording: sending cancel');
+
+    try {
+      await FlutterOverlayWindow.shareData(jsonEncode(payload));
+    } catch (e) {
+      debugPrint('OverlayAppProxy.cancelRecording: shareData failed: $e');
+    }
+  }
+
   String _createRequestId() {
     final micros = DateTime.now().microsecondsSinceEpoch;
     final hash = identityHashCode(this);
@@ -186,7 +315,44 @@ class OverlayAppProxy extends AppController {
 
   @override
   Future<void> activateSelectedModel() async {
-    // No-op — overlay relies on main app.
+    final selected = models.selectedModelId;
+    if (selected == null) return;
+    await switchModel(selected);
+  }
+
+  Future<void> switchModel(String modelId) async {
+    if (!_isListening) {
+      throw StateError('Overlay channel is not ready yet.');
+    }
+
+    final id = _createRequestId();
+    final completer = Completer<void>();
+    _modelSwitchPending[id] = completer;
+
+    final payload = <String, Object>{
+      'type': 'model_switch_request',
+      'requestId': id,
+      'modelId': modelId,
+    };
+
+    debugPrint('OverlayAppProxy.switchModel: sending request id=$id model=$modelId');
+
+    try {
+      await FlutterOverlayWindow.shareData(jsonEncode(payload));
+    } catch (e) {
+      _modelSwitchPending.remove(id);
+      debugPrint('OverlayAppProxy.switchModel: shareData failed: $e');
+      rethrow;
+    }
+
+    return completer.future.timeout(
+      const Duration(seconds: 30),
+      onTimeout: () {
+        _modelSwitchPending.remove(id);
+        debugPrint('OverlayAppProxy.switchModel: timed out id=$id');
+        throw TimeoutException('Model switch timed out');
+      },
+    );
   }
 
   void disposeRelay() {
@@ -205,6 +371,18 @@ class OverlayAppProxy extends AppController {
       }
     }
     _sttPending.clear();
+    for (final c in _recordingPending.values) {
+      if (!c.isCompleted) {
+        c.completeError(Exception('Overlay closed'));
+      }
+    }
+    _recordingPending.clear();
+    for (final c in _modelSwitchPending.values) {
+      if (!c.isCompleted) {
+        c.completeError(Exception('Overlay closed'));
+      }
+    }
+    _modelSwitchPending.clear();
   }
 }
 
@@ -227,5 +405,51 @@ class OverlaySttService extends SttService {
       lang: lang,
       isTranslate: isTranslate,
     );
+  }
+}
+
+class OverlayAudioRecorderService extends AudioRecorderService {
+  OverlayAudioRecorderService(this._proxy);
+
+  final OverlayAppProxy _proxy;
+
+  static const MethodChannel _overlayChannel =
+      MethodChannel('x-slayer/overlay');
+
+  @override
+  Future<bool> hasPermission() async => true;
+
+  @override
+  Future<String> start() async {
+    debugPrint('OverlayAudioRecorderService.start: calling native recording in service');
+    final temp = await getTemporaryDirectory();
+    final dir = '${temp.path}/stt_recordings';
+    final fileName = 'rec_${DateTime.now().toUtc().millisecondsSinceEpoch}.wav';
+    final outPath = '$dir/$fileName';
+
+    final result = await _overlayChannel.invokeMethod<String>(
+      'startRecording',
+      {'path': outPath},
+    );
+    debugPrint('OverlayAudioRecorderService.start: native returned $result');
+    return result ?? outPath;
+  }
+
+  @override
+  Future<String?> stop() async {
+    debugPrint('OverlayAudioRecorderService.stop: calling native stop in service');
+    final result = await _overlayChannel.invokeMethod<String>('stopRecording');
+    debugPrint('OverlayAudioRecorderService.stop: native returned $result');
+    return result;
+  }
+
+  @override
+  Future<void> cancelAndDelete() async {
+    await _overlayChannel.invokeMethod<void>('cancelRecording');
+  }
+
+  @override
+  Future<void> dispose() async {
+    // No local resources to dispose; the service owns the recorder.
   }
 }

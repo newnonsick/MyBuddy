@@ -111,6 +111,7 @@ class ChatSessionController extends ChangeNotifier {
     notifyListeners();
 
     try {
+      debugPrint('ChatSessionController: calling _recorder.start() (type=${_recorder.runtimeType})');
       await _recorder.start();
       if (generation != _recordGeneration) return;
       _recordStartedAt = DateTime.now();
@@ -155,6 +156,7 @@ class ChatSessionController extends ChangeNotifier {
     try {
       final audioPath = await _recorder.stop();
       if (generation != _recordGeneration) return;
+      debugPrint('ChatSessionController: _recorder.stop() returned path=$audioPath');
 
       if (audioPath == null || audioPath.trim().isEmpty) {
         throw StateError('No audio file recorded.');
@@ -171,11 +173,9 @@ class ChatSessionController extends ChangeNotifier {
       }
 
       final audioFile = File(audioPath);
-      if (!await audioFile.exists()) {
-        throw StateError('Recorded file not found.');
-      }
-
-      final bytes = await audioFile.length();
+      final exists = await audioFile.exists();
+      final bytes = exists ? await audioFile.length() : 0;
+      debugPrint('ChatSessionController: file=$audioPath exists=$exists bytes=$bytes');
       if (bytes < 2048) {
         throw StateError('Recording is too short (file is ${bytes}B).');
       }

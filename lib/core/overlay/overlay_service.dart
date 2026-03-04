@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:record/record.dart';
 
 import 'overlay_preferences.dart';
 
@@ -86,6 +87,12 @@ class OverlayService extends ChangeNotifier {
     if (!_permissionGranted) {
       final granted = await requestPermission();
       if (!granted) return;
+    }
+    
+    final micGranted = await AudioRecorder().hasPermission();
+    if (!micGranted) {
+      debugPrint('OverlayService: Microphone permission denied, cannot start overlay');
+      return;
     }
 
     if (_overlayActive) {

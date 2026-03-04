@@ -7,6 +7,7 @@ import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 
 import '../../app/app_controller.dart';
 import '../stt/stt_service.dart';
+import 'package:path_provider/path_provider.dart';
 
 class OverlayChatRelay {
   OverlayChatRelay({required this.appController, required this.sttService});
@@ -48,6 +49,14 @@ class OverlayChatRelay {
         await _handleChatRequest(map);
       } else if (type == 'stt_request') {
         await _handleSttRequest(map);
+      } else if (type == 'recording_start_request') {
+        await _handleRecordingStartRequest(map);
+      } else if (type == 'recording_stop_request') {
+        await _handleRecordingStopRequest(map);
+      } else if (type == 'recording_cancel_request') {
+        await _handleRecordingCancelRequest();
+      } else if (type == 'model_switch_request') {
+        await _handleModelSwitchRequest(map);
       }
     } catch (e) {
       debugPrint('OverlayChatRelay: error handling message: $e');
@@ -205,6 +214,119 @@ class OverlayChatRelay {
       await FlutterOverlayWindow.shareData(jsonEncode(payload));
     } catch (e) {
       debugPrint('OverlayChatRelay: stt_response send failed: $e');
+    }
+  }
+
+  Future<void> _handleRecordingStartRequest(Map<String, dynamic> map) async {
+    final requestId = map['requestId'] as String? ?? '';
+    debugPrint('OverlayChatRelay: recording_start_request id=$requestId');
+
+    try {
+      final temp = await getTemporaryDirectory();
+      final dir = '${temp.path}/stt_recordings';
+      final fileName = 'rec_${DateTime.now().toUtc().millisecondsSinceEpoch}.wav';
+      final outPath = '$dir/$fileName';
+
+      final path = await FlutterOverlayWindow.startOverlayRecording(outPath);
+      debugPrint('OverlayChatRelay: native recording started at $path');
+      await _sendRecordingResponse(requestId: requestId, path: path ?? outPath);
+    } catch (e) {
+      debugPrint('OverlayChatRelay: recording start error: $e');
+      await _sendRecordingResponse(requestId: requestId, error: '$e');
+    }
+  }
+
+  Future<void> _handleRecordingStopRequest(Map<String, dynamic> map) async {
+    final requestId = map['requestId'] as String? ?? '';
+    debugPrint('OverlayChatRelay: recording_stop_request id=$requestId');
+
+    try {
+      final path = await FlutterOverlayWindow.stopOverlayRecording();
+      debugPrint('OverlayChatRelay: native recording stopped at $path');
+      await _sendRecordingResponse(
+        requestId: requestId,
+        path: path ?? '',
+      );
+    } catch (e) {
+      debugPrint('OverlayChatRelay: recording stop error: $e');
+      await _sendRecordingResponse(requestId: requestId, error: '$e');
+    }
+  }
+
+  Future<void> _handleRecordingCancelRequest() async {
+    debugPrint('OverlayChatRelay: recording_cancel_request');
+    try {
+      await FlutterOverlayWindow.cancelOverlayRecording();
+    } catch (e) {
+      debugPrint('OverlayChatRelay: recording cancel error: $e');
+    }
+  }
+
+  Future<void> _sendRecordingResponse({
+    required String requestId,
+    String? path,
+    String? error,
+  }) async {
+    final payload = <String, Object>{
+      'type': 'recording_response',
+      'requestId': requestId,
+      if (path != null) 'path': path,
+      if (error != null) 'error': error,
+    };
+    debugPrint('OverlayChatRelay: sending recording_response id=$requestId');
+    try {
+      await FlutterOverlayWindow.shareData(jsonEncode(payload));
+    } catch (e) {
+      debugPrint('OverlayChatRelay: recording_response send failed: $e');
+    }
+  }
+
+  Future<void> _handleModelSwitchRequest(Map<String, dynamic> map) async {
+    final requestId = map['requestId'] as String? ?? '';
+    final modelId = map['modelId'] as String?;
+    debugPrint(
+      'OverlayChatRelay: model_switch_request id=$requestId model=$modelId',
+    );
+
+    if (modelId == null || modelId.trim().isEmpty) {
+      await _sendModelSwitchResponse(
+        requestId: requestId,
+        error: 'Missing model ID',
+      );
+      return;
+    }
+
+    try {
+      await _ensureAppReadyForOverlayChat();
+      appController.models.setPendingSelection(modelId);
+      await appController.models.commitSelection();
+      await appController.activateSelectedModel();
+      debugPrint('OverlayChatRelay: model switched to $modelId');
+      await _sendModelSwitchResponse(requestId: requestId);
+    } catch (e) {
+      debugPrint('OverlayChatRelay: model switch error: $e');
+      await _sendModelSwitchResponse(requestId: requestId, error: '$e');
+    }
+  }
+
+  Future<void> _sendModelSwitchResponse({
+    required String requestId,
+    String? error,
+  }) async {
+    final payload = <String, Object>{
+      'type': 'model_switch_response',
+      'requestId': requestId,
+      if (error != null) 'error': error,
+    };
+    debugPrint(
+      'OverlayChatRelay: sending model_switch_response id=$requestId',
+    );
+    try {
+      await FlutterOverlayWindow.shareData(jsonEncode(payload));
+    } catch (e) {
+      debugPrint(
+        'OverlayChatRelay: model_switch_response send failed: $e',
+      );
     }
   }
 }

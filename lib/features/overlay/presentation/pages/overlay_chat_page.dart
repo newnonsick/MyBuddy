@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app/app_controller.dart';
 import '../../../../app/providers.dart';
 import '../../../../core/audio/audio_recorder_service.dart';
+import '../../../../core/overlay/overlay_app_proxy.dart';
 import '../../../../core/overlay/overlay_preferences.dart';
 import '../../../../core/stt/whisper_languages.dart';
 import '../../../../core/tts/tts_service.dart';
@@ -29,7 +30,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
   static const double _expandedEdgeInset = 8;
 
   final TtsService _tts = TtsService();
-  final AudioRecorderService _recorder = AudioRecorderService();
+  late final AudioRecorderService _recorder;
   final TextEditingController _textController = TextEditingController();
   late final ChatSessionController _session;
 
@@ -55,6 +56,11 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
   @override
   void initState() {
     super.initState();
+    final appController = ref.read(appControllerProvider);
+    _recorder = appController is OverlayAppProxy
+        ? OverlayAudioRecorderService(appController)
+        : AudioRecorderService();
+    debugPrint('OverlayChatPage: using recorder=${_recorder.runtimeType} (appController=${appController.runtimeType})');
     _session = ChatSessionController(
       appController: ref.read(appControllerProvider),
       sttModelController: ref.read(sttModelControllerProvider),

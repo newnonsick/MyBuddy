@@ -35,6 +35,14 @@ import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import android.media.AudioFormat;
+import android.media.AudioRecord;
+import android.media.MediaRecorder;
+
 import io.flutter.embedding.android.FlutterTextureView;
 import io.flutter.embedding.android.FlutterView;
 import io.flutter.FlutterInjector;
@@ -87,16 +95,347 @@ public class OverlayService extends Service implements View.OnTouchListener {
     private boolean hasVibratedForTrash = false;
     private Vibrator vibrator;
 
+    // --- Native audio recording (AudioRecord-based, runs inside the foreground service) ---
+    private android.media.AudioRecord audioRecord;
+    private Thread recordingThread;
+    private volatile boolean nativeRecording = false;
+    private String nativeRecordingPath;
+    private static final int NATIVE_SAMPLE_RATE = 16000;
+    private static final int NATIVE_CHANNEL_CONFIG = android.media.AudioFormat.CHANNEL_IN_MONO;
+    private static final int NATIVE_AUDIO_FORMAT = android.media.AudioFormat.ENCODING_PCM_16BIT;
+
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
         return null;
     }
 
+    // ---- Native recording from foreground service context ----
+
+    public static String startNativeRecordingStatic(String path) {
+        if (instance == null) {
+            Log.e("OverlayRecording", "startNativeRecordingStatic: instance is NULL");
+            return null;
+        }
+        return instance.startNativeRecording(path);
+    }
+
+    public static String stopNativeRecordingStatic() {
+        if (instance == null) return null;
+        return instance.stopNativeRecording();
+    }
+
+    public static void cancelNativeRecordingStatic() {
+        if (instance != null) instance.cancelNativeRecording();
+    }
+
+    @android.annotation.SuppressLint("MissingPermission")
+    private String startNativeRecording(String path) {
+        if (nativeRecording) {
+            stopNativeRecording();
+        }
+
+        nativeRecordingPath = path;
+
+        try {
+            File parentDir = new File(path).getParentFile();
+            if (parentDir != null) parentDir.mkdirs();
+
+            Log.d("OverlayRecording", "Starting AudioRecord. pid=" + android.os.Process.myPid()
+                    + " uid=" + android.os.Process.myUid());
+
+            int bufferSize = android.media.AudioRecord.getMinBufferSize(
+                    NATIVE_SAMPLE_RATE, NATIVE_CHANNEL_CONFIG, NATIVE_AUDIO_FORMAT);
+            if (bufferSize <= 0) bufferSize = NATIVE_SAMPLE_RATE * 2; // 1 second fallback
+
+            // Use AudioRecord.Builder with setContext() to set the correct PID
+            // in the attribution source. The legacy constructor always sets pid=-1,
+            // causing AudioFlinger to mute the stream for background apps.
+            final long token = android.os.Binder.clearCallingIdentity();
+            try {
+                android.media.AudioFormat audioFormat = new android.media.AudioFormat.Builder()
+                        .setSampleRate(NATIVE_SAMPLE_RATE)
+                        .setChannelMask(NATIVE_CHANNEL_CONFIG)
+                        .setEncoding(NATIVE_AUDIO_FORMAT)
+                        .build();
+
+                audioRecord = new android.media.AudioRecord.Builder()
+                        .setAudioSource(android.media.MediaRecorder.AudioSource.VOICE_RECOGNITION)
+                        .setAudioFormat(audioFormat)
+                        .setBufferSizeInBytes(bufferSize)
+                        .setContext(OverlayService.this)
+                        .build();
+            } finally {
+                android.os.Binder.restoreCallingIdentity(token);
+            }
+
+            if (audioRecord.getState() != android.media.AudioRecord.STATE_INITIALIZED) {
+                Log.e("OverlayRecording", "AudioRecord init failed, state=" + audioRecord.getState());
+                audioRecord.release();
+                audioRecord = null;
+                return null;
+            }
+
+            audioRecord.startRecording();
+            nativeRecording = true;
+
+            // Write PCM data on a background thread
+            final int readBufSize = bufferSize;
+            recordingThread = new Thread(() -> {
+                java.io.RandomAccessFile raf = null;
+                try {
+                    raf = new java.io.RandomAccessFile(path, "rw");
+                    // Write placeholder WAV header (44 bytes), will update later
+                    raf.write(new byte[44]);
+
+                    byte[] buffer = new byte[readBufSize];
+                    long totalBytes = 0;
+                    while (nativeRecording) {
+                        int read = audioRecord.read(buffer, 0, buffer.length);
+                        if (read > 0) {
+                            raf.write(buffer, 0, read);
+                            totalBytes += read;
+                        }
+                    }
+
+                    // Go back and write the correct WAV header
+                    raf.seek(0);
+                    writeWavHeader(raf, totalBytes, NATIVE_SAMPLE_RATE, 1);
+                    Log.d("OverlayRecording", "WAV written: " + path
+                            + " (" + (totalBytes + 44) + " bytes, "
+                            + String.format("%.1f", totalBytes / (double)(NATIVE_SAMPLE_RATE * 2)) + "s)");
+                } catch (Exception e) {
+                    Log.e("OverlayRecording", "Recording thread error: " + e.getMessage(), e);
+                } finally {
+                    if (raf != null) {
+                        try { raf.close(); } catch (Exception ignored) {}
+                    }
+                }
+            }, "OverlayAudioRecorder");
+            recordingThread.start();
+
+            Log.d("OverlayRecording", "AudioRecord started: " + path);
+            return path;
+        } catch (Exception e) {
+            Log.e("OverlayRecording", "AudioRecord start failed: " + e.getMessage(), e);
+            if (audioRecord != null) {
+                try { audioRecord.release(); } catch (Exception ignored) {}
+                audioRecord = null;
+            }
+            return null;
+        }
+    }
+
+    private void writeWavHeader(java.io.RandomAccessFile raf, long totalAudioLen,
+                                int sampleRate, int channels) throws java.io.IOException {
+        long totalDataLen = totalAudioLen + 36;
+        long byteRate = (long) sampleRate * channels * 2;
+
+        byte[] header = new byte[44];
+        header[0] = 'R'; header[1] = 'I'; header[2] = 'F'; header[3] = 'F';
+        header[4] = (byte)(totalDataLen & 0xff);
+        header[5] = (byte)((totalDataLen >> 8) & 0xff);
+        header[6] = (byte)((totalDataLen >> 16) & 0xff);
+        header[7] = (byte)((totalDataLen >> 24) & 0xff);
+        header[8] = 'W'; header[9] = 'A'; header[10] = 'V'; header[11] = 'E';
+        header[12] = 'f'; header[13] = 'm'; header[14] = 't'; header[15] = ' ';
+        header[16] = 16; header[17] = 0; header[18] = 0; header[19] = 0; // chunk size
+        header[20] = 1; header[21] = 0; // PCM format
+        header[22] = (byte) channels; header[23] = 0;
+        header[24] = (byte)(sampleRate & 0xff);
+        header[25] = (byte)((sampleRate >> 8) & 0xff);
+        header[26] = (byte)((sampleRate >> 16) & 0xff);
+        header[27] = (byte)((sampleRate >> 24) & 0xff);
+        header[28] = (byte)(byteRate & 0xff);
+        header[29] = (byte)((byteRate >> 8) & 0xff);
+        header[30] = (byte)((byteRate >> 16) & 0xff);
+        header[31] = (byte)((byteRate >> 24) & 0xff);
+        header[32] = (byte)(channels * 2); header[33] = 0; // block align
+        header[34] = 16; header[35] = 0; // bits per sample
+        header[36] = 'd'; header[37] = 'a'; header[38] = 't'; header[39] = 'a';
+        header[40] = (byte)(totalAudioLen & 0xff);
+        header[41] = (byte)((totalAudioLen >> 8) & 0xff);
+        header[42] = (byte)((totalAudioLen >> 16) & 0xff);
+        header[43] = (byte)((totalAudioLen >> 24) & 0xff);
+        raf.write(header);
+    }
+
+    private String stopNativeRecording() {
+        if (!nativeRecording || audioRecord == null) {
+            return nativeRecordingPath;
+        }
+
+        nativeRecording = false;
+
+        // Wait for recording thread to finish writing
+        if (recordingThread != null) {
+            try { recordingThread.join(3000); } catch (InterruptedException ignored) {}
+            recordingThread = null;
+        }
+
+        try {
+            audioRecord.stop();
+        } catch (Exception e) {
+            Log.e("OverlayRecording", "AudioRecord stop failed: " + e.getMessage());
+        }
+        audioRecord.release();
+        audioRecord = null;
+
+        Log.d("OverlayRecording", "AudioRecord stopped: " + nativeRecordingPath
+                + " (" + new File(nativeRecordingPath).length() + " bytes)");
+        return nativeRecordingPath;
+    }
+
+    private void cancelNativeRecording() {
+        String path = stopNativeRecording();
+        if (path != null) {
+            new File(path).delete();
+        }
+        nativeRecordingPath = null;
+    }
+
+    /**
+     * Convert AAC/M4A file to 16kHz mono 16-bit PCM WAV using MediaExtractor + MediaCodec.
+     */
+    private void convertM4aToWav(String inputPath, String outputPath) throws IOException {
+        android.media.MediaExtractor extractor = new android.media.MediaExtractor();
+        extractor.setDataSource(inputPath);
+
+        // Find audio track
+        int audioTrackIndex = -1;
+        android.media.MediaFormat inputFormat = null;
+        for (int i = 0; i < extractor.getTrackCount(); i++) {
+            android.media.MediaFormat fmt = extractor.getTrackFormat(i);
+            String mime = fmt.getString(android.media.MediaFormat.KEY_MIME);
+            if (mime != null && mime.startsWith("audio/")) {
+                audioTrackIndex = i;
+                inputFormat = fmt;
+                break;
+            }
+        }
+        if (audioTrackIndex < 0 || inputFormat == null) {
+            extractor.release();
+            throw new IOException("No audio track found in " + inputPath);
+        }
+
+        extractor.selectTrack(audioTrackIndex);
+        String mime = inputFormat.getString(android.media.MediaFormat.KEY_MIME);
+
+        // Configure decoder
+        android.media.MediaCodec decoder = android.media.MediaCodec.createDecoderByType(mime);
+        decoder.configure(inputFormat, null, null, 0);
+        decoder.start();
+
+        // Collect all decoded PCM
+        java.io.ByteArrayOutputStream pcmStream = new java.io.ByteArrayOutputStream();
+        android.media.MediaCodec.BufferInfo info = new android.media.MediaCodec.BufferInfo();
+        boolean inputDone = false;
+        boolean outputDone = false;
+        long timeoutUs = 10000;
+
+        while (!outputDone) {
+            // Feed input
+            if (!inputDone) {
+                int inIdx = decoder.dequeueInputBuffer(timeoutUs);
+                if (inIdx >= 0) {
+                    java.nio.ByteBuffer inBuf = decoder.getInputBuffer(inIdx);
+                    int sampleSize = extractor.readSampleData(inBuf, 0);
+                    if (sampleSize < 0) {
+                        decoder.queueInputBuffer(inIdx, 0, 0, 0,
+                                android.media.MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+                        inputDone = true;
+                    } else {
+                        decoder.queueInputBuffer(inIdx, 0, sampleSize,
+                                extractor.getSampleTime(), 0);
+                        extractor.advance();
+                    }
+                }
+            }
+
+            // Drain output
+            int outIdx = decoder.dequeueOutputBuffer(info, timeoutUs);
+            if (outIdx >= 0) {
+                if (info.size > 0) {
+                    java.nio.ByteBuffer outBuf = decoder.getOutputBuffer(outIdx);
+                    outBuf.position(info.offset);
+                    outBuf.limit(info.offset + info.size);
+                    byte[] chunk = new byte[info.size];
+                    outBuf.get(chunk);
+                    pcmStream.write(chunk);
+                }
+                decoder.releaseOutputBuffer(outIdx, false);
+                if ((info.flags & android.media.MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                    outputDone = true;
+                }
+            }
+        }
+        // Get the actual output sample rate from the decoder (before stopping!)
+        android.media.MediaFormat outputFormat = decoder.getOutputFormat();
+        int actualSampleRate = outputFormat.containsKey(android.media.MediaFormat.KEY_SAMPLE_RATE)
+                ? outputFormat.getInteger(android.media.MediaFormat.KEY_SAMPLE_RATE)
+                : NATIVE_SAMPLE_RATE;
+        int actualChannels = outputFormat.containsKey(android.media.MediaFormat.KEY_CHANNEL_COUNT)
+                ? outputFormat.getInteger(android.media.MediaFormat.KEY_CHANNEL_COUNT)
+                : 1;
+
+        decoder.stop();
+        decoder.release();
+        extractor.release();
+
+        byte[] pcmData = pcmStream.toByteArray();
+        pcmStream.close();
+
+        Log.d("OverlayRecording", "Decoder output: sampleRate=" + actualSampleRate
+                + " channels=" + actualChannels + " pcmBytes=" + pcmData.length);
+
+        // Write WAV file with the actual decoder output format
+        writeWavFile(outputPath, pcmData, actualSampleRate, actualChannels);
+    }
+
+    private void writeWavFile(String filePath, byte[] pcmData, int sampleRate, int channels) throws IOException {
+        long totalAudioLen = pcmData.length;
+        long totalDataLen = totalAudioLen + 36;
+        long byteRate = (long) sampleRate * channels * 2;
+
+        byte[] header = new byte[44];
+        header[0] = 'R'; header[1] = 'I'; header[2] = 'F'; header[3] = 'F';
+        header[4] = (byte)(totalDataLen & 0xff);
+        header[5] = (byte)((totalDataLen >> 8) & 0xff);
+        header[6] = (byte)((totalDataLen >> 16) & 0xff);
+        header[7] = (byte)((totalDataLen >> 24) & 0xff);
+        header[8] = 'W'; header[9] = 'A'; header[10] = 'V'; header[11] = 'E';
+        header[12] = 'f'; header[13] = 'm'; header[14] = 't'; header[15] = ' ';
+        header[16] = 16; // PCM chunk size
+        header[20] = 1;  // PCM format
+        header[22] = (byte) channels;
+        header[24] = (byte)(sampleRate & 0xff);
+        header[25] = (byte)((sampleRate >> 8) & 0xff);
+        header[26] = (byte)((sampleRate >> 16) & 0xff);
+        header[27] = (byte)((sampleRate >> 24) & 0xff);
+        header[28] = (byte)(byteRate & 0xff);
+        header[29] = (byte)((byteRate >> 8) & 0xff);
+        header[30] = (byte)((byteRate >> 16) & 0xff);
+        header[31] = (byte)((byteRate >> 24) & 0xff);
+        header[32] = (byte)(channels * 2); // block align
+        header[34] = 16; // bits per sample
+        header[36] = 'd'; header[37] = 'a'; header[38] = 't'; header[39] = 'a';
+        header[40] = (byte)(totalAudioLen & 0xff);
+        header[41] = (byte)((totalAudioLen >> 8) & 0xff);
+        header[42] = (byte)((totalAudioLen >> 16) & 0xff);
+        header[43] = (byte)((totalAudioLen >> 24) & 0xff);
+
+        FileOutputStream fos = new FileOutputStream(filePath);
+        fos.write(header);
+        fos.write(pcmData);
+        fos.flush();
+        fos.close();
+    }
+
     @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
     public void onDestroy() {
         Log.d("OverLay", "Destroying the overlay window service");
+        cancelNativeRecording();
         if (trashView != null && windowManager != null) {
             trashView.animate().cancel();
             try {
@@ -143,6 +482,7 @@ public class OverlayService extends Service implements View.OnTouchListener {
             stopSelf();
         }
         isRunning = true;
+        instance = this;
         Log.d("onStartCommand", "Service started");
         FlutterEngine engine = FlutterEngineCache.getInstance().get(OverlayConstants.CACHED_TAG);
         engine.getLifecycleChannel().appIsResumed();
@@ -165,6 +505,30 @@ public class OverlayService extends Service implements View.OnTouchListener {
                 int height = call.argument("height");
                 boolean enableDrag = call.argument("enableDrag");
                 resizeOverlay(width, height, enableDrag, result);
+            } else if (call.method.equals("startRecording")) {
+                String path = call.argument("path");
+                try {
+                    String resultPath = startNativeRecording(path);
+                    if (resultPath != null) {
+                        result.success(resultPath);
+                    } else {
+                        result.error("RECORDING_ERROR", "AudioRecord init failed (service=" + this + ")", null);
+                    }
+                } catch (Exception e) {
+                    Log.e("OverlayRecording", "startRecording handler error: " + e.getMessage(), e);
+                    result.error("RECORDING_ERROR", e.getMessage(), null);
+                }
+            } else if (call.method.equals("stopRecording")) {
+                try {
+                    String resultPath = stopNativeRecording();
+                    result.success(resultPath);
+                } catch (Exception e) {
+                    Log.e("OverlayRecording", "stopRecording handler error: " + e.getMessage(), e);
+                    result.error("RECORDING_ERROR", e.getMessage(), null);
+                }
+            } else if (call.method.equals("cancelRecording")) {
+                cancelNativeRecording();
+                result.success(null);
             }
         });
         overlayMessageChannel.setMessageHandler((message, reply) -> {
@@ -394,16 +758,13 @@ public class OverlayService extends Service implements View.OnTouchListener {
                 .setContentIntent(pendingIntent)
                 .setVisibility(WindowSetup.notificationVisibility)
                 .build();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(OverlayConstants.NOTIFICATION_ID, notification,
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-                            | android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(OverlayConstants.NOTIFICATION_ID, notification,
                     android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
         } else {
             startForeground(OverlayConstants.NOTIFICATION_ID, notification);
         }
+        Log.d("OverlayRecording", "startForeground called with MICROPHONE type, pid=" + android.os.Process.myPid());
         vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
         instance = this;
     }

@@ -7,11 +7,13 @@ class AppLifecycleObserver extends WidgetsBindingObserver {
   AppLifecycleObserver({
     NotificationService? notificationService,
     OverlayService? overlayService,
+    this.onResume,
   }) : _notificationService = notificationService ?? NotificationService(),
        _overlayService = overlayService ?? OverlayService();
 
   final NotificationService _notificationService;
   final OverlayService _overlayService;
+  final Future<void> Function()? onResume;
 
   void initialize() {
     WidgetsBinding.instance.addObserver(this);
@@ -33,6 +35,7 @@ class AppLifecycleObserver extends WidgetsBindingObserver {
       case AppLifecycleState.resumed:
         _notificationService.setAppForegroundState(true);
         _notificationService.onAppOpened();
+        onResume?.call();
         break;
 
       case AppLifecycleState.inactive:

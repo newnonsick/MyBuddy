@@ -103,6 +103,8 @@ class GoogleCalendarService extends ChangeNotifier {
 
   calendar.CalendarApi? _calendarApi;
 
+  int _lastAuthVersion = -1;
+
   List<CalendarEvent> _events = [];
   List<CalendarEvent> get events => List.unmodifiable(_events);
 
@@ -120,8 +122,10 @@ class GoogleCalendarService extends ChangeNotifier {
   void _onAuthChanged() {
     if (authService.isSignedIn && authService.authClient != null) {
       _calendarApi = calendar.CalendarApi(authService.authClient!);
+      _lastAuthVersion = authService.authClientVersion;
     } else {
       _calendarApi = null;
+      _lastAuthVersion = -1;
       _events = [];
     }
     notifyListeners();
@@ -147,23 +151,33 @@ class GoogleCalendarService extends ChangeNotifier {
     _events.sort((a, b) => a.startTime.compareTo(b.startTime));
   }
 
-  Future<CalendarResult<List<CalendarEvent>>> fetchEvents({
-    DateTime? startDate,
-    DateTime? endDate,
-  }) async {
+  Future<String?> _ensureFreshApi() async {
     if (!authService.isSignedIn) {
-      return CalendarResult.failure('Please sign in to view your calendar.');
+      return 'Please sign in to access your calendar.';
     }
 
     final tokenValid = await authService.ensureValidToken();
     if (!tokenValid) {
-      return CalendarResult.failure('Session expired. Please sign in again.');
+      return 'Session expired. Please sign in again.';
     }
 
-    _calendarApi ??= calendar.CalendarApi(authService.authClient!);
+    if (_calendarApi == null ||
+        _lastAuthVersion != authService.authClientVersion) {
+      _calendarApi = calendar.CalendarApi(authService.authClient!);
+      _lastAuthVersion = authService.authClientVersion;
+    }
 
-    _setLoading(true);
-    _clearError();
+    return null;
+  }
+
+  Future<CalendarResult<List<CalendarEvent>>> fetchEvents({
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    final error = await _ensureFreshApi();
+    if (error != null) {
+      return CalendarResult.failure(error);
+    }
 
     try {
       final start = startDate ?? _selectedDate;
@@ -225,16 +239,10 @@ class GoogleCalendarService extends ChangeNotifier {
     bool isAllDay = false,
     String? location,
   }) async {
-    if (!authService.isSignedIn) {
-      return CalendarResult.failure('Please sign in to create events.');
+    final error = await _ensureFreshApi();
+    if (error != null) {
+      return CalendarResult.failure(error);
     }
-
-    final tokenValid = await authService.ensureValidToken();
-    if (!tokenValid) {
-      return CalendarResult.failure('Session expired. Please sign in again.');
-    }
-
-    _calendarApi ??= calendar.CalendarApi(authService.authClient!);
 
     _setLoading(true);
     _clearError();
@@ -281,16 +289,10 @@ class GoogleCalendarService extends ChangeNotifier {
     bool isAllDay = false,
     String? location,
   }) async {
-    if (!authService.isSignedIn) {
-      return CalendarResult.failure('Please sign in to edit events.');
+    final error = await _ensureFreshApi();
+    if (error != null) {
+      return CalendarResult.failure(error);
     }
-
-    final tokenValid = await authService.ensureValidToken();
-    if (!tokenValid) {
-      return CalendarResult.failure('Session expired. Please sign in again.');
-    }
-
-    _calendarApi ??= calendar.CalendarApi(authService.authClient!);
 
     _setLoading(true);
     _clearError();
@@ -335,17 +337,9 @@ class GoogleCalendarService extends ChangeNotifier {
   }
 
   Future<CalendarResult<void>> deleteEvent(String eventId) async {
-    if (!authService.isSignedIn) {
-      return CalendarResult.failure('Please sign in to delete events.');
-    }
-
-    final tokenValid = await authService.ensureValidToken();
-    if (!tokenValid) {
-      return CalendarResult.failure('Session expired. Please sign in again.');
-    }
-
-    if (_calendarApi == null) {
-      return CalendarResult.failure('Calendar not initialized.');
+    final error = await _ensureFreshApi();
+    if (error != null) {
+      return CalendarResult.failure(error);
     }
 
     _setLoading(true);

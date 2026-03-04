@@ -59,6 +59,7 @@ class _AppWithLifecycleState extends ConsumerState<_AppWithLifecycle> {
     _lifecycleObserver = AppLifecycleObserver(
       notificationService: widget.notificationService,
       overlayService: _overlayService,
+      onResume: _onAppResumed,
     )..initialize();
     final appController = ref.read(appControllerProvider);
     unawaited(appController.startup());
@@ -77,4 +78,22 @@ class _AppWithLifecycleState extends ConsumerState<_AppWithLifecycle> {
 
   @override
   Widget build(BuildContext context) => widget.child;
+
+  Future<void> _onAppResumed() async {
+    final models = ref.read(modelControllerProvider);
+    final stt = ref.read(sttModelControllerProvider);
+    final app = ref.read(appControllerProvider);
+
+    final previousModelId = models.selectedModelId;
+
+    await models.loadLocalState();
+    await stt.loadLocalState();
+
+    final newModelId = models.selectedModelId;
+    if (newModelId != null &&
+        newModelId != previousModelId &&
+        app.llmInstalled) {
+      await app.activateSelectedModel();
+    }
+  }
 }

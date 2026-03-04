@@ -113,7 +113,11 @@ public class FlutterOverlayWindowPlugin implements
             intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
             intent.putExtra("startX", startX);
             intent.putExtra("startY", startY);
-            context.startService(intent);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent);
+            } else {
+                context.startService(intent);
+            }
             result.success(null);
         } else if (call.method.equals("isOverlayActive")) {
             result.success(OverlayService.isRunning);
@@ -136,6 +140,20 @@ public class FlutterOverlayWindowPlugin implements
                 result.success(false);
             }
             return;
+        } else if (call.method.equals("startOverlayRecording")) {
+            String path = call.argument("path");
+            String resultPath = OverlayService.startNativeRecordingStatic(path);
+            if (resultPath != null) {
+                result.success(resultPath);
+            } else {
+                result.error("RECORDING_ERROR", "Failed to start native recording", null);
+            }
+        } else if (call.method.equals("stopOverlayRecording")) {
+            String resultPath = OverlayService.stopNativeRecordingStatic();
+            result.success(resultPath);
+        } else if (call.method.equals("cancelOverlayRecording")) {
+            OverlayService.cancelNativeRecordingStatic();
+            result.success(null);
         } else {
             result.notImplemented();
         }

@@ -78,9 +78,12 @@ class GoogleAuthService extends ChangeNotifier {
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
 
-  http.Client? _authClient;
+  GoogleAuthClient? _authClient;
 
   http.Client? get authClient => _authClient;
+
+  int _authClientVersion = 0;
+  int get authClientVersion => _authClientVersion;
 
   String? get userEmail => _currentUser?.email;
 
@@ -135,14 +138,11 @@ class GoogleAuthService extends ChangeNotifier {
     _currentUser = user;
 
     try {
-      _authClient = await user.authorizationClient
-          .authorizationForScopes([calendar.CalendarApi.calendarScope])
-          .then((auth) {
-            if (auth == null) return null;
-            return GoogleAuthClient(auth.accessToken);
-          });
+      final auth = await user.authorizationClient
+          .authorizationForScopes([calendar.CalendarApi.calendarScope]);
 
-      if (_authClient != null) {
+      if (auth != null) {
+        _setAuthClient(GoogleAuthClient(auth.accessToken));
         _errorMessage = null;
         _setState(GoogleAuthState.signedIn);
       } else {
@@ -161,7 +161,7 @@ class GoogleAuthService extends ChangeNotifier {
         calendar.CalendarApi.calendarScope,
       ]);
 
-      _authClient = GoogleAuthClient(auth.accessToken);
+      _setAuthClient(GoogleAuthClient(auth.accessToken));
       _errorMessage = null;
       _setState(GoogleAuthState.signedIn);
     } catch (e) {
@@ -173,7 +173,7 @@ class GoogleAuthService extends ChangeNotifier {
 
   void _handleUserSignOut() {
     _currentUser = null;
-    _authClient = null;
+    _clearAuthClient();
     _setState(GoogleAuthState.signedOut);
   }
 
@@ -241,7 +241,7 @@ class GoogleAuthService extends ChangeNotifier {
   Future<void> signOut() async {
     try {
       await _googleSignIn.signOut();
-      _authClient = null;
+      _clearAuthClient();
       _currentUser = null;
       _errorMessage = null;
       _setState(GoogleAuthState.signedOut);
@@ -255,7 +255,7 @@ class GoogleAuthService extends ChangeNotifier {
   Future<void> disconnect() async {
     try {
       await _googleSignIn.disconnect();
-      _authClient = null;
+      _clearAuthClient();
       _currentUser = null;
       _errorMessage = null;
       _setState(GoogleAuthState.signedOut);
@@ -271,6 +271,10 @@ class GoogleAuthService extends ChangeNotifier {
       return false;
     }
 
+    if (_authClient != null && !_authClient!.isExpired) {
+      return true;
+    }
+
     try {
       final auth = await _currentUser!.authorizationClient
           .authorizationForScopes([calendar.CalendarApi.calendarScope]);
@@ -280,9 +284,9 @@ class GoogleAuthService extends ChangeNotifier {
           [calendar.CalendarApi.calendarScope],
         );
 
-        _authClient = GoogleAuthClient(newAuth.accessToken);
+        _setAuthClient(GoogleAuthClient(newAuth.accessToken));
       } else {
-        _authClient = GoogleAuthClient(auth.accessToken);
+        _setAuthClient(GoogleAuthClient(auth.accessToken));
       }
 
       return _authClient != null;
@@ -305,6 +309,19 @@ class GoogleAuthService extends ChangeNotifier {
         );
       }
     }
+  }
+
+  void _setAuthClient(GoogleAuthClient client) {
+    _authClient?.close();
+    _authClient = client;
+    _authClientVersion++;
+    notifyListeners();
+  }
+
+  void _clearAuthClient() {
+    _authClient?.close();
+    _authClient = null;
+    _authClientVersion++;
   }
 
   void _setState(GoogleAuthState newState) {
@@ -349,10 +366,16 @@ class GoogleAuthService extends ChangeNotifier {
 }
 
 class GoogleAuthClient extends http.BaseClient {
-  GoogleAuthClient(this._accessToken);
+  GoogleAuthClient(this._accessToken)
+      : _createdAt = DateTime.now();
+
+  static const Duration _tokenLifetime = Duration(minutes: 50);
 
   final String _accessToken;
+  final DateTime _createdAt;
   final http.Client _client = http.Client();
+  
+  bool get isExpired => DateTime.now().isAfter(_createdAt.add(_tokenLifetime));
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) {

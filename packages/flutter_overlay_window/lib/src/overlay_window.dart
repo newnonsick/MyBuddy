@@ -95,6 +95,23 @@ class FlutterOverlayWindow {
     return _res;
   }
 
+  /// Start native audio recording within the overlay's foreground service.
+  /// Returns the file path where the WAV audio is being written.
+  static Future<String?> startOverlayRecording(String path) async {
+    return await _channel.invokeMethod<String>('startOverlayRecording', {'path': path});
+  }
+
+  /// Stop native audio recording and finalize the WAV file.
+  /// Returns the file path of the recorded audio.
+  static Future<String?> stopOverlayRecording() async {
+    return await _channel.invokeMethod<String>('stopOverlayRecording');
+  }
+
+  /// Cancel native audio recording and delete the file.
+  static Future<void> cancelOverlayRecording() async {
+    await _channel.invokeMethod<void>('cancelOverlayRecording');
+  }
+
   /// Broadcast data to and from overlay app
   static Future shareData(dynamic data) async {
     return await _overlayMessageChannel.send(data);
