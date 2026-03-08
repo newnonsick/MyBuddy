@@ -5,15 +5,20 @@
 <h1 align="center">MyBuddy</h1>
 
 <p align="center">
-  <strong>A privacy-first AI companion with on-device LLM, voice interaction, 3D avatar, and floating overlay - built with Flutter.</strong>
+  <strong>A privacy-first AI companion with on-device LLM, voice interaction, an embedded 3D avatar, and an Android floating overlay - built with Flutter.</strong>
 </p>
 
 <p align="center">
-  <a href="#key-features">Features</a> &bull;
+  <a href="#overview">Overview</a> &bull;
+  <a href="#related-repositories">Related Repositories</a> &bull;
+  <a href="#features">Features</a> &bull;
   <a href="#architecture">Architecture</a> &bull;
-  <a href="#tech-stack">Tech Stack</a> &bull;
+  <a href="#requirements">Requirements</a> &bull;
   <a href="#getting-started">Getting Started</a> &bull;
   <a href="#configuration">Configuration</a> &bull;
+  <a href="#running-the-app">Running the App</a> &bull;
+  <a href="#building-for-release">Building for Release</a> &bull;
+  <a href="#troubleshooting">Troubleshooting</a> &bull;
   <a href="#license">License</a>
 </p>
 
@@ -21,344 +26,355 @@
 
 ## Overview
 
-MyBuddy is a conversational AI assistant that runs large language models and speech recognition **entirely on-device**. No cloud APIs, no data leaving the phone. It ships with a 3D animated avatar powered by Unity, a three-layer persistent memory system, Google Calendar integration via natural language, a floating overlay for multitasking, and a polished glassmorphism UI built on Material 3.
+MyBuddy is a local-first AI companion application that runs large language models and speech recognition on the user's device. The product combines:
+
+- on-device LLM inference for text conversations and tool calling
+- Whisper-based speech recognition for voice input
+- platform TTS with WAV generation for avatar lip-sync
+- an embedded Unity avatar on Android
+- a floating Android overlay for multitasking
+- structured long-term memory and Google Calendar integration
+
+This repository contains the Flutter application and the local Flutter packages it depends on at runtime.
 
 ---
 
-## Key Features
+## Related Repositories
 
-### On-Device LLM Inference
+MyBuddy is part of a multi-repository product surface:
 
-- Run Gemma, Qwen, DeepSeek, Llama, and Hammer models locally via `flutter_gemma`
-- Zero cloud dependency - all inference happens on the user's device
-- Configurable temperature, top-K, top-P, max tokens, random seed, and thinking mode
-- Serial inference queue prevents concurrent execution and ensures stability
-- Function calling support for animation dispatch and calendar event creation
+- **Flutter app**: https://github.com/newnonsick/MyBuddy
+- **Unity avatar runtime**: https://github.com/newnonsick/MyBuddy-Unity
+- **Model catalogs**: https://github.com/newnonsick/MyBuddy-cfg
+
+The app consumes the Unity export as an Android library and fetches LLM and STT catalogs from the config repository at runtime.
+
+---
+
+## Features
+
+### On-Device AI
+
+- local LLM inference through `flutter_gemma`
+- support for multiple model families such as Gemma, Qwen, DeepSeek, Llama, and Phi-class general models
+- serialized inference pipeline to avoid unsafe concurrent model execution
+- function calling for avatar animation and Google Calendar event creation
 
 ### Voice Interaction
 
-- **Speech-to-Text** - On-device transcription powered by Whisper.cpp (via `whisper_ggml_plus`)
-- **Text-to-Speech** - Platform-native TTS with WAV file synthesis for avatar lip-sync
-- Hold-to-record interface with automatic transcription and submission
-- 100+ supported languages for speech recognition
-- Optional CoreML/Metal acceleration on Apple platforms
+- on-device speech-to-text via `whisper_ggml_plus`
+- hold-to-record chat flow with automatic transcription submission
+- text-to-speech output with WAV synthesis for avatar playback
+- optional CoreML encoder downloads on Apple platforms for STT acceleration
 
-### 3D Animated Avatar
+### 3D Avatar and Overlay
 
-- Embedded Unity scene renders a 3D character with real-time lip-sync
-- 10 character animations: jump, spin, think, clap, chicken dance, thankful, greet, and 3 dance styles
-- LLM-triggered animations via function calling - the AI animates itself contextually
-- MethodChannel bridge for Flutter-Unity communication
+- embedded Unity avatar rendered behind Flutter on Android
+- lip-sync and animation playback driven by Flutter requests
+- Android floating overlay with bidirectional IPC to the main app process
+- multiple overlay presentation modes for multitasking
 
-### Three-Layer Persistent Memory
+### Product Capabilities
 
-MyBuddy uses a structured memory system that the LLM reads and updates across sessions:
-
-| Layer | Contents |
-|-------|----------|
-| **Soul** | Core personality, mission, principles, boundaries, response style |
-| **Identity** | Assistant name, role, voice/tone, behavior rules |
-| **User Profile** | User's name, traits, preferences, goals, facts |
-
-- LLM-driven self-reflection extracts and merges stable facts after each conversation
-- User-editable memory with per-field locking and auto-update toggle
-- Memory schema versioning with automatic migration from legacy formats
-
-### Floating Overlay Window
-
-- System-level overlay lets the user chat and use voice while in other apps
-- Three UI modes: **Minimal**, **Balanced**, and **Avatar-lite**
-- Full bidirectional IPC between the overlay process and the main app via `BasicMessageChannel`
-- Supports both chat requests and STT requests from the overlay
-- Auto-open when the app moves to the background (configurable)
-- Draggable and resizable with configurable custom height
-
-### Google Calendar Integration
-
-- Full calendar UI with monthly grid view, event list, and event creation
-- Natural language event creation - tell the AI to schedule something and it creates a calendar event via function call
-- Google Sign-In with OAuth, full event CRUD via Google Calendar API
-- Fetch events by week or month, timezone-aware scheduling
-
-### Smart Notifications
-
-- Scheduled daily reminders with friendly, randomized messages
-- Notification scheduling window (9 AM to 8 PM) with 6-day lookahead
-- Auto-cancellation when the app is in the foreground
-- Timezone-aware scheduling via `flutter_timezone`
-
-### Glassmorphism Design System
-
-A custom set of reusable UI components built on dark-themed Material 3:
-
-- `GlassSurface` - Core backdrop-filter surface with configurable blur and opacity
-- `GlassCard` - Frosted-glass card container
-- `GlassPanel` - Section panel with glass effect
-- `GlassChatBubble` - Chat message bubble
-- `GlassIconButton` - Icon button with glass hover/press states
-- `GlassPill` - Compact pill-shaped label
+- three-layer persistent memory: Soul, Identity, and User Profile
+- Google Calendar integration with natural-language event creation
+- model download and local model management from remote catalogs
+- scheduled notifications with timezone-aware delivery
 
 ---
 
 ## Architecture
 
-MyBuddy follows a **feature-first architecture** with a shared core services layer and Riverpod for state management.
+MyBuddy follows a feature-first Flutter architecture with a shared core services layer and Riverpod-managed application state.
 
-```
+```text
 lib/
-├── main.dart                    # Entry point, lifecycle observer, overlay entry
-├── app/                         # App-wide controllers & Riverpod providers
-│   ├── app_controller.dart      # Central orchestrator (LLM, chat, memory)
-│   ├── model_controller.dart    # LLM model catalog, download, selection
-│   ├── stt_model_controller.dart# STT model catalog, download, selection
-│   ├── providers.dart           # All Riverpod provider definitions
-│   └── my_app.dart              # MaterialApp with theme configuration
-│
-├── core/                        # Domain services (no UI dependencies)
-│   ├── audio/                   # Audio recording (16kHz mono WAV)
-│   ├── google/                  # Google Auth & Calendar API services
-│   ├── llm/                     # LLM inference, function calling, tools, animation types
-│   ├── memory/                  # Three-layer persistent memory with LLM-driven reflection
-│   ├── model/                   # LLM model catalog, store, and selection persistence
-│   ├── notification/            # Scheduled notifications & app lifecycle observer
-│   ├── overlay/                 # Overlay service, preferences, chat relay, app proxy
-│   ├── stt/                     # STT catalog, store, transcription, language support
-│   ├── tts/                     # Text-to-speech WAV synthesis
-│   ├── unity/                   # MethodChannel bridge to embedded Unity scene
-│   └── utils/                   # Formatting utilities
-│
-├── features/                    # Feature modules
-│   ├── chat/                    # Main conversation UI, composer, transcript, memory editor
-│   ├── google_calendar/         # Calendar page, grid, event list, add/edit forms
-│   ├── overlay/                 # Floating overlay host app & UI
-│   └── settings/                # Settings tabs (General, Personalization, Notifications, LLM, STT)
-│
-├── shared/                      # Reusable UI components
-│   ├── widgets/glass/           # Glassmorphism design system
-│   └── utils/                   # Shared utilities (JSON extraction, etc.)
-│
+  app/        App-level controllers, providers, orchestration
+  core/       Domain services, platform bridges, model and memory systems
+  features/   Chat, settings, overlay, and calendar UI modules
+  shared/     Reusable widgets and utilities
+
 packages/
-├── whisper_ggml_plus/           # Local Flutter FFI plugin wrapping whisper.cpp
-└── flutter_overlay_window/      # Local plugin for system-level overlay windows
+  whisper_ggml_plus/       Local Whisper.cpp Flutter plugin
+  flutter_overlay_window/  Local Android overlay plugin
+
+android/
+  app/           Flutter Android host
+  unityLibrary/  Exported Unity Android library embedded by the app
+  launcher/      Unity-exported launcher module retained for compatibility
 ```
 
-### Design Patterns
+Key runtime boundaries:
 
-| Pattern | Usage |
-|---------|-------|
-| **Service Layer** | Each capability is a standalone service class (`LlmService`, `SttService`, `TtsService`, `MemoryService`, `OverlayService`) |
-| **Catalog + Store + Selection** | Consistent tri-part model management for both LLM and STT models |
-| **Riverpod Providers** | `ChangeNotifierProvider` for reactive state across controllers and services |
-| **Generation-Based Cancellation** | Async operations use incrementing counters to discard stale callbacks |
-| **Serial Queue** | `LlmService` enqueues inference requests to prevent concurrent execution |
-| **Background Isolates** | Memory prompt building, ZIP extraction, and Whisper transcription run off the main thread |
-| **Process Proxy** | `OverlayAppProxy` extends `AppController` to relay requests over IPC to the main app process |
-
-### Conversation Flow
-
-```
-User holds mic -> Record audio (16kHz WAV)
-    -> Whisper.cpp transcription (on-device)
-    -> Text auto-submitted to LLM
-    -> LLM generates response (+ optional function calls)
-    -> Function calls dispatched (animate avatar, create calendar event, update memory)
-    -> Response displayed in chat
-    -> TTS synthesizes response to WAV
-    -> Unity avatar lip-syncs to audio
-```
-
-### Overlay Architecture
-
-```
-Main App Process                     Overlay Process
-+-------------------------+         +-------------------------+
-| AppController           |         | OverlayAppProxy         |
-| LlmService              |  IPC    | (extends AppController) |
-| SttService               <-------> OverlaySttService        |
-| OverlayChatRelay         |         | Overlay UI              |
-+-------------------------+         +-------------------------+
-  BasicMessageChannel (bidirectional JSON messaging)
-```
+- Flutter to Unity: `MethodChannel('unity_bridge')`
+- App to overlay process: `BasicMessageChannel('x-slayer/overlay_messenger')`
+- Remote model catalogs: GitHub raw JSON from the MyBuddy-cfg repository
 
 ---
 
-## Tech Stack
+## Requirements
 
-| Layer | Technology |
-|-------|------------|
-| **Framework** | Flutter 3+ / Dart ^3.9.2 |
-| **State Management** | Riverpod 3.x |
-| **LLM Inference** | flutter_gemma (GGML/GGUF models) |
-| **Speech-to-Text** | whisper_ggml_plus (whisper.cpp v1.8.3 via FFI) |
-| **Text-to-Speech** | flutter_tts (platform-native engines) |
-| **3D Avatar** | Embedded Unity (Android via unityLibrary) |
-| **Overlay** | flutter_overlay_window (system-level floating window) |
-| **Auth** | Google Sign-In + OAuth |
-| **Calendar** | Google Calendar API (googleapis) |
-| **Notifications** | flutter_local_notifications |
-| **HTTP** | Dio (model downloads with progress), http (auth) |
-| **Storage** | SharedPreferences, path_provider |
-| **Toast/Alerts** | toastification |
-| **Design System** | Custom glassmorphism (dark theme, Material 3) |
+### Core Tooling
+
+- Flutter SDK compatible with Dart `^3.9.2`
+- Android Studio or Visual Studio Code with Flutter tooling
+- JDK 11 for Android builds
+- Android SDK and NDK `29.0.13113456`
+
+### Platform Notes
+
+- Android is the primary supported production target
+- iOS, macOS, Windows, Linux, and Web folders exist, but the Unity avatar and Android overlay are Android-specific
+- Apple STT acceleration requires Xcode and CoreML-capable devices
+
+### Optional External Services
+
+- Google Cloud project and OAuth credentials for Calendar integration
+- network access for model catalog fetches and model downloads
 
 ---
 
 ## Getting Started
 
-### Prerequisites
+### 1. Clone the Repository
 
-- [Flutter SDK](https://docs.flutter.dev/get-started/install) (channel stable, Dart ^3.9.2)
-- Android Studio or Xcode (for platform builds)
-- For Android: NDK `29.0.13113456` (configured automatically)
-- For iOS/macOS: Xcode with CoreML support (optional, for STT acceleration)
+```bash
+git clone https://github.com/newnonsick/MyBuddy.git
+cd MyBuddy
+```
 
-### Installation
+### 2. Install Flutter Dependencies
 
-1. **Clone the repository**
+```bash
+flutter pub get
+```
 
-   ```bash
-   git clone https://github.com/newnonsick/MyBuddy.git
-   cd MyBuddy
-   ```
+### 3. Prepare Android Tooling
 
-2. **Install dependencies**
+Confirm that `android/local.properties` points to a valid Android SDK and Flutter SDK. The Android project expects:
 
-   ```bash
-   flutter pub get
-   ```
+- compile SDK 36
+- min SDK 24
+- target SDK 36
+- NDK `29.0.13113456`
 
-3. **Configure Google API credentials** (see [Configuration](#configuration))
+### 4. Configure Optional Google Credentials
 
-4. **Run the app**
+For Google Calendar integration, pass OAuth values with `--dart-define`.
 
-   ```bash
-   flutter run
-   ```
+Example:
 
-### First Launch
+```bash
+flutter run \
+  --dart-define=GOOGLE_CLIENT_ID_ANDROID=your-android-client-id \
+  --dart-define=GOOGLE_SERVER_CLIENT_ID=your-server-client-id
+```
 
-1. Open **Settings** and navigate to the **LLM** tab
-2. Browse the model catalog and download a model (smaller models like Qwen or Gemma variants recommended for first use)
-3. Navigate to the **STT** tab and download a Whisper model (tiny or base recommended for faster downloads)
-4. Return to the home screen and start chatting
+The `env.json` file is a local reference template only. Production configuration should come from build-time defines or your secure release pipeline.
+
+### 5. Launch the App
+
+```bash
+flutter run
+```
 
 ---
 
 ## Configuration
 
-### Google Calendar (Optional)
-
-Google Calendar integration requires OAuth credentials:
-
-1. Create a project in the [Google Cloud Console](https://console.cloud.google.com/)
-2. Enable the **Google Calendar API**
-3. Create OAuth 2.0 credentials (Android client ID and Web/Server client ID)
-4. Pass credentials at build time:
-
-   ```bash
-   flutter run \
-     --dart-define=GOOGLE_CLIENT_ID_ANDROID=<your-android-client-id> \
-     --dart-define=GOOGLE_SERVER_CLIENT_ID=<your-server-client-id>
-   ```
-
-The `env.json` file in the project root serves as a reference template for the required credential keys.
-
 ### Model Catalogs
 
-LLM and STT model catalogs are fetched from remote JSON files hosted on GitHub:
+The app fetches model metadata at runtime from the companion config repository:
 
-- **LLM Catalog**: `newnonsick/MyBuddy-cfg/llm_models.json`
-- **STT Catalog**: `newnonsick/MyBuddy-cfg/stt_models.json`
+- LLM catalog: `https://raw.githubusercontent.com/newnonsick/MyBuddy-cfg/refs/heads/main/llm_models.json`
+- STT catalog: `https://raw.githubusercontent.com/newnonsick/MyBuddy-cfg/main/stt_models.json`
 
-Models are downloaded from Google Drive or direct URLs and stored locally on the device.
+Catalog entries provide:
 
----
+- stable model IDs
+- download URLs
+- approximate display sizes
+- minimum byte thresholds for validation
+- runtime configuration for model loading
 
-## Model Management
+### Local Model Storage
 
-### LLM Models
+- LLM models are stored inside the app documents directory
+- STT models are stored separately with optional CoreML encoder folders on Apple platforms
+- installation registries track downloaded models and metadata locally
 
-MyBuddy supports multiple LLM architectures through `flutter_gemma`:
+### Overlay and Unity
 
-| Model Type | Examples |
-|------------|----------|
-| Gemma | Gemma 2B, Gemma 7B |
-| Qwen | Qwen 2.5 series |
-| DeepSeek | DeepSeek R1 distills |
-| Llama | Llama 3.x variants |
-| Hammer | Function-calling specialized |
+Android overlay support depends on the local `flutter_overlay_window` package and the user granting overlay permission.
 
-Each model includes configuration metadata: type, max tokens, token buffer, temperature, top-K/P, random seed, thinking mode, file type, and function call support.
-
-### STT Models
-
-Whisper models are available in multiple sizes:
-
-| Size | Parameters | Use Case |
-|------|-----------|----------|
-| Tiny | 39M | Fastest, lower accuracy |
-| Base | 74M | Good balance for mobile |
-| Small | 244M | Higher accuracy |
-| Medium | 769M | Near-best accuracy |
-| Large v3 Turbo | 809M | Best quality with optimized speed |
-
-On iOS and macOS, optional **CoreML encoder** downloads enable hardware-accelerated inference via the Apple Neural Engine.
-
-### Storage
-
-- LLM models: `<app_documents>/models/`
-- STT models: `<app_documents>/stt_models/`
-- Registry files track installed models with metadata (size, download date, config)
-- Downloads use atomic `.partial` file pattern with progress tracking and cancellation support
+Unity avatar support depends on the exported `android/unityLibrary` module being present and aligned with the host app.
 
 ---
 
-## Platform Support
+## Running the App
 
-| Platform | Status | Notes |
-|----------|--------|-------|
-| **Android** | Primary | Full feature set including Unity 3D avatar and floating overlay (min SDK 24, target SDK 36) |
-| **iOS** | Future Support | Voice and text chat, model management, calendar, and notifications (no overlay, no Unity avatar) |
+### Development Run
 
-> **Note**: The Unity 3D avatar integration and floating overlay window are currently configured for Android only. The core conversational AI features work cross-platform without these capabilities.
+```bash
+flutter run -d android
+```
+
+### Useful Variants
+
+```bash
+flutter run --release
+flutter run -d chrome
+flutter run -d windows
+```
+
+Use non-Android targets for general UI work only. The full product experience, including embedded Unity avatar and overlay, is currently Android-focused.
+
+### First-Run Workflow
+
+1. Open Settings.
+2. Download and select an LLM model.
+3. Download and select a Whisper STT model.
+4. Return to chat and start a conversation.
+5. Grant overlay permission if you want the floating assistant experience.
 
 ---
 
-## Dependencies
+## Building for Release
 
-### Runtime
+### Android APK
 
-| Package | Purpose |
-|---------|---------|
-| `flutter_riverpod` | Reactive state management |
-| `flutter_gemma` | On-device LLM inference engine |
-| `whisper_ggml_plus` | Whisper.cpp FFI for speech-to-text |
-| `record` | Audio recording (16kHz mono WAV) |
-| `flutter_tts` | Platform text-to-speech synthesis |
-| `flutter_overlay_window` | System-level floating overlay windows |
-| `dio` | HTTP client for model downloads (progress, cancellation) |
-| `http` | HTTP client for authenticated API requests |
-| `path_provider` | Platform-specific directory paths |
-| `shared_preferences` | Key-value persistence (preferences, model selection, memory) |
-| `archive` | ZIP extraction for CoreML model bundles |
-| `flutter_local_notifications` | Scheduled local notifications |
-| `timezone` / `flutter_timezone` | Timezone-aware notification scheduling |
-| `google_sign_in` | Google OAuth authentication |
-| `googleapis` | Google Calendar REST API client |
-| `extension_google_sign_in_as_googleapis_auth` | OAuth bridge for googleapis |
-| `toastification` | In-app toast notifications |
+```bash
+flutter build apk --release \
+  --dart-define=GOOGLE_CLIENT_ID_ANDROID=your-android-client-id \
+  --dart-define=GOOGLE_SERVER_CLIENT_ID=your-server-client-id
+```
 
-### Local Packages
+### Android App Bundle
 
-| Package | Purpose |
-|---------|---------|
-| `whisper_ggml_plus` | Flutter FFI plugin wrapping whisper.cpp v1.8.3 with support for all model sizes, VAD, and CoreML/Metal acceleration on Apple platforms |
-| `flutter_overlay_window` | Flutter plugin for Android system overlay windows with bidirectional data sharing and lifecycle management |
+```bash
+flutter build appbundle --release \
+  --dart-define=GOOGLE_CLIENT_ID_ANDROID=your-android-client-id \
+  --dart-define=GOOGLE_SERVER_CLIENT_ID=your-server-client-id
+```
+
+### iOS Build
+
+```bash
+flutter build ios --release \
+  --dart-define=GOOGLE_SERVER_CLIENT_ID=your-server-client-id
+```
+
+iOS builds do not include the Android overlay or Unity Android library path.
+
+### Android Native Build
+
+If you need to assemble from Gradle directly:
+
+```bash
+cd android
+./gradlew app:assembleRelease
+```
+
+On Windows:
+
+```powershell
+.\gradlew.bat app:assembleRelease
+```
+
+---
+
+## How to Use the App
+
+### Chat
+
+- type a message and send it for LLM response generation
+- hold the microphone control to record speech and transcribe it
+- allow the assistant to trigger avatar animations when supported by the selected model
+
+### Settings
+
+- manage LLM downloads and active model selection
+- manage STT downloads and optional CoreML assets
+- adjust personalization and memory behavior
+- configure notification behavior and overlay preferences
+
+### Calendar
+
+- sign in with Google
+- browse events in the calendar view
+- create events from the calendar UI or natural-language assistant requests
+
+---
+
+## Development Workflow
+
+### Analyze
+
+```bash
+flutter analyze
+```
+
+### Test
+
+```bash
+flutter test
+```
+
+### Regenerate or Refresh Native Dependencies
+
+```bash
+flutter clean
+flutter pub get
+```
+
+When the Unity export changes, sync the `android/unityLibrary` and `android/launcher` modules from the companion Unity repository export before rebuilding Android.
+
+---
+
+## Troubleshooting
+
+### Models do not appear in Settings
+
+- verify network access to the MyBuddy-cfg GitHub raw URLs
+- confirm JSON catalogs are valid and reachable
+- restart the app after transient network failures
+
+### Unity avatar does not respond on Android
+
+- confirm `android/unityLibrary` is present and synced from the Unity export
+- verify the Android build still includes `implementation(project(":unityLibrary"))`
+- rebuild the Android app after updating the Unity export
+
+### Overlay does not open
+
+- verify overlay permission is granted on the device
+- test on Android, not on desktop or web targets
+- confirm the local `flutter_overlay_window` package builds correctly
+
+### Calendar sign-in fails
+
+- verify `--dart-define` values are present at run or build time
+- confirm OAuth credentials are configured for the correct platform package or bundle ID
+
+---
+
+## Repository Layout
+
+```text
+android/      Android host, Unity library modules, Gradle config
+assets/       Images and static assets
+ios/          iOS runner
+lib/          Flutter application source
+linux/        Linux host
+macos/        macOS host
+packages/     Local Flutter packages
+test/         Flutter tests
+web/          Web host
+windows/      Windows host
+```
 
 ---
 
 ## License
 
-This project is licensed under the **Apache License 2.0**. See the [LICENSE](LICENSE) file for details.
-
-Copyright 2026 Thitivath Mongkolgittichot
+This project is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
