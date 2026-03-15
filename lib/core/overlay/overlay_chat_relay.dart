@@ -4,10 +4,10 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../app/app_controller.dart';
 import '../stt/stt_service.dart';
-import 'package:path_provider/path_provider.dart';
 
 class OverlayChatRelay {
   OverlayChatRelay({required this.appController, required this.sttService});

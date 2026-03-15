@@ -8,8 +8,11 @@ import 'model_descriptor.dart';
 class ModelCatalogService {
   ModelCatalogService({Dio? dio}) : _dio = dio ?? Dio();
 
-  static const String defaultCatalogUrl =
-      'https://raw.githubusercontent.com/newnonsick/MyBuddy-cfg/refs/heads/main/llm_models.json';
+  static const String defaultCatalogUrl = String.fromEnvironment(
+    'MODEL_CATALOG_URL',
+    defaultValue:
+        'https://raw.githubusercontent.com/newnonsick/MyBuddy-cfg/refs/heads/main/llm_models.json',
+  );
 
   final Dio _dio;
 

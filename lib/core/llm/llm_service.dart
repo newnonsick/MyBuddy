@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
-import 'package:googleapis/dataproc/v1.dart';
 
 import '../../shared/utils/json_extractor.dart';
 import '../google/google_auth_service.dart';

@@ -45,9 +45,9 @@ MyBuddy is part of a multi-repository product surface:
 
 - **Flutter app**: https://github.com/newnonsick/MyBuddy
 - **Unity avatar runtime**: https://github.com/newnonsick/MyBuddy-Unity
-- **Model catalogs**: https://github.com/newnonsick/MyBuddy-cfg
+- **Model catalog admin panel**: https://github.com/newnonsick/MyBuddy-Admin-Panel
 
-The app consumes the Unity export as an Android library and fetches LLM and STT catalogs from the config repository at runtime.
+The app consumes the Unity export as an Android library and fetches LLM and STT catalogs from the admin panel API at runtime.
 
 ---
 
@@ -108,7 +108,7 @@ Key runtime boundaries:
 
 - Flutter to Unity: `MethodChannel('unity_bridge')`
 - App to overlay process: `BasicMessageChannel('x-slayer/overlay_messenger')`
-- Remote model catalogs: GitHub raw JSON from the MyBuddy-cfg repository
+- Remote model catalogs: JSON API served by the MyBuddy-Admin-Panel
 
 ---
 
@@ -158,24 +158,37 @@ Confirm that `android/local.properties` points to a valid Android SDK and Flutte
 - target SDK 36
 - NDK `29.0.13113456`
 
-### 4. Configure Optional Google Credentials
+### 4. Configure Build-Time Variables
 
-For Google Calendar integration, pass OAuth values with `--dart-define`.
-
-Example:
+Copy the example environment file and fill in your values:
 
 ```bash
-flutter run \
-  --dart-define=GOOGLE_CLIENT_ID_ANDROID=your-android-client-id \
-  --dart-define=GOOGLE_SERVER_CLIENT_ID=your-server-client-id
+cp env.json.example env.json
 ```
 
-The `env.json` file is a local reference template only. Production configuration should come from build-time defines or your secure release pipeline.
+Pass it at run time with `--dart-define-from-file`:
+
+```bash
+flutter run --dart-define-from-file=env.json
+```
+
+`env.json` is gitignored. `env.json.example` is the committed template showing every supported key.
+
+Supported keys:
+
+| Key | Required | Description |
+|-----|----------|-------------|
+| `GOOGLE_CLIENT_ID_ANDROID` | For Calendar | Android OAuth client ID |
+| `GOOGLE_SERVER_CLIENT_ID` | For Calendar | Server OAuth client ID |
+| `MODEL_CATALOG_URL` | No | Override the LLM model catalog URL |
+| `STT_CATALOG_URL` | No | Override the STT model catalog URL |
+
+When `MODEL_CATALOG_URL` or `STT_CATALOG_URL` are omitted the app falls back to built-in default URLs.
 
 ### 5. Launch the App
 
 ```bash
-flutter run
+flutter run --dart-define-from-file=env.json
 ```
 
 ---
@@ -184,10 +197,12 @@ flutter run
 
 ### Model Catalogs
 
-The app fetches model metadata at runtime from the companion config repository:
+The app fetches model metadata at runtime from the MyBuddy-Admin-Panel API:
 
-- LLM catalog: `https://raw.githubusercontent.com/newnonsick/MyBuddy-cfg/refs/heads/main/llm_models.json`
-- STT catalog: `https://raw.githubusercontent.com/newnonsick/MyBuddy-cfg/main/stt_models.json`
+- LLM catalog: `GET /api/llm_models` on your deployed admin panel instance
+- STT catalog: `GET /api/stt_models` on your deployed admin panel instance
+
+Both URLs are compile-time configurable via `MODEL_CATALOG_URL` and `STT_CATALOG_URL` in `env.json`. When omitted, the app falls back to built-in default URLs. Point these to your admin panel deployment (e.g., `https://your-admin-panel.vercel.app/api/llm_models`).
 
 Catalog entries provide:
 
@@ -216,7 +231,7 @@ Unity avatar support depends on the exported `android/unityLibrary` module being
 ### Development Run
 
 ```bash
-flutter run -d android
+flutter run -d android --dart-define-from-file=env.json
 ```
 
 ### Useful Variants
@@ -244,24 +259,19 @@ Use non-Android targets for general UI work only. The full product experience, i
 ### Android APK
 
 ```bash
-flutter build apk --release \
-  --dart-define=GOOGLE_CLIENT_ID_ANDROID=your-android-client-id \
-  --dart-define=GOOGLE_SERVER_CLIENT_ID=your-server-client-id
+flutter build apk --release --dart-define-from-file=env.json
 ```
 
 ### Android App Bundle
 
 ```bash
-flutter build appbundle --release \
-  --dart-define=GOOGLE_CLIENT_ID_ANDROID=your-android-client-id \
-  --dart-define=GOOGLE_SERVER_CLIENT_ID=your-server-client-id
+flutter build appbundle --release --dart-define-from-file=env.json
 ```
 
 ### iOS Build
 
 ```bash
-flutter build ios --release \
-  --dart-define=GOOGLE_SERVER_CLIENT_ID=your-server-client-id
+flutter build ios --release --dart-define-from-file=env.json
 ```
 
 iOS builds do not include the Android overlay or Unity Android library path.
@@ -335,8 +345,8 @@ When the Unity export changes, sync the `android/unityLibrary` and `android/laun
 
 ### Models do not appear in Settings
 
-- verify network access to the MyBuddy-cfg GitHub raw URLs
-- confirm JSON catalogs are valid and reachable
+- verify network access to the admin panel API endpoints
+- confirm the admin panel is deployed and serving valid JSON catalogs
 - restart the app after transient network failures
 
 ### Unity avatar does not respond on Android
