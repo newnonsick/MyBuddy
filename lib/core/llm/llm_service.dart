@@ -419,7 +419,10 @@ class LlmService {
       }
     } catch (e) {
       if (_isSessionNotCreatedError(e)) {
-        chat.close();
+        try{
+          await chat.session.close();
+        }
+        catch(_){}
         chat.session = await chat.sessionCreator!();
         return _generateAndHandleFunctionCalls(
           chat,

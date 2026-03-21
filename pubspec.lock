@@ -226,10 +226,10 @@ packages:
     dependency: "direct main"
     description:
       name: flutter_gemma
-      sha256: "2f90dabd83a16b8f38f3bb38c9ac1d0669f1f6f4a07585341f41682825e03ba4"
+      sha256: cf0bbe44181bdb3f66a9add4af403be8e287496c62cc389d7a0ed3f1498442b3
       url: "https://pub.dev"
     source: hosted
-    version: "0.12.2"
+    version: "0.12.5"
   flutter_launcher_icons:
     dependency: "direct main"
     description:
@@ -511,6 +511,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.2"
+  local_hnsw:
+    dependency: transitive
+    description:
+      name: local_hnsw
+      sha256: "7fb0988e3f850121774d9dfe94068f843d87908d6b1e9ed5039710d8d9ae3f7a"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
   logging:
     dependency: transitive
     description:
