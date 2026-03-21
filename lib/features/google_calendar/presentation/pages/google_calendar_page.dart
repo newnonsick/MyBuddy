@@ -103,7 +103,7 @@ class _GoogleCalendarPageState extends ConsumerState<GoogleCalendarPage> {
             ),
           ),
           if (authService.isSignedIn) ...[
-            GlassIconButton.pill(
+            GlassIconButton.panel(
               tooltip: 'Today',
               icon: Icons.today_rounded,
               onPressed: () {

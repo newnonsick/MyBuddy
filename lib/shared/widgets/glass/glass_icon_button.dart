@@ -37,7 +37,7 @@ class GlassIconButton extends StatelessWidget {
             icon: Icon(icon, size: 20, color: iconColor),
             visualDensity: VisualDensity.compact,
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+            constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
           ),
         );
       case _GlassIconButtonVariant.panel:
@@ -46,10 +46,10 @@ class GlassIconButton extends StatelessWidget {
           child: IconButton(
             tooltip: tooltip,
             onPressed: onPressed,
-            icon: Icon(icon, size: 22, color: iconColor),
+            icon: Icon(icon, size: 20, color: iconColor),
             visualDensity: VisualDensity.compact,
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+            constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
           ),
         );
     }
