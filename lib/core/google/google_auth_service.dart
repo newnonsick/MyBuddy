@@ -51,12 +51,7 @@ abstract class GoogleAuthConfig {
   }
 }
 
-enum GoogleAuthState {
-  signedOut,
-  signingIn,
-  signedIn,
-  error,
-}
+enum GoogleAuthState { signedOut, signingIn, signedIn, error }
 
 class GoogleAuthService extends ChangeNotifier {
   GoogleAuthService() {
@@ -122,7 +117,7 @@ class GoogleAuthService extends ChangeNotifier {
   void _handleAuthenticationEvent(GoogleSignInAuthenticationEvent event) {
     switch (event) {
       case GoogleSignInAuthenticationEventSignIn(:final user):
-        _handleUserSignIn(user);
+        unawaited(_handleUserSignIn(user));
       case GoogleSignInAuthenticationEventSignOut():
         _handleUserSignOut();
     }
@@ -130,42 +125,32 @@ class GoogleAuthService extends ChangeNotifier {
 
   void _handleAuthenticationError(Object error) {
     debugPrint('GoogleAuthService: Auth error: $error');
+    _clearAuthClient();
+    _currentUser = null;
     _errorMessage = _parseError(error);
     _setState(GoogleAuthState.error);
   }
 
   Future<void> _handleUserSignIn(GoogleSignInAccount user) async {
-    _currentUser = user;
-
     try {
-      final auth = await user.authorizationClient
-          .authorizationForScopes([calendar.CalendarApi.calendarScope]);
-
-      if (auth != null) {
-        _setAuthClient(GoogleAuthClient(auth.accessToken));
-        _errorMessage = null;
-        _setState(GoogleAuthState.signedIn);
-      } else {
-        await _requestAuthorization(user);
-      }
-    } catch (e) {
-      debugPrint('GoogleAuthService: Failed to get auth client: $e');
-      _errorMessage = 'Failed to authenticate with Google';
-      _setState(GoogleAuthState.error);
-    }
-  }
-
-  Future<void> _requestAuthorization(GoogleSignInAccount user) async {
-    try {
-      final auth = await user.authorizationClient.authorizeScopes([
+      final auth = await user.authorizationClient.authorizationForScopes([
         calendar.CalendarApi.calendarScope,
       ]);
 
-      _setAuthClient(GoogleAuthClient(auth.accessToken));
+      final accessToken =
+          auth?.accessToken ??
+          (await user.authorizationClient.authorizeScopes([
+            calendar.CalendarApi.calendarScope,
+          ])).accessToken;
+
+      _setAuthClient(GoogleAuthClient(accessToken));
+      _currentUser = user;
       _errorMessage = null;
       _setState(GoogleAuthState.signedIn);
     } catch (e) {
-      debugPrint('GoogleAuthService: Authorization failed: $e');
+      debugPrint('GoogleAuthService: Failed to get auth client: $e');
+      _clearAuthClient();
+      _currentUser = null;
       _errorMessage = _parseError(e);
       _setState(GoogleAuthState.error);
     }
@@ -174,6 +159,7 @@ class GoogleAuthService extends ChangeNotifier {
   void _handleUserSignOut() {
     _currentUser = null;
     _clearAuthClient();
+    _errorMessage = null;
     _setState(GoogleAuthState.signedOut);
   }
 
@@ -224,6 +210,9 @@ class GoogleAuthService extends ChangeNotifier {
     } on GoogleSignInException catch (e) {
       debugPrint('GoogleAuthService: Sign-in failed: $e');
       if (e.code == GoogleSignInExceptionCode.canceled) {
+        _clearAuthClient();
+        _currentUser = null;
+        _errorMessage = null;
         _setState(GoogleAuthState.signedOut);
         return false;
       }
@@ -292,6 +281,8 @@ class GoogleAuthService extends ChangeNotifier {
       return _authClient != null;
     } catch (e) {
       debugPrint('GoogleAuthService: Token refresh failed: $e');
+      _clearAuthClient();
+      _currentUser = null;
       _errorMessage = 'Session expired. Please sign in again.';
       _setState(GoogleAuthState.signedOut);
       return false;
@@ -303,7 +294,7 @@ class GoogleAuthService extends ChangeNotifier {
       _errorMessage = null;
       if (_state == GoogleAuthState.error) {
         _setState(
-          _currentUser != null
+          _currentUser != null && _authClient != null
               ? GoogleAuthState.signedIn
               : GoogleAuthState.signedOut,
         );
@@ -366,15 +357,14 @@ class GoogleAuthService extends ChangeNotifier {
 }
 
 class GoogleAuthClient extends http.BaseClient {
-  GoogleAuthClient(this._accessToken)
-      : _createdAt = DateTime.now();
+  GoogleAuthClient(this._accessToken) : _createdAt = DateTime.now();
 
   static const Duration _tokenLifetime = Duration(minutes: 50);
 
   final String _accessToken;
   final DateTime _createdAt;
   final http.Client _client = http.Client();
-  
+
   bool get isExpired => DateTime.now().isAfter(_createdAt.add(_tokenLifetime));
 
   @override

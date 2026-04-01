@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
@@ -65,6 +66,7 @@ class NotificationService extends ChangeNotifier {
     if (_isInitialized) return;
 
     tz_data.initializeTimeZones();
+    await _setLocalTimezone();
 
     final prefs = await SharedPreferences.getInstance();
     _isDailyReminderEnabled =
@@ -94,6 +96,19 @@ class NotificationService extends ChangeNotifier {
     _isInitialized = true;
     debugPrint('NotificationService initialized');
     debugPrint('Daily reminders enabled: $_isDailyReminderEnabled');
+  }
+
+  Future<void> _setLocalTimezone() async {
+    try {
+      final timezoneInfo = await FlutterTimezone.getLocalTimezone();
+      final location = tz.getLocation(timezoneInfo.identifier);
+      tz.setLocalLocation(location);
+      debugPrint(
+        'NotificationService timezone set to ${timezoneInfo.identifier}',
+      );
+    } catch (e) {
+      debugPrint('NotificationService timezone fallback to default: $e');
+    }
   }
 
   Future<void> _requestPermissions() async {

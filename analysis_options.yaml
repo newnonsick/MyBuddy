@@ -18,9 +18,10 @@ analyzer:
     - "**/*.g.dart"
     - "**/*.freezed.dart"
     - "**/generated_plugin_registrant.dart"
-    # Vendored plugin example apps are separate Dart packages and shouldn't be
-    # analyzed as part of the main app package.
-    - "packages/whisper_ggml_plus/example/**"
+    # Vendored local plugins are separate packages and should be validated in
+    # their own package roots, not as part of the app package analysis.
+    - "packages/whisper_ggml_plus/**"
+    - "packages/flutter_overlay_window/**"
 
 linter:
   # The lint rules applied to this project can be customized in the

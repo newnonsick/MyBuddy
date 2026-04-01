@@ -289,9 +289,7 @@ class OverlayAppProxy extends AppController {
   Future<void> cancelRecording() async {
     if (!_isListening) return;
 
-    final payload = <String, Object>{
-      'type': 'recording_cancel_request',
-    };
+    final payload = <String, Object>{'type': 'recording_cancel_request'};
 
     debugPrint('OverlayAppProxy.cancelRecording: sending cancel');
 
@@ -335,7 +333,9 @@ class OverlayAppProxy extends AppController {
       'modelId': modelId,
     };
 
-    debugPrint('OverlayAppProxy.switchModel: sending request id=$id model=$modelId');
+    debugPrint(
+      'OverlayAppProxy.switchModel: sending request id=$id model=$modelId',
+    );
 
     try {
       await FlutterOverlayWindow.shareData(jsonEncode(payload));
@@ -409,19 +409,20 @@ class OverlaySttService extends SttService {
 }
 
 class OverlayAudioRecorderService extends AudioRecorderService {
-  OverlayAudioRecorderService(this._proxy);
+  OverlayAudioRecorderService(OverlayAppProxy _);
 
-  final OverlayAppProxy _proxy;
-
-  static const MethodChannel _overlayChannel =
-      MethodChannel('x-slayer/overlay');
+  static const MethodChannel _overlayChannel = MethodChannel(
+    'x-slayer/overlay',
+  );
 
   @override
   Future<bool> hasPermission() async => true;
 
   @override
   Future<String> start() async {
-    debugPrint('OverlayAudioRecorderService.start: calling native recording in service');
+    debugPrint(
+      'OverlayAudioRecorderService.start: calling native recording in service',
+    );
     final temp = await getTemporaryDirectory();
     final dir = '${temp.path}/stt_recordings';
     final fileName = 'rec_${DateTime.now().toUtc().millisecondsSinceEpoch}.wav';
@@ -437,7 +438,9 @@ class OverlayAudioRecorderService extends AudioRecorderService {
 
   @override
   Future<String?> stop() async {
-    debugPrint('OverlayAudioRecorderService.stop: calling native stop in service');
+    debugPrint(
+      'OverlayAudioRecorderService.stop: calling native stop in service',
+    );
     final result = await _overlayChannel.invokeMethod<String>('stopRecording');
     debugPrint('OverlayAudioRecorderService.stop: native returned $result');
     return result;

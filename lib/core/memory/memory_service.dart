@@ -685,7 +685,7 @@ class MemoryService {
   Future<void> updateSoulMemoryFromChat({required LlmService llm}) async {
     try {
       final currentSoul = await loadSoulMemoryData();
-      final currentJson = currentSoul.toJson().toString();
+      final currentJson = jsonEncode(currentSoul.toJson());
       final lockedFields = await loadLockedFields(
         scope: LockedFieldsScope.soul,
       );
@@ -703,7 +703,8 @@ class MemoryService {
         lockedFields: lockedFields,
       );
 
-      if (updatedSoul.toJson().toString() == currentSoul.toJson().toString()) {
+      if (jsonEncode(updatedSoul.toJson()) ==
+          jsonEncode(currentSoul.toJson())) {
         return;
       }
       await saveSoulMemoryData(updatedSoul);
@@ -718,7 +719,7 @@ class MemoryService {
   Future<void> updateIdentityMemoryFromChat({required LlmService llm}) async {
     try {
       final currentIdentity = await loadIdentityMemoryData();
-      final currentJson = currentIdentity.toJson().toString();
+      final currentJson = jsonEncode(currentIdentity.toJson());
       final lockedFields = await loadLockedFields(
         scope: LockedFieldsScope.identity,
       );
@@ -739,8 +740,8 @@ class MemoryService {
         lockedFields: lockedFields,
       );
 
-      if (updatedIdentity.toJson().toString() ==
-          currentIdentity.toJson().toString()) {
+      if (jsonEncode(updatedIdentity.toJson()) ==
+          jsonEncode(currentIdentity.toJson())) {
         return;
       }
       await saveIdentityMemoryData(updatedIdentity);
@@ -755,7 +756,7 @@ class MemoryService {
   Future<void> updateUserMemoryFromChat({required LlmService llm}) async {
     try {
       final currentUser = await loadUserMemoryData();
-      final currentJson = currentUser.toJson().toString();
+      final currentJson = jsonEncode(currentUser.toJson());
       const lockedFields = <String>{};
 
       final rawResponse = await llm.extractUserMemoryFromChat(
@@ -766,7 +767,8 @@ class MemoryService {
 
       final updatedUser = _parseExtractedUserMemory(rawResponse, currentUser);
 
-      if (updatedUser.toJson().toString() == currentUser.toJson().toString()) {
+      if (jsonEncode(updatedUser.toJson()) ==
+          jsonEncode(currentUser.toJson())) {
         return;
       }
       await saveUserMemoryData(updatedUser);
@@ -1137,7 +1139,8 @@ You may update the SOUL, IDENTITY, and USER sections by using the appropriate av
 
 Avatar & Function Protocol:
 - You not just AI, but also have an avatar with a body and a voice. You can perform actions. Call available functions to perform an action while conversing with the user.
-- You may call avatar animation functions (perform_action) anytime to express feelings, thoughts, and attitudes. This is an important way to communicate with the user, so use it often and appropriately.
+- You may call avatar animation functions (perform_avatar_action) anytime to express feelings, thoughts, and attitudes. This is an important way to communicate with the user, so use it often and appropriately.
+- You must decide the animation types that your avatar supports by yourself, don't ask user to choose from the list. Instead, parse the user's request and map it to the most appropriate animation type that you support.
 - Freely call any available functions without asking for permission.
 - If you call a function, follow required JSON format exactly.
 

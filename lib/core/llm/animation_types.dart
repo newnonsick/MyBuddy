@@ -1,14 +1,14 @@
 enum CharacterAnimation {
   jump(animationIndex: 0, duration: Duration(seconds: 3)),
-  spin(animationIndex: 1),
-  think(animationIndex: 2),
-  clap(animationIndex: 3),
-  chickenDance(animationIndex: 4),
-  thankful(animationIndex: 7),
-  greet(animationIndex: 8),
-  dance1(animationIndex: 9),
-  dance2(animationIndex: 10),
-  dance3(animationIndex: 11);
+  spin(animationIndex: 1, duration: Duration(seconds: 5)),
+  think(animationIndex: 2, duration: Duration(seconds: 5)),
+  clap(animationIndex: 3, duration: Duration(seconds: 3)),
+  chickenDance(animationIndex: 4, duration: Duration(seconds: 6)),
+  thankful(animationIndex: 7, duration: Duration(seconds: 4)),
+  greet(animationIndex: 8, duration: Duration(seconds: 5)),
+  dance1(animationIndex: 9, duration: Duration(seconds: 9)),
+  dance2(animationIndex: 10, duration: Duration(seconds: 5)),
+  dance3(animationIndex: 11, duration: Duration(seconds: 9));
 
   const CharacterAnimation({
     required this.animationIndex,
@@ -27,21 +27,21 @@ enum CharacterAnimation {
     if (name == null) return null;
 
     switch (name.toLowerCase().trim()) {
-      case 'jumping':
+      case 'jump':
         return CharacterAnimation.jump;
-      case 'spinning':
+      case 'spin':
         return CharacterAnimation.spin;
-      case 'clapping':
+      case 'clap':
         return CharacterAnimation.clap;
       case 'thankful':
         return CharacterAnimation.thankful;
-      case 'greeting':
+      case 'greet':
         return CharacterAnimation.greet;
-      case 'dancing':
+      case 'dance':
         return CharacterAnimation.randomDance();
       case 'chicken_dance':
         return CharacterAnimation.chickenDance;
-      case 'thinking':
+      case 'think':
         return CharacterAnimation.think;
       default:
         return CharacterAnimation.thankful; // Default fallback

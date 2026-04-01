@@ -49,7 +49,35 @@ class ModelStore {
 
   Future<String> resolveLocalPath(String fileName) async {
     final dir = await _modelsDir();
-    return p.join(dir.path, fileName);
+    final safeFileName = _sanitizeFileName(fileName);
+    return p.join(dir.path, safeFileName);
+  }
+
+  String _sanitizeFileName(String fileName) {
+    final trimmed = fileName.trim();
+    if (trimmed.isEmpty) {
+      throw StateError('Model file name is empty.');
+    }
+
+    if (RegExp(r'[\x00-\x1F]').hasMatch(trimmed)) {
+      throw StateError('Model file name contains invalid characters.');
+    }
+
+    final normalized = trimmed.replaceAll('\\', '/');
+    if (normalized.contains('/')) {
+      throw StateError('Model file name must not contain path separators.');
+    }
+
+    if (p.isAbsolute(trimmed) || trimmed == '.' || trimmed == '..') {
+      throw StateError('Model file name must be a relative file name.');
+    }
+
+    final base = p.basename(trimmed);
+    if (base != trimmed) {
+      throw StateError('Model file name is invalid.');
+    }
+
+    return base;
   }
 
   bool _isValidFile(File file, {required int? expectedMinBytes}) {
@@ -232,7 +260,8 @@ class ModelStore {
       return originalUrl;
     }
 
-    final baseUrl = 'https://drive.usercontent.google.com/uc?export=download&id=$fileId';
+    final baseUrl =
+        'https://drive.usercontent.google.com/uc?export=download&id=$fileId';
 
     final response = await _dio.get<dynamic>(
       baseUrl,

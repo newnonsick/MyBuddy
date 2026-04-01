@@ -5,9 +5,9 @@ import '../google/google_calendar_service.dart';
 
 abstract final class LlmTools {
   static const Tool animateCharacter = Tool(
-    name: 'perform_action',
+    name: 'perform_avatar_action',
     description:
-        'Makes you move your own body to perform a specified action or animation.',
+        'Instructs the your own avatar to perform a specific action or animation to interact with the user in a more engaging and dynamic way. Use this tool when you want to express emotions, reactions, or simply have fun with the user through your avatar\'s movements. You can specify the type of animation and how many times it should be performed.',
     parameters: {
       'type': 'object',
       'properties': {
@@ -15,20 +15,20 @@ abstract final class LlmTools {
           'type': 'string',
           'description': 'Animation to perform.',
           'enum': [
-            'jumping',
-            'spinning',
-            'clapping',
+            'jump',
+            'spin',
+            'clap',
             'thankful',
-            'greeting',
-            'dancing',
+            'greet',
+            'dance',
             'chicken_dance',
-            'thinking',
+            'think',
           ],
         },
         'animate_count': {
           'type': 'int',
           'description':
-              'Number of times to perform the animation (only for certain animations). Default is 1.',
+              'Number of times to perform the animation. Default is 1.',
         },
         'response_text': {
           'type': 'string',

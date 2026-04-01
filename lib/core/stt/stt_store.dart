@@ -52,7 +52,43 @@ class SttStore {
 
   Future<String> resolveLocalPath(String fileName) async {
     final dir = await _modelsDir();
-    return p.join(dir.path, fileName);
+    final safeFileName = _sanitizeFileName(fileName);
+    return p.join(dir.path, safeFileName);
+  }
+
+  String _sanitizeFileName(String fileName) {
+    return _sanitizePathSegment(fileName, fieldName: 'STT file name');
+  }
+
+  String _sanitizeFolderName(String folderName) {
+    return _sanitizePathSegment(folderName, fieldName: 'STT folder name');
+  }
+
+  String _sanitizePathSegment(String raw, {required String fieldName}) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      throw StateError('$fieldName is empty.');
+    }
+
+    if (RegExp(r'[\x00-\x1F]').hasMatch(trimmed)) {
+      throw StateError('$fieldName contains invalid characters.');
+    }
+
+    final normalized = trimmed.replaceAll('\\', '/');
+    if (normalized.contains('/')) {
+      throw StateError('$fieldName must not contain path separators.');
+    }
+
+    if (p.isAbsolute(trimmed) || trimmed == '.' || trimmed == '..') {
+      throw StateError('$fieldName must be a relative name.');
+    }
+
+    final base = p.basename(trimmed);
+    if (base != trimmed) {
+      throw StateError('$fieldName is invalid.');
+    }
+
+    return base;
   }
 
   bool _isValidFile(File file, {required int? expectedMinBytes}) {
@@ -271,12 +307,17 @@ class SttStore {
         coreMl != null && (Platform.isIOS || Platform.isMacOS);
 
     if (shouldDownloadCoreMl) {
-      final archivePath = p.join(dir.path, coreMl.archiveFileName);
+      final archiveFileName = _sanitizeFileName(coreMl.archiveFileName);
+      final extractedFolderName = _sanitizeFolderName(
+        coreMl.extractedFolderName,
+      );
+
+      final archivePath = p.join(dir.path, archiveFileName);
       final archiveFile = File(archivePath);
       final tempZipPath = '$archivePath.partial';
       final tempZipFile = File(tempZipPath);
 
-      final extractedDirPath = p.join(dir.path, coreMl.extractedFolderName);
+      final extractedDirPath = p.join(dir.path, extractedFolderName);
       final extractedDir = Directory(extractedDirPath);
 
       if (!extractedDir.existsSync()) {
@@ -345,7 +386,7 @@ class SttStore {
 
           if (!extractedDir.existsSync()) {
             throw StateError(
-              'CoreML extraction complete, but ${coreMl.extractedFolderName} was not found.',
+              'CoreML extraction complete, but $extractedFolderName was not found.',
             );
           }
 
@@ -377,10 +418,31 @@ class SttStore {
 
     final bytes = zipFile.readAsBytesSync();
     final archive = ZipDecoder().decodeBytes(bytes);
+    final destinationRoot = Directory(destDir).absolute.path;
 
     for (final file in archive) {
-      final filename = file.name;
-      final outPath = p.join(destDir, filename);
+      final rawName = file.name.replaceAll('\\', '/');
+      final relativePath = p.posix.normalize(rawName);
+      if (relativePath.isEmpty ||
+          relativePath == '.' ||
+          relativePath.startsWith('/') ||
+          relativePath.startsWith('..') ||
+          relativePath.contains('/../') ||
+          relativePath.endsWith('/..')) {
+        throw StateError('Unsafe zip entry path: ${file.name}');
+      }
+
+      final outPath = p.normalize(p.join(destDir, relativePath));
+      final outPathAbsolute = File(outPath).absolute.path;
+      final isInsideDestination =
+          outPathAbsolute == destinationRoot ||
+          p.isWithin(destinationRoot, outPathAbsolute);
+
+      if (!isInsideDestination) {
+        throw StateError(
+          'Zip entry escapes destination directory: ${file.name}',
+        );
+      }
 
       if (file.isFile) {
         final outFile = File(outPath);

@@ -2,11 +2,8 @@ import 'package:flutter/foundation.dart';
 
 @immutable
 class ChatLine {
-  const ChatLine({
-    required this.text,
-    required this.isUser,
-    DateTime? timestamp,
-  }) : timestamp = timestamp ?? const _CurrentDateTime();
+  ChatLine({required this.text, required this.isUser, DateTime? timestamp})
+    : timestamp = timestamp ?? DateTime.now();
 
   factory ChatLine.user(String text) =>
       ChatLine(text: text, isUser: true, timestamp: DateTime.now());
@@ -36,14 +33,4 @@ class ChatLine {
   @override
   String toString() =>
       'ChatLine(role: $role, text: ${text.length > 50 ? '${text.substring(0, 50)}...' : text})';
-}
-
-class _CurrentDateTime implements DateTime {
-  const _CurrentDateTime();
-
-  DateTime get _now => DateTime.now();
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) =>
-      Function.apply(_now.noSuchMethod, [invocation]);
 }

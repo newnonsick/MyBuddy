@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'app/app_controller.dart';
 import 'app/my_app.dart';
 import 'app/providers.dart';
 import 'core/notification/app_lifecycle_observer.dart';
@@ -55,18 +56,26 @@ class _AppWithLifecycleState extends ConsumerState<_AppWithLifecycle> {
   @override
   void initState() {
     super.initState();
-    _overlayService.initialize();
+    unawaited(_overlayService.initialize());
     _lifecycleObserver = AppLifecycleObserver(
       notificationService: widget.notificationService,
       overlayService: _overlayService,
       onResume: _onAppResumed,
     )..initialize();
     final appController = ref.read(appControllerProvider);
-    unawaited(appController.startup());
+    unawaited(_startAppController(appController));
     _chatRelay = OverlayChatRelay(
       appController: appController,
       sttService: ref.read(sttServiceProvider),
     )..start();
+  }
+
+  Future<void> _startAppController(AppController appController) async {
+    try {
+      await appController.startup();
+    } catch (e, st) {
+      debugPrint('App startup failed: $e\n$st');
+    }
   }
 
   @override

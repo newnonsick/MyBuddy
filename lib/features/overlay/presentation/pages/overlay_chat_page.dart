@@ -60,7 +60,9 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     _recorder = appController is OverlayAppProxy
         ? OverlayAudioRecorderService(appController)
         : AudioRecorderService();
-    debugPrint('OverlayChatPage: using recorder=${_recorder.runtimeType} (appController=${appController.runtimeType})');
+    debugPrint(
+      'OverlayChatPage: using recorder=${_recorder.runtimeType} (appController=${appController.runtimeType})',
+    );
     _session = ChatSessionController(
       appController: ref.read(appControllerProvider),
       sttModelController: ref.read(sttModelControllerProvider),
@@ -187,7 +189,9 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOutCubic,
-          alignment: _collapsedOnLeft ? Alignment.centerLeft : Alignment.centerRight,
+          alignment: _collapsedOnLeft
+              ? Alignment.centerLeft
+              : Alignment.centerRight,
           child: Padding(
             padding: const EdgeInsets.all(4),
             child: _buildCollapsedBubble(app),
@@ -197,7 +201,11 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     );
   }
 
-  Widget _buildExpandedState(AppController app, BuildContext context, {required Key key}) {
+  Widget _buildExpandedState(
+    AppController app,
+    BuildContext context, {
+    required Key key,
+  }) {
     final viewInsetBottom = MediaQuery.viewInsetsOf(context).bottom;
     final bottomInset = _mode == OverlayUiMode.minimal
         ? 8.0
@@ -354,7 +362,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
         curve: Curves.easeOutCubic,
         width: 58,
         height: 58,
-        transform: Matrix4.identity()..scale(scale, scale),
+        transform: Matrix4.identity()..scaleByDouble(scale, scale, 1, 1),
         transformAlignment: Alignment.center,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
@@ -364,11 +372,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
             width: 0.8,
           ),
           boxShadow: [
-            BoxShadow(
-              color: glowColor,
-              blurRadius: 20,
-              spreadRadius: 2,
-            ),
+            BoxShadow(color: glowColor, blurRadius: 20, spreadRadius: 2),
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.25),
               blurRadius: 10,
@@ -394,18 +398,18 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
                   color: iconColor,
                 )
               : isProcessing
-                  ? Icon(
-                      Icons.lens_blur_rounded,
-                      key: const ValueKey('processing'),
-                      size: 24,
-                      color: iconColor,
-                    )
-                  : Icon(
-                      Icons.smart_toy_rounded, //blur_on_rounded
-                      key: const ValueKey('idle'),
-                      size: 24,
-                      color: iconColor,
-                    ),
+              ? Icon(
+                  Icons.lens_blur_rounded,
+                  key: const ValueKey('processing'),
+                  size: 24,
+                  color: iconColor,
+                )
+              : Icon(
+                  Icons.smart_toy_rounded, //blur_on_rounded
+                  key: const ValueKey('idle'),
+                  size: 24,
+                  color: iconColor,
+                ),
         ),
       ),
     );
@@ -435,7 +439,9 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
           Padding(
             padding: const EdgeInsets.only(top: 2),
             child: Icon(
-              latest == null ? Icons.chat_bubble_outline_rounded : (isUser ? Icons.person_rounded : Icons.smart_toy_rounded),
+              latest == null
+                  ? Icons.chat_bubble_outline_rounded
+                  : (isUser ? Icons.person_rounded : Icons.smart_toy_rounded),
               size: 14,
               color: Colors.white.withValues(alpha: 0.4),
             ),
@@ -575,9 +581,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
               const SizedBox(width: 8),
               GlassIconButton.pill(
                 tooltip: isSending ? 'Sending...' : 'Send',
-                icon: isSending
-                    ? Icons.more_horiz
-                    : Icons.arrow_upward_rounded,
+                icon: isSending ? Icons.more_horiz : Icons.arrow_upward_rounded,
                 onPressed: canSend ? _onSend : null,
               ),
             ],
@@ -620,9 +624,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
         const SizedBox(width: 6),
         GlassIconButton.pill(
           tooltip: isSending ? 'Sending...' : 'Send',
-          icon: isSending
-              ? Icons.more_horiz
-              : Icons.arrow_upward_rounded,
+          icon: isSending ? Icons.more_horiz : Icons.arrow_upward_rounded,
           onPressed: canSend ? _onSend : null,
         ),
       ],
@@ -631,8 +633,12 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
 
   String _statusText(AppController app) {
     if (_session.recording) return 'Listening... tap mic to send';
-    if (_session.transcribing || app.transcribingAudio) return 'Transcribing...';
-    if (_session.sending || app.generatingResponse) return 'Generating response...';
+    if (_session.transcribing || app.transcribingAudio) {
+      return 'Transcribing...';
+    }
+    if (_session.sending || app.generatingResponse) {
+      return 'Generating response...';
+    }
     if (_session.speaking) return 'Speaking...';
     if (app.installingLlm) return 'Preparing model...';
     if (!app.llmInstalled) return 'Select model in settings';
@@ -998,24 +1004,24 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
         ? 0.0
         : math.max(0.0, screenWidth - _bubbleSize);
     const minY = _bubbleEdgeInset;
-    final maxY = math.max(
-      minY,
-      screenHeight - _bubbleSize - _bubbleEdgeInset,
-    );
-    final targetY = (_lastBubblePosition?.y ?? _lastExpandedPosition?.y ?? (screenHeight / 3))
-        .clamp(minY, maxY)
-        .toDouble();
+    final maxY = math.max(minY, screenHeight - _bubbleSize - _bubbleEdgeInset);
+    final targetY =
+        (_lastBubblePosition?.y ??
+                _lastExpandedPosition?.y ??
+                (screenHeight / 3))
+            .clamp(minY, maxY)
+            .toDouble();
 
     // 1. Tell Flutter to show the collapsed bubble *before* we shrink the OS window.
     // We animate it moving to the left/right side via the AnimatedContainer.
     if (mounted) setState(() => _collapsed = true);
-    await Future<void>.delayed(const Duration(milliseconds: 150)); // let flutter animate first
+    await Future<void>.delayed(
+      const Duration(milliseconds: 150),
+    ); // let flutter animate first
 
     // 2. Shrink the OS window.
     try {
-      await FlutterOverlayWindow.moveOverlay(
-        OverlayPosition(targetX, targetY),
-      );
+      await FlutterOverlayWindow.moveOverlay(OverlayPosition(targetX, targetY));
     } catch (_) {}
 
     try {

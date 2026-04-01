@@ -1,30 +1,28 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-// import 'package:mybuddy/main.dart';
+import 'package:mybuddy/core/utils/format_bytes.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    // await tester.pumpWidget(const MyApp());
+  group('formatBytes', () {
+    test('formats bytes and kilobytes', () {
+      expect(formatBytes(0), '0 B');
+      expect(formatBytes(512), '512 B');
+      expect(formatBytes(1024), '1.0 KB');
+    });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    test('formats megabytes with two decimals', () {
+      expect(formatBytes(1024 * 1024), '1.00 MB');
+      expect(formatBytes(2 * 1024 * 1024), '2.00 MB');
+    });
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+  group('formatSpeed', () {
+    test('formats normal speeds', () {
+      expect(formatSpeed(1536), '1.5 KB/s');
+    });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    test('handles invalid values', () {
+      expect(formatSpeed(double.nan), '0 B/s');
+      expect(formatSpeed(double.infinity), '0 B/s');
+    });
   });
 }

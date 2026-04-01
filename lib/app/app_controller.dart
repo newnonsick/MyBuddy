@@ -103,6 +103,12 @@ class AppController extends ChangeNotifier {
       debugPrint(
         'AppController.startup: Complete. LLM installed: $llmInstalled',
       );
+    } catch (e, st) {
+      _llmError = 'Startup failed: $e';
+      _llmInstalled = false;
+      debugPrint('AppController.startup: Failed: $e\n$st');
+      notifyListeners();
+      rethrow;
     } finally {
       _startupFuture = null;
     }

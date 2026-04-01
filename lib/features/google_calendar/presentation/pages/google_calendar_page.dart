@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -52,7 +54,12 @@ class _GoogleCalendarPageState extends ConsumerState<GoogleCalendarPage> {
     if (authService.isSignedIn) {
       final calendarService = ref.read(googleCalendarServiceProvider);
       final controller = ref.read(googleCalendarControllerProvider);
-      await calendarService.fetchMonthEvents(month: controller.currentMonth);
+      final result = await calendarService.fetchMonthEvents(
+        month: controller.currentMonth,
+      );
+      if (result.isFailure && mounted && result.error != null) {
+        _showError(result.error!);
+      }
     }
   }
 
@@ -108,7 +115,7 @@ class _GoogleCalendarPageState extends ConsumerState<GoogleCalendarPage> {
               icon: Icons.today_rounded,
               onPressed: () {
                 ref.read(googleCalendarControllerProvider).goToToday();
-                _loadEventsIfSignedIn();
+                unawaited(_loadEventsIfSignedIn());
               },
             ),
             const SizedBox(width: 8),
@@ -142,6 +149,13 @@ class _GoogleCalendarPageState extends ConsumerState<GoogleCalendarPage> {
       );
     }
 
+    if (calendarService.errorMessage != null &&
+        calendarService.events.isEmpty) {
+      return _buildErrorState(calendarService.errorMessage!, () {
+        calendarService.clearError();
+      });
+    }
+
     return RefreshIndicator(
       onRefresh: _loadEventsIfSignedIn,
       color: Theme.of(context).colorScheme.primary,
@@ -156,15 +170,11 @@ class _GoogleCalendarPageState extends ConsumerState<GoogleCalendarPage> {
                 currentMonth: controller.currentMonth,
                 onPreviousMonth: () {
                   controller.previousMonth();
-                  calendarService.fetchMonthEvents(
-                    month: controller.currentMonth,
-                  );
+                  unawaited(_loadEventsIfSignedIn());
                 },
                 onNextMonth: () {
                   controller.nextMonth();
-                  calendarService.fetchMonthEvents(
-                    month: controller.currentMonth,
-                  );
+                  unawaited(_loadEventsIfSignedIn());
                 },
               ),
             ),
