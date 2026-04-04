@@ -22,6 +22,7 @@ analyzer:
     # their own package roots, not as part of the app package analysis.
     - "packages/whisper_ggml_plus/**"
     - "packages/flutter_overlay_window/**"
+    - "packages/flutter_gemma/**"
 
 linter:
   # The lint rules applied to this project can be customized in the

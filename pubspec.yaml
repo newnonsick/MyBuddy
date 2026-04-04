@@ -100,6 +100,8 @@ dependency_overrides:
     path: packages/whisper_ggml_plus
   flutter_overlay_window:
     path: packages/flutter_overlay_window
+  flutter_gemma:
+    path: packages/flutter_gemma
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
