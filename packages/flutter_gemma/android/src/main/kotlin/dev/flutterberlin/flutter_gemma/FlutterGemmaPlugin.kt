@@ -82,12 +82,11 @@ private class PlatformServiceImpl(
   private val engineLock = Any()  // Lock for thread-safe engine access
 
   // NEW: Use InferenceEngine abstraction instead of InferenceModel
-  private var engine: InferenceEngine? = null
-  private var session: InferenceSession? = null
+  @Volatile private var engine: InferenceEngine? = null
+  @Volatile private var session: InferenceSession? = null
 
   // RAG components
   private var embeddingModel: EmbeddingModel? = null
-  private var vectorStore: VectorStore? = null
 
   fun cleanup() {
     scope.cancel()
@@ -101,8 +100,6 @@ private class PlatformServiceImpl(
     }
     embeddingModel?.close()
     embeddingModel = null
-    vectorStore?.close()
-    vectorStore = null
   }
 
   override fun createModel(
@@ -133,6 +130,9 @@ private class PlatformServiceImpl(
 
         // Only now clear old state and swap in new engine (thread-safe)
         synchronized(engineLock) {
+          // Cancel stale stream collector before replacing engine
+          streamJob?.cancel()
+          streamJob = null
           session?.cancelGeneration()
           try {
             session?.close()
@@ -178,6 +178,8 @@ private class PlatformServiceImpl(
     loraPath: String?,
     enableVisionModality: Boolean?,
     enableAudioModality: Boolean?,
+    systemInstruction: String?,
+    enableThinking: Boolean?,
     callback: (Result<Unit>) -> Unit
   ) {
     scope.launch {
@@ -194,6 +196,8 @@ private class PlatformServiceImpl(
             loraPath = loraPath,
             enableVisionModality = enableVisionModality,
             enableAudioModality = enableAudioModality,
+            systemInstruction = systemInstruction,
+            enableThinking = enableThinking ?: false,
           )
 
           session?.close()
@@ -392,6 +396,18 @@ private class PlatformServiceImpl(
     }
   }
 
+  override fun generateDocumentEmbeddingFromModel(text: String, callback: (Result<List<Double>>) -> Unit) {
+    scope.launch {
+      try {
+        val embedding = embeddingModel?.embedDocument(text)
+          ?: throw IllegalStateException("Embedding model not initialized. Call createEmbeddingModel first.")
+        callback(Result.success(embedding))
+      } catch (e: Exception) {
+        callback(Result.failure(e))
+      }
+    }
+  }
+
   override fun generateEmbeddingsFromModel(texts: List<String>, callback: (Result<List<Any?>>) -> Unit) {
     scope.launch {
       try {
@@ -429,17 +445,11 @@ private class PlatformServiceImpl(
     }
   }
 
+  // VectorStore methods are no-ops: VectorStore is now handled entirely in Dart via sqlite3.
+  // These stubs satisfy the Pigeon-generated interface.
+
   override fun initializeVectorStore(databasePath: String, callback: (Result<Unit>) -> Unit) {
-    scope.launch {
-      try {
-        vectorStore = null
-        vectorStore = VectorStore(context)
-        vectorStore!!.initialize(databasePath)
-        callback(Result.success(Unit))
-      } catch (e: Exception) {
-        callback(Result.failure(e))
-      }
-    }
+    callback(Result.success(Unit))
   }
 
   override fun addDocument(
@@ -449,15 +459,7 @@ private class PlatformServiceImpl(
     metadata: String?,
     callback: (Result<Unit>) -> Unit
   ) {
-    scope.launch {
-      try {
-        vectorStore?.addDocument(id, content, embedding, metadata)
-          ?: throw IllegalStateException("Vector store not initialized")
-        callback(Result.success(Unit))
-      } catch (e: Exception) {
-        callback(Result.failure(e))
-      }
-    }
+    callback(Result.success(Unit))
   }
 
   override fun searchSimilar(
@@ -466,72 +468,26 @@ private class PlatformServiceImpl(
     threshold: Double,
     callback: (Result<List<RetrievalResult>>) -> Unit
   ) {
-    scope.launch {
-      try {
-        val results = vectorStore?.searchSimilar(queryEmbedding, topK.toInt(), threshold)
-          ?: throw IllegalStateException("Vector store not initialized")
-        callback(Result.success(results))
-      } catch (e: Exception) {
-        callback(Result.failure(e))
-      }
-    }
+    callback(Result.success(listOf()))
   }
 
   override fun getVectorStoreStats(callback: (Result<VectorStoreStats>) -> Unit) {
-    scope.launch {
-      try {
-        val stats = vectorStore?.getStats()
-          ?: throw IllegalStateException("Vector store not initialized")
-        callback(Result.success(stats))
-      } catch (e: Exception) {
-        callback(Result.failure(e))
-      }
-    }
+    callback(Result.success(VectorStoreStats(documentCount = 0, vectorDimension = 0)))
   }
 
   override fun clearVectorStore(callback: (Result<Unit>) -> Unit) {
-    scope.launch {
-      try {
-        vectorStore?.clear()
-          ?: throw IllegalStateException("Vector store not initialized")
-        callback(Result.success(Unit))
-      } catch (e: Exception) {
-        callback(Result.failure(e))
-      }
-    }
+    callback(Result.success(Unit))
   }
 
   override fun closeVectorStore(callback: (Result<Unit>) -> Unit) {
-    try {
-      vectorStore?.close()
-      vectorStore = null
-      callback(Result.success(Unit))
-    } catch (e: Exception) {
-      callback(Result.failure(e))
-    }
+    callback(Result.success(Unit))
   }
 
   override fun getAllDocumentsWithEmbeddings(callback: (Result<List<DocumentWithEmbedding>>) -> Unit) {
-    scope.launch {
-      try {
-        val results = vectorStore?.getAllDocumentsWithEmbeddings()
-          ?: throw IllegalStateException("Vector store not initialized")
-        callback(Result.success(results))
-      } catch (e: Exception) {
-        callback(Result.failure(e))
-      }
-    }
+    callback(Result.success(listOf()))
   }
 
   override fun getDocumentsByIds(ids: List<String>, callback: (Result<List<RetrievalResult>>) -> Unit) {
-    scope.launch {
-      try {
-        val results = vectorStore?.getDocumentsByIds(ids)
-          ?: throw IllegalStateException("Vector store not initialized")
-        callback(Result.success(results))
-      } catch (e: Exception) {
-        callback(Result.failure(e))
-      }
-    }
+    callback(Result.success(listOf()))
   }
 }

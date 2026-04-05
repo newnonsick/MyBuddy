@@ -30,6 +30,8 @@ class MobileInferenceModel extends InferenceModel {
     bool? supportsFunctionCalls,
     bool isThinking = false,
     ModelType? modelType,
+    ToolChoice toolChoice = ToolChoice.auto,
+    String? systemInstruction,
   }) async {
     chat = InferenceChat(
       sessionCreator: () => createSession(
@@ -40,6 +42,8 @@ class MobileInferenceModel extends InferenceModel {
         loraPath: loraPath,
         enableVisionModality: supportImage ?? false,
         enableAudioModality: supportAudio ?? this.supportAudio,
+        systemInstruction: systemInstruction,
+        enableThinking: isThinking,
       ),
       maxTokens: maxTokens,
       tokenBuffer: tokenBuffer,
@@ -50,6 +54,8 @@ class MobileInferenceModel extends InferenceModel {
       modelType: modelType ?? this.modelType,
       isThinking: isThinking,
       fileType: fileType,
+      toolChoice: toolChoice,
+      systemInstruction: systemInstruction,
     );
     await chat!.initSession();
     return chat!;
@@ -80,6 +86,8 @@ class MobileInferenceModel extends InferenceModel {
     String? loraPath,
     bool? enableVisionModality,
     bool? enableAudioModality,
+    String? systemInstruction,
+    bool enableThinking = false,
   }) async {
     if (_isClosed) {
       throw StateError('Model is closed. Create a new instance to use it again');
@@ -102,6 +110,8 @@ class MobileInferenceModel extends InferenceModel {
         enableVisionModality: enableVisionModality ?? supportImage,
         // Enable audio modality if the model supports it (Gemma 3n E4B)
         enableAudioModality: enableAudioModality ?? supportAudio,
+        systemInstruction: systemInstruction,
+        enableThinking: enableThinking,
       );
 
       final session = _session = MobileInferenceModelSession(
@@ -109,6 +119,7 @@ class MobileInferenceModel extends InferenceModel {
         fileType: fileType,
         supportImage: enableVisionModality ?? supportImage,
         supportAudio: enableAudioModality ?? supportAudio,
+        systemInstruction: systemInstruction,
         onClose: () {
           _session = null;
           _createCompleter = null;

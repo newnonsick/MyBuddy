@@ -12,7 +12,7 @@ plugins {
     // To specify a custom Gradle version in Unity, go do "Preferences > External Tools", uncheck "Gradle Installed with Unity (recommended)" and specify a path to a custom Gradle version
     id("com.android.application") version "8.9.1" apply false
     id("com.android.library") version "8.9.1" apply false
-    id("org.jetbrains.kotlin.android") version "2.1.0" apply false
+    id("org.jetbrains.kotlin.android") version "2.3.0" apply false
 }
 
 val newBuildDir: Directory =

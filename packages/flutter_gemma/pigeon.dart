@@ -51,6 +51,10 @@ abstract class PlatformService {
     bool? enableVisionModality,
     // Add option to enable audio modality (Gemma 3n E4B)
     bool? enableAudioModality,
+    // System instruction for LiteRT-LM native support
+    String? systemInstruction,
+    // Enable thinking mode (Gemma 4 via extraContext)
+    bool? enableThinking,
   });
 
   @async
@@ -94,6 +98,9 @@ abstract class PlatformService {
 
   @async
   List<double> generateEmbeddingFromModel(String text);
+
+  @async
+  List<double> generateDocumentEmbeddingFromModel(String text);
 
   @async
   List<Object?> generateEmbeddingsFromModel(List<String> texts);

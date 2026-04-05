@@ -38,6 +38,8 @@ class DesktopInferenceModel extends InferenceModel {
     String? loraPath,
     bool? enableVisionModality,
     bool? enableAudioModality,
+    String? systemInstruction,
+    bool enableThinking = false,
   }) async {
     if (_isClosed) {
       throw StateError('Model is closed. Create a new instance to use it again');
@@ -52,6 +54,7 @@ class DesktopInferenceModel extends InferenceModel {
     try {
       // Create conversation on server with sampler config
       await grpcClient.createConversation(
+        systemMessage: systemInstruction,
         temperature: temperature,
         topK: topK,
         topP: topP,
@@ -63,6 +66,7 @@ class DesktopInferenceModel extends InferenceModel {
         fileType: fileType,
         supportImage: enableVisionModality ?? supportImage,
         supportAudio: enableAudioModality ?? supportAudio,
+        enableThinking: enableThinking,
         onClose: () {
           _session = null;
           _createCompleter = null;
@@ -92,6 +96,8 @@ class DesktopInferenceModel extends InferenceModel {
     bool? supportsFunctionCalls,
     bool isThinking = false,
     ModelType? modelType,
+    ToolChoice toolChoice = ToolChoice.auto,
+    String? systemInstruction,
   }) async {
     chat = InferenceChat(
       sessionCreator: () => createSession(
@@ -102,6 +108,8 @@ class DesktopInferenceModel extends InferenceModel {
         loraPath: loraPath,
         enableVisionModality: supportImage ?? this.supportImage,
         enableAudioModality: supportAudio ?? this.supportAudio,
+        systemInstruction: systemInstruction,
+        enableThinking: isThinking,
       ),
       maxTokens: maxTokens,
       tokenBuffer: tokenBuffer,
@@ -112,6 +120,8 @@ class DesktopInferenceModel extends InferenceModel {
       modelType: modelType ?? this.modelType,
       isThinking: isThinking,
       fileType: fileType,
+      toolChoice: toolChoice,
+      systemInstruction: systemInstruction,
     );
     await chat!.initSession();
     return chat!;
@@ -151,6 +161,7 @@ class DesktopInferenceModelSession extends InferenceModelSession {
     required this.fileType,
     required this.supportImage,
     required this.supportAudio,
+    this.enableThinking = false,
     required this.onClose,
   });
 
@@ -159,6 +170,7 @@ class DesktopInferenceModelSession extends InferenceModelSession {
   final ModelFileType fileType;
   final bool supportImage;
   final bool supportAudio;
+  final bool enableThinking;
   final VoidCallback onClose;
 
   final StringBuffer _queryBuffer = StringBuffer();
@@ -206,15 +218,15 @@ class DesktopInferenceModelSession extends InferenceModelSession {
     final buffer = StringBuffer();
 
     if (audio != null) {
-      await for (final token in grpcClient.chatWithAudio(text, audio)) {
+      await for (final token in grpcClient.chatWithAudio(text, audio, enableThinking: enableThinking)) {
         buffer.write(token);
       }
     } else if (image != null) {
-      await for (final token in grpcClient.chatWithImage(text, image)) {
+      await for (final token in grpcClient.chatWithImage(text, image, enableThinking: enableThinking)) {
         buffer.write(token);
       }
     } else {
-      await for (final token in grpcClient.chat(text)) {
+      await for (final token in grpcClient.chat(text, enableThinking: enableThinking)) {
         buffer.write(token);
       }
     }
@@ -240,13 +252,13 @@ class DesktopInferenceModelSession extends InferenceModelSession {
 
     if (audio != null) {
       debugPrint('[DesktopSession] Calling chatWithAudio: audio=${audio.length} bytes');
-      yield* grpcClient.chatWithAudio(text, audio);
+      yield* grpcClient.chatWithAudio(text, audio, enableThinking: enableThinking);
     } else if (image != null) {
       debugPrint('[DesktopSession] Calling chatWithImage: image=${image.length} bytes');
-      yield* grpcClient.chatWithImage(text, image);
+      yield* grpcClient.chatWithImage(text, image, enableThinking: enableThinking);
     } else {
       debugPrint('[DesktopSession] Calling chat (no image/audio)');
-      yield* grpcClient.chat(text);
+      yield* grpcClient.chat(text, enableThinking: enableThinking);
     }
   }
 

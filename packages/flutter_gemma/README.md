@@ -6,9 +6,9 @@
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/flutter_gemma)
 
-**The plugin supports not only Gemma, but also other models. Here's the full list of supported models:** [Gemma3n E2B/E4B](https://huggingface.co/google/gemma-3n-E2B-it-litert-preview), [FastVLM 0.5B](https://huggingface.co/litert-community/FastVLM-0.5B), [Gemma-3 1B](https://huggingface.co/litert-community/Gemma3-1B-IT), [Gemma 3 270M](https://huggingface.co/litert-community/gemma-3-270m-it), [FunctionGemma 270M](https://huggingface.co/sasha-denisov/function-gemma-270M-it), [Qwen3 0.6B](https://huggingface.co/litert-community/Qwen3-0.6B), [Qwen 2.5](https://huggingface.co/litert-community/Qwen2.5-1.5B-Instruct), [Phi-4 Mini](https://huggingface.co/litert-community/Phi-4-mini-instruct), [DeepSeek R1](https://huggingface.co/litert-community/DeepSeek-R1-Distill-Qwen-1.5B), [SmolLM 135M](https://huggingface.co/litert-community/SmolLM-135M-Instruct).
+**The plugin supports not only Gemma, but also other models. Here's the full list of supported models:** [Gemma 4 E2B/E4B](https://huggingface.co/google/gemma-4-E2B-it-litert-lm), [Gemma3n E2B/E4B](https://huggingface.co/google/gemma-3n-E2B-it-litert-preview), [FastVLM 0.5B](https://huggingface.co/litert-community/FastVLM-0.5B), [Gemma-3 1B](https://huggingface.co/litert-community/Gemma3-1B-IT), [Gemma 3 270M](https://huggingface.co/litert-community/gemma-3-270m-it), [FunctionGemma 270M](https://huggingface.co/sasha-denisov/function-gemma-270M-it), [Qwen3 0.6B](https://huggingface.co/litert-community/Qwen3-0.6B), [Qwen 2.5](https://huggingface.co/litert-community/Qwen2.5-1.5B-Instruct), [Phi-4 Mini](https://huggingface.co/litert-community/Phi-4-mini-instruct), [DeepSeek R1](https://huggingface.co/litert-community/DeepSeek-R1-Distill-Qwen-1.5B), [SmolLM 135M](https://huggingface.co/litert-community/SmolLM-135M-Instruct).
 
-*Note: The flutter_gemma plugin supports Gemma3n (with **multimodal vision and audio support**), FastVLM (vision), Gemma-3, FunctionGemma, Qwen3, Qwen 2.5, Phi-4, DeepSeek R1 and SmolLM. Desktop platforms (macOS, Windows, Linux) require `.litertlm` model format.
+*Note: The flutter_gemma plugin supports Gemma 4 and Gemma3n (with **multimodal vision and audio support**), FastVLM (vision), Gemma-3, FunctionGemma, Qwen3, Qwen 2.5, Phi-4, DeepSeek R1 and SmolLM. Desktop platforms (macOS, Windows, Linux) require `.litertlm` model format.
 
 [Gemma](https://ai.google.dev/gemma) is a family of lightweight, state-of-the art open models built from the same research and technology used to create the Gemini models
 
@@ -16,7 +16,7 @@
   <img src="https://raw.githubusercontent.com/DenisovAV/flutter_gemma/main/assets/gemma3.png" alt="gemma_github_cover">
 </p>
 
-Bring the power of Google's lightweight Gemma language models directly to your Flutter applications. With Flutter Gemma, you can seamlessly incorporate advanced AI capabilities into your iOS and Android apps, all without relying on external servers.
+Bring the power of Google's lightweight Gemma language models directly to your Flutter applications. With Flutter Gemma, you can seamlessly incorporate advanced AI capabilities into your Flutter applications, all without relying on external servers.
 
 There is an example of using:
 
@@ -32,8 +32,8 @@ There is an example of using:
 - **🖼️ Multimodal Support:** Text + Image input with Gemma3n vision models
 - **🎙️ Audio Input:** Record and send audio messages with Gemma3n E2B/E4B models (Android, Desktop - LiteRT-LM engine)
 - **🛠️ Function Calling:** Enable your models to call external functions and integrate with other services (supported by select models)
-- **🧠 Thinking Mode:** View the reasoning process of DeepSeek models with <think> blocks 
-- **🛑 Stop Generation:** Cancel text generation mid-process on Android devices 
+- **🧠 Thinking Mode:** View the reasoning process of DeepSeek and Gemma 4 models with thinking blocks
+- **🛑 Stop Generation:** Cancel text generation mid-process on Android, Web, and Desktop
 - **⚙️ Backend Switching:** Choose between CPU and GPU backends for each model individually in the example app 
 - **🔍 Advanced Model Filtering:** Filter models by features (Multimodal, Function Calls, Thinking) with expandable UI
 - **📊 Model Sorting:** Sort models alphabetically, by size, or use default order in the example app 
@@ -58,7 +58,7 @@ Both formats have **identical behavior** — MediaPipe handles chat templates in
 
 ### Type 2: Manual Template Formatting
 - **`.bin` files:** Standard binary format
-- **`.tflite` files:** TensorFlow Lite format
+- **`.tflite` files:** LiteRT format (formerly TensorFlow Lite)
 
 Both formats require **manual chat template formatting** in your code.
 
@@ -72,6 +72,8 @@ The example app offers a curated list of models, each suited for different tasks
 
 | Model Family | Best For | Function Calling | Thinking Mode | Vision | Languages | Size |
 |---|---|:---:|:---:|:---:|---|---|
+| **Gemma 4 E2B** | Next-gen multimodal chat — text, image, audio | ✅ | ✅ | ✅ | Multilingual | 2.4GB |
+| **Gemma 4 E4B** | Next-gen multimodal chat — text, image, audio | ✅ | ✅ | ✅ | Multilingual | 4.3GB |
 | **Gemma3n** | On-device multimodal chat and image analysis | ✅ | ❌ | ✅ | Multilingual | 3-6GB |
 | **FastVLM 0.5B** | Fast vision-language inference | ❌ | ❌ | ✅ | Multilingual | 0.5GB |
 | **Phi-4 Mini** | Advanced reasoning and instruction following | ✅ | ❌ | ❌ | Multilingual | 3.9GB |
@@ -89,7 +91,7 @@ When installing models, you need to specify the correct `ModelType`. Use this ta
 
 | Model Family | ModelType | Examples |
 |--------------|-----------|----------|
-| **Gemma (all variants)** | `ModelType.gemmaIt` | Gemma 3 1B, Gemma 3 270M, Gemma3n E2B/E4B |
+| **Gemma (all variants)** | `ModelType.gemmaIt` | Gemma 4 E2B/E4B, Gemma 3 1B, Gemma 3 270M, Gemma3n E2B/E4B |
 | **DeepSeek** | `ModelType.deepSeek` | DeepSeek R1 |
 | **Qwen** | `ModelType.qwen` | Qwen3 0.6B, Qwen 2.5 1.5B, Qwen 2.5 0.5B |
 | **FunctionGemma** | `ModelType.functionGemma` | FunctionGemma 270M IT |
@@ -125,7 +127,7 @@ await FlutterGemma.installModel(modelType: ModelType.general)
 
 > **⚠️ Important:** Complete platform-specific setup before using the plugin.
 
-1. **Download Model and optionally LoRA Weights:** Obtain a pre-trained Gemma model (recommended: 2b or 2b-it) [from Kaggle](https://www.kaggle.com/models/google/gemma/frameworks/tfLite/)
+1. **Download Model and optionally LoRA Weights:** Obtain a model from the [Supported Models](#-supported-models) section or [HuggingFace](https://huggingface.co/litert-community)
 * For **multimodal support**, download [Gemma3n models](https://huggingface.co/google/gemma-3n-E2B-it-litert-preview) or [Gemma3n in LitertLM format](https://huggingface.co/google/gemma-3n-E2B-it-litert-lm) that support vision input
 * Optionally, [fine-tune a model for your specific use case]( https://www.kaggle.com/code/juanmerinobermejo/llm-pr-fine-tuning-with-gemma-2b?scriptVersionId=169776634)
 * If you have LoRA weights, you can use them to customize the model's behavior without retraining the entire model.
@@ -237,7 +239,7 @@ Add to 'AndroidManifest.xml' above tag `</application>`
 * Add dependencies to `index.html` file in web folder
 ```html
   <script type="module">
-  import { FilesetResolver, LlmInference } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-genai@0.10.26';
+  import { FilesetResolver, LlmInference } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-genai@0.10.27';
   window.FilesetResolver = FilesetResolver;
   window.LlmInference = LlmInference;
   </script>
@@ -250,7 +252,7 @@ Add to 'AndroidManifest.xml' above tag `</application>`
 > Desktop platforms use **LiteRT-LM format only** (`.litertlm` files).
 > MediaPipe `.task` and `.bin` models used on mobile/web are **NOT compatible** with desktop.
 
-Desktop support uses a different architecture — a bundled JVM gRPC server that communicates with your Flutter app.
+Desktop **inference** uses a bundled JVM gRPC server that communicates with your Flutter app. Desktop **embeddings** use a different, lighter architecture — LiteRT C API via `dart:ffi` directly in the Dart process (no JVM, no gRPC).
 
 | Platform | Architecture | GPU Acceleration | Status |
 |----------|-------------|------------------|--------|
@@ -303,7 +305,7 @@ Add to `macos/Runner/DebugProfile.entitlements` and `Release.entitlements`:
 **Windows Setup:**
 
 No additional configuration required. The plugin automatically:
-- Downloads JRE 21 (cached in `%LOCALAPPDATA%\flutter_gemma\jre\`)
+- Downloads JRE 24 (cached in `%LOCALAPPDATA%\flutter_gemma\jre\`)
 - Extracts native DLLs from the server JAR
 - Starts gRPC server on dynamic port
 
@@ -359,9 +361,22 @@ await chat.addQueryChunk(Message.text(
 final response = await chat.generateChatResponse();
 
 // Cleanup
-await chat.close();
 await model.close();
 ```
+
+### System Instructions
+
+Control model behavior with a system-level instruction:
+
+```dart
+final chat = await model.createChat(
+  systemInstruction: 'You are a concise assistant. Always respond in bullet points.',
+);
+```
+
+**Platform support:**
+- **Android `.litertlm` / Desktop**: Passed natively via `ConversationConfig.systemInstruction`
+- **Android `.task` / iOS / Web**: Prepended to first user message as fallback
 
 ### 3. Multiple Instances from Same Model
 
@@ -1358,30 +1373,53 @@ final chat = await inferenceModel.createChat(
   topK: 1,
   tools: _tools, // Pass your tools
   supportsFunctionCalls: true, // Enable function calling (required for tools)
-  // tokenBuffer: 256, // Adjust if needed for function calling
+  toolChoice: ToolChoice.auto, // auto (default) | required | none
 );
 ```
 
-**Step 3: Handle Different Response Types**
+**ToolChoice modes:**
+| Mode | Behavior |
+|------|----------|
+| `ToolChoice.auto` | Model decides whether to call a tool (default) |
+| `ToolChoice.required` | Model must respond with a function call |
+| `ToolChoice.none` | Tools are hidden, model responds with text only |
 
-The model can now return two types of responses:
+**Step 3: Handle Response Types**
+
+The model can return text, a single function call, or multiple parallel function calls:
 
 ```dart
-// Add user message
 await chat.addQueryChunk(Message.text(text: 'Change the background to blue', isUser: true));
 
-// Handle async responses
-chat.generateChatResponseAsync().listen((response) {
-  if (response is TextResponse) {
-    // Regular text token from the model
-    print('Text: ${response.token}');
-    // Update your UI with the text
-  } else if (response is FunctionCallResponse) {
-    // Model wants to call a function
-    print('Function Call: ${response.name}(${response.args})');
-    _handleFunctionCall(response);
+// Sync mode
+final response = await chat.generateChatResponse();
+
+if (response is TextResponse) {
+  print('Text: ${response.token}');
+} else if (response is FunctionCallResponse) {
+  // Single function call
+  print('Call: ${response.name}(${response.args})');
+  _handleFunctionCall(response);
+} else if (response is ParallelFunctionCallResponse) {
+  // Multiple function calls (e.g. "Change title and background color")
+  for (final call in response.calls) {
+    print('Call: ${call.name}(${call.args})');
+    await _handleFunctionCall(call);
   }
-});
+}
+
+// Streaming mode — same types arrive via stream
+await for (final response in chat.generateChatResponseAsync()) {
+  if (response is TextResponse) {
+    print(response.token);
+  } else if (response is FunctionCallResponse) {
+    _handleFunctionCall(response);
+  } else if (response is ParallelFunctionCallResponse) {
+    for (final call in response.calls) {
+      await _handleFunctionCall(call);
+    }
+  }
+}
 ```
 
 **Step 4: Execute Function and Send Response Back**
@@ -1473,6 +1511,7 @@ final chat = await model.createChat(
 | Android | ✅ Full support |
 | iOS | ✅ Full support |
 | Web | ❌ Not supported yet |
+| Desktop | ✅ Full support |
 
 #### Fine-tuning FunctionGemma
 
@@ -1505,11 +1544,11 @@ FunctionGemma uses a special format (different from JSON-based function calling)
 
 The `flutter_gemma` plugin handles this format automatically via `FunctionCallParser`.
 
-9. **🧠 Thinking Mode (DeepSeek Models)**
+9. **🧠 Thinking Mode (DeepSeek & Gemma 4 Models)**
 
-DeepSeek models support "thinking mode" where you can see the model's reasoning process before it generates the final response. This provides transparency into how the model approaches problems.
+DeepSeek and Gemma 4 (E2B/E4B) models support "thinking mode" where you can see the model's reasoning process before it generates the final response. This provides transparency into how the model approaches problems.
 
-**Enable Thinking Mode:**
+**Enable Thinking Mode (DeepSeek):**
 
 ```dart
 final chat = await inferenceModel.createChat(
@@ -1520,7 +1559,6 @@ final chat = await inferenceModel.createChat(
   modelType: ModelType.deepSeek, // Required for DeepSeek models
   supportsFunctionCalls: true, // DeepSeek also supports function calls
   tools: _tools, // Optional: add tools for function calling
-  // tokenBuffer: 256, // Token buffer for context management
 );
 ```
 
@@ -1547,12 +1585,25 @@ chat.generateChatResponseAsync().listen((response) {
 });
 ```
 
+**Enable Thinking Mode (Gemma 4):**
+
+```dart
+final chat = await inferenceModel.createChat(
+  temperature: 1.0,
+  topK: 64,
+  topP: 0.95,
+  isThinking: true, // Enable thinking mode
+  modelType: ModelType.gemmaIt, // Gemma 4 E2B/E4B
+);
+// <|think|> is auto-injected into systemInstruction — no manual prompt needed.
+```
+
 **Thinking Mode Features:**
 - ✅ **Transparent Reasoning**: See how the model thinks through problems
 - ✅ **Interactive UI**: Show/hide thinking bubbles with expandable content
 - ✅ **Streaming Support**: Thinking content streams in real-time
 - ✅ **Function Integration**: Models can think before calling functions
-- ✅ **DeepSeek Optimized**: Designed specifically for DeepSeek model architecture
+- ✅ **Supported Models**: DeepSeek R1 and Gemma 4 E2B/E4B
 
 **Example Thinking Flow:**
 1. User asks: "Change the background to blue and explain why blue is calming"
@@ -1566,13 +1617,14 @@ Generate vector embeddings from text and perform semantic search with local vect
 
 ### Platform Support
 
-| Feature | Android | iOS | Web |
-|---------|---------|-----|-----|
-| **Embedding Generation** | ✅ Full | ✅ Full | ✅ Full |
-| **VectorStore (RAG)** | ✅ SQLite | ✅ SQLite | ✅ SQLite WASM |
+| Feature | Android | iOS | Web | Desktop |
+|---------|---------|-----|-----|---------|
+| **Embedding Generation** | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
+| **VectorStore (RAG)** | ✅ SQLite | ✅ SQLite | ✅ SQLite WASM | ✅ SQLite |
 
 - **Mobile (Android/iOS)**: Full RAG support with SQLite-based VectorStore
 - **Web**: Full RAG support with SQLite WASM (wa-sqlite + OPFS) - see [Web Setup](#web-setup-embeddings--vectorstore) below
+- **Desktop (macOS/Windows/Linux)**: Full RAG support. Embeddings use LiteRT C API via `dart:ffi` (no gRPC, no JVM). VectorStore uses SQLite.
 
 ### Supported Embedding Models
 
@@ -1642,17 +1694,21 @@ final embeddingModel = await FlutterGemma.getActiveEmbedder(
   preferredBackend: PreferredBackend.gpu, // Optional: use GPU acceleration
 );
 
-// Generate embedding for single text
-final embedding = await embeddingModel.generateEmbedding('Hello, world!');
-print('Embedding vector: ${embedding.take(5)}...'); // Show first 5 dimensions
-print('Embedding dimension: ${embedding.length}');
+// Generate query embedding (for search)
+final queryEmb = await embeddingModel.generateEmbedding('What is Flutter?');
+print('Query embedding: ${queryEmb.take(5)}...'); // Show first 5 dimensions
 
-// Generate embeddings for multiple texts
-final embeddings = await embeddingModel.generateEmbeddings([
-  'Hello, world!',
-  'How are you?',
-  'Flutter is awesome!'
-]);
+// Generate document embedding (for indexing) — uses document prefix
+final docEmb = await embeddingModel.generateEmbedding(
+  'Flutter is a UI framework by Google',
+  taskType: TaskType.retrievalDocument,
+);
+
+// Batch embeddings
+final embeddings = await embeddingModel.generateEmbeddings(
+  ['Hello, world!', 'How are you?', 'Flutter is awesome!'],
+  taskType: TaskType.retrievalDocument, // optional, default is retrievalQuery
+);
 print('Generated ${embeddings.length} embeddings');
 
 // Get embedding model dimension
@@ -1676,6 +1732,9 @@ double cosineSimilarity(List<double> a, List<double> b) {
 
 final similarity = cosineSimilarity(embeddings[0], embeddings[1]);
 print('Similarity: $similarity');
+
+// Note: EmbeddingGemma and Gecko return L2-normalized vectors (‖v‖ ≈ 1.0),
+// so dot product alone equals cosine similarity — you can skip normalization.
 
 // Close model when done
 await embeddingModel.close();
@@ -1702,8 +1761,11 @@ final documents = [
 ];
 
 for (final doc in documents) {
-  // Generate embedding
-  final embedding = await embeddingModel.generateEmbedding(doc);
+  // Generate document embedding (uses document prefix for better retrieval)
+  final embedding = await embeddingModel.generateEmbedding(
+    doc,
+    taskType: TaskType.retrievalDocument,
+  );
 
   // Add to vector store
   await FlutterGemmaPlugin.instance.addDocumentWithEmbedding(
@@ -1752,10 +1814,10 @@ await embeddingModel.close();
 
 Add script tags to your `index.html`:
 ```html
-<!-- Load from jsDelivr CDN (version 0.11.14) -->
-<script src="https://cdn.jsdelivr.net/gh/DenisovAV/flutter_gemma@0.11.14/web/cache_api.js"></script>
-<script type="module" src="https://cdn.jsdelivr.net/gh/DenisovAV/flutter_gemma@0.11.14/web/litert_embeddings.js"></script>
-<script type="module" src="https://cdn.jsdelivr.net/gh/DenisovAV/flutter_gemma@0.11.14/web/sqlite_vector_store.js"></script>
+<!-- Load from jsDelivr CDN (version 0.12.7) -->
+<script src="https://cdn.jsdelivr.net/gh/DenisovAV/flutter_gemma@0.12.7/web/cache_api.js"></script>
+<script type="module" src="https://cdn.jsdelivr.net/gh/DenisovAV/flutter_gemma@0.12.7/web/litert_embeddings.js"></script>
+<script type="module" src="https://cdn.jsdelivr.net/gh/DenisovAV/flutter_gemma@0.12.7/web/sqlite_vector_store.js"></script>
 ```
 
 **Option 2: Build locally (For development or customization)**
@@ -1885,7 +1947,7 @@ int tokenCount = await session.sizeInTokens('Your prompt text here');
 print('Prompt size in tokens: $tokenCount');
 ```
 
-11. **Closing the Model**
+12. **Closing the Model**
 
 When you no longer need to perform any further inferences, call the close method to release resources:
 
@@ -2040,24 +2102,25 @@ Function calling is currently supported by the following models:
 
 ### Feature Comparison
 
-| Feature | Android | iOS | Web | Notes |
-|---------|---------|-----|-----|-------|
-| **Text Generation** | ✅ Full | ✅ Full | ✅ Full | All models supported |
-| **Image Input (Multimodal)** | ✅ Full | ✅ Full | ✅ Full | Gemma3n models |
-| **Audio Input** | ✅ Android + Desktop | ❌ Not supported | ❌ Not supported | Gemma3n E2B/E4B, LiteRT-LM only |
-| **Function Calling** | ✅ Full | ✅ Full | ✅ Full | Select models only |
-| **Thinking Mode** | ✅ Full | ✅ Full | ✅ Full | DeepSeek models |
-| **Stop Generation** | ✅ Android only | ❌ Not supported | ❌ Not supported | Cancel mid-process |
-| **GPU Acceleration** | ✅ Full | ✅ Full | ✅ Full | Recommended |
-| **CPU Backend** | ✅ Full | ✅ Full | ❌ Not supported | MediaPipe limitation |
-| **Streaming Responses** | ✅ Full | ✅ Full | ✅ Full | Real-time generation |
-| **LoRA Support** | ✅ Full | ✅ Full | ✅ Full | Fine-tuned weights |
-| **Text Embeddings** | ✅ Full | ✅ Full | ✅ Full | EmbeddingGemma, Gecko |
-| **VectorStore (RAG)** | ✅ SQLite | ✅ SQLite | ✅ SQLite WASM | Semantic search, RAG |
-| **File Downloads** | ✅ Background | ✅ Background | ✅ In-memory | Platform-specific |
-| **Asset Loading** | ✅ Full | ✅ Full | ✅ Full | All source types |
-| **Bundled Resources** | ✅ Full | ✅ Full | ✅ Full | Native bundles |
-| **External Files (FileSource)** | ✅ Full | ✅ Full | ❌ Not supported | No local FS on web |
+| Feature | Android | iOS | Web | Desktop | Notes |
+|---------|---------|-----|-----|---------|-------|
+| **Text Generation** | ✅ Full | ✅ Full | ✅ Full | ✅ Full | All models supported |
+| **Image Input (Multimodal)** | ✅ Full | ✅ Full | ✅ Full | ⚠️ Broken (#684) | macOS: model hallucinates |
+| **Audio Input** | ✅ Full | ✅ Full | ❌ Not supported | ✅ Full | Gemma3n E2B/E4B |
+| **Function Calling** | ✅ Full | ✅ Full | ✅ Full | ❌ Not supported | LiteRT-LM limitation |
+| **Thinking Mode** | ✅ Full | ✅ Full | ✅ Full | ✅ Full | DeepSeek & Gemma 4 |
+| **Stop Generation** | ✅ Full | ✅ Full | ✅ Full | ✅ Full | Cancel mid-process |
+| **GPU Acceleration** | ✅ Full | ✅ Full | ✅ Full | ⚠️ Partial | macOS GPU broken |
+| **NPU Acceleration** | ✅ Full | ❌ Not supported | ❌ Not supported | ❌ Not supported | Android only (.litertlm) |
+| **CPU Backend** | ✅ Full | ✅ Full | ❌ Not supported | ✅ Full | MediaPipe limitation |
+| **Streaming Responses** | ✅ Full | ✅ Full | ✅ Full | ✅ Full | Real-time generation |
+| **LoRA Support** | ✅ Full | ✅ Full | ✅ Full | ❌ Not supported | LiteRT-LM limitation |
+| **Text Embeddings** | ✅ Full | ✅ Full | ✅ Full | ✅ Full | EmbeddingGemma, Gecko |
+| **VectorStore (RAG)** | ✅ SQLite | ✅ SQLite | ✅ SQLite WASM | ✅ SQLite | Semantic search, RAG |
+| **File Downloads** | ✅ Background | ✅ Background | ✅ In-memory | ✅ Background | Platform-specific |
+| **Asset Loading** | ✅ Full | ✅ Full | ✅ Full | ❌ Not supported | Flutter assets N/A |
+| **Bundled Resources** | ✅ Full | ✅ Full | ✅ Full | ❌ Not supported | Native bundles only |
+| **External Files (FileSource)** | ✅ Full | ✅ Full | ❌ Not supported | ✅ Full | No local FS on web |
 
 ### Web Platform Specifics
 
@@ -2213,13 +2276,14 @@ import 'package:flutter_gemma/core/extensions.dart';
 
 // Clean response based on model type
 String cleanedResponse = ModelThinkingFilter.cleanResponse(
-  rawResponse, 
+  rawResponse,
   ModelType.deepSeek
 );
 
 // The filter automatically removes model-specific tokens like:
 // - <end_of_turn> tags (Gemma models)
-// - Special DeepSeek tokens
+// - <think>...</think> blocks (DeepSeek)
+// - <|channel>thought\n...<channel|> blocks (Gemma 4 E2B/E4B)
 // - Extra whitespace and formatting
 ```
 
@@ -2227,16 +2291,17 @@ This is automatically handled by the chat API, but can be useful for custom infe
 
 ## **🚀 What's New**
 
+✅ **🤖 Gemma 4 E2B/E4B** - Next-gen multimodal models with native audio, improved vision, 128K context window
+✅ **📋 systemInstruction** - Set system-level context in `createChat()` and `createSession()`
+✅ **📊 Benchmark test** - Run `example/integration_test/benchmark_comparison_test.dart` to compare models on your device
 ✅ **🎙️ Audio Input** - Record and send audio messages with Gemma3n E2B/E4B models (Android, Desktop)
 ✅ **📊 Text Embeddings** - Generate vector embeddings with EmbeddingGemma and Gecko models for semantic search applications
 ✅ **🔧 Unified Model Management** - Single system for managing both inference and embedding models with automatic validation
 ✅ **🖥️ Desktop Support** - Full support for macOS, Windows, and Linux with LiteRT-LM
 
 **Coming Soon:**
-- On-Device RAG Pipelines
 - Video Input
 - Audio Output (Text-to-Speech)
-- System Instruction support
 
 ---
 

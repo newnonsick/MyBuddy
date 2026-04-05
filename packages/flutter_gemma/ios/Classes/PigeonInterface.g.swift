@@ -231,7 +231,7 @@ class PigeonInterfacePigeonCodec: FlutterStandardMessageCodec, @unchecked Sendab
 protocol PlatformService {
   func createModel(maxTokens: Int64, modelPath: String, loraRanks: [Int64]?, preferredBackend: PreferredBackend?, maxNumImages: Int64?, supportAudio: Bool?, completion: @escaping (Result<Void, Error>) -> Void)
   func closeModel(completion: @escaping (Result<Void, Error>) -> Void)
-  func createSession(temperature: Double, randomSeed: Int64, topK: Int64, topP: Double?, loraPath: String?, enableVisionModality: Bool?, enableAudioModality: Bool?, completion: @escaping (Result<Void, Error>) -> Void)
+  func createSession(temperature: Double, randomSeed: Int64, topK: Int64, topP: Double?, loraPath: String?, enableVisionModality: Bool?, enableAudioModality: Bool?, systemInstruction: String?, enableThinking: Bool?, completion: @escaping (Result<Void, Error>) -> Void)
   func closeSession(completion: @escaping (Result<Void, Error>) -> Void)
   func sizeInTokens(prompt: String, completion: @escaping (Result<Int64, Error>) -> Void)
   func addQueryChunk(prompt: String, completion: @escaping (Result<Void, Error>) -> Void)
@@ -243,6 +243,7 @@ protocol PlatformService {
   func createEmbeddingModel(modelPath: String, tokenizerPath: String, preferredBackend: PreferredBackend?, completion: @escaping (Result<Void, Error>) -> Void)
   func closeEmbeddingModel(completion: @escaping (Result<Void, Error>) -> Void)
   func generateEmbeddingFromModel(text: String, completion: @escaping (Result<[Double], Error>) -> Void)
+  func generateDocumentEmbeddingFromModel(text: String, completion: @escaping (Result<[Double], Error>) -> Void)
   func generateEmbeddingsFromModel(texts: [String], completion: @escaping (Result<[Any?], Error>) -> Void)
   func getEmbeddingDimension(completion: @escaping (Result<Int64, Error>) -> Void)
   func initializeVectorStore(databasePath: String, completion: @escaping (Result<Void, Error>) -> Void)
@@ -330,7 +331,9 @@ class PlatformServiceSetup {
         let loraPathArg: String? = nilOrValue(args[4])
         let enableVisionModalityArg: Bool? = nilOrValue(args[5])
         let enableAudioModalityArg: Bool? = nilOrValue(args[6])
-        api.createSession(temperature: temperatureArg, randomSeed: randomSeedArg, topK: topKArg, topP: topPArg, loraPath: loraPathArg, enableVisionModality: enableVisionModalityArg, enableAudioModality: enableAudioModalityArg) { result in
+        let systemInstructionArg: String? = nilOrValue(args[7])
+        let enableThinkingArg: Bool? = nilOrValue(args[8])
+        api.createSession(temperature: temperatureArg, randomSeed: randomSeedArg, topK: topKArg, topP: topPArg, loraPath: loraPathArg, enableVisionModality: enableVisionModalityArg, enableAudioModality: enableAudioModalityArg, systemInstruction: systemInstructionArg, enableThinking: enableThinkingArg) { result in
           switch result {
           case .success:
             reply(wrapResult(nil))
@@ -520,6 +523,23 @@ class PlatformServiceSetup {
       }
     } else {
       generateEmbeddingFromModelChannel.setMessageHandler(nil)
+    }
+    let generateDocumentEmbeddingFromModelChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_gemma.PlatformService.generateDocumentEmbeddingFromModel\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      generateDocumentEmbeddingFromModelChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let textArg = args[0] as! String
+        api.generateDocumentEmbeddingFromModel(text: textArg) { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      generateDocumentEmbeddingFromModelChannel.setMessageHandler(nil)
     }
     let generateEmbeddingsFromModelChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_gemma.PlatformService.generateEmbeddingsFromModel\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {

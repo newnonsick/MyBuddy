@@ -82,16 +82,32 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
     }
   }
 
-  Future<void> _openSettings() async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const SettingsPage()));
+  Future<void> _openSettings() {
+    return _pushFullscreenPage(const SettingsPage());
   }
 
-  Future<void> _openCalendar() async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const GoogleCalendarPage()));
+  Future<void> _openCalendar() {
+    return _pushFullscreenPage(const GoogleCalendarPage());
+  }
+
+  Future<void> _pushFullscreenPage(Widget page) {
+    return Navigator.of(context).push<void>(
+      PageRouteBuilder<void>(
+        opaque: true,
+        transitionDuration: const Duration(milliseconds: 0),
+        reverseTransitionDuration: const Duration(milliseconds: 0),
+        pageBuilder: (_, __, ___) => page,
+        transitionsBuilder: (_, animation, __, child) {
+          final fade = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          );
+
+          return FadeTransition(opacity: fade, child: child);
+        },
+      ),
+    );
   }
 
   Future<void> _openMemoryEditor() async {

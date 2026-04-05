@@ -231,7 +231,7 @@ class PlatformService {
     }
   }
 
-  Future<void> createSession({required double temperature, required int randomSeed, required int topK, double? topP, String? loraPath, bool? enableVisionModality, bool? enableAudioModality, }) async {
+  Future<void> createSession({required double temperature, required int randomSeed, required int topK, double? topP, String? loraPath, bool? enableVisionModality, bool? enableAudioModality, String? systemInstruction, bool? enableThinking, }) async {
     final String pigeonVar_channelName = 'dev.flutter.pigeon.flutter_gemma.PlatformService.createSession$pigeonVar_messageChannelSuffix';
     final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
@@ -239,7 +239,7 @@ class PlatformService {
       binaryMessenger: pigeonVar_binaryMessenger,
     );
     final List<Object?>? pigeonVar_replyList =
-        await pigeonVar_channel.send(<Object?>[temperature, randomSeed, topK, topP, loraPath, enableVisionModality, enableAudioModality]) as List<Object?>?;
+        await pigeonVar_channel.send(<Object?>[temperature, randomSeed, topK, topP, loraPath, enableVisionModality, enableAudioModality, systemInstruction, enableThinking]) as List<Object?>?;
     if (pigeonVar_replyList == null) {
       throw _createConnectionError(pigeonVar_channelName);
     } else if (pigeonVar_replyList.length > 1) {
@@ -510,6 +510,33 @@ class PlatformService {
     }
   }
 
+  Future<List<double>> generateDocumentEmbeddingFromModel(String text) async {
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.flutter_gemma.PlatformService.generateDocumentEmbeddingFromModel$pigeonVar_messageChannelSuffix';
+    final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final List<Object?>? pigeonVar_replyList =
+        await pigeonVar_channel.send(<Object?>[text]) as List<Object?>?;
+    if (pigeonVar_replyList == null) {
+      throw _createConnectionError(pigeonVar_channelName);
+    } else if (pigeonVar_replyList.length > 1) {
+      throw PlatformException(
+        code: pigeonVar_replyList[0]! as String,
+        message: pigeonVar_replyList[1] as String?,
+        details: pigeonVar_replyList[2],
+      );
+    } else if (pigeonVar_replyList[0] == null) {
+      throw PlatformException(
+        code: 'null-error',
+        message: 'Host platform returned null value for non-null return value.',
+      );
+    } else {
+      return (pigeonVar_replyList[0] as List<Object?>?)!.cast<double>();
+    }
+  }
+
   Future<List<Object?>> generateEmbeddingsFromModel(List<String> texts) async {
     final String pigeonVar_channelName = 'dev.flutter.pigeon.flutter_gemma.PlatformService.generateEmbeddingsFromModel$pigeonVar_messageChannelSuffix';
     final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
@@ -714,7 +741,7 @@ class PlatformService {
   ///
   /// **Performance:**
   /// - Returns all documents in single call
-  /// - Embeddings as List<double> (decoded from BLOB)
+  /// - Embeddings as `List<double>` (decoded from BLOB)
   ///
   /// Returns empty list if no documents stored.
   Future<List<DocumentWithEmbedding>> getAllDocumentsWithEmbeddings() async {

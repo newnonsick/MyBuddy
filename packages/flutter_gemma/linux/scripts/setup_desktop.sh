@@ -59,9 +59,9 @@ JRE_URL="https://cdn.azul.com/zulu/bin/${JRE_ARCHIVE}"
 
 # JAR settings
 JAR_NAME="litertlm-server.jar"
-JAR_VERSION="0.12.5"
+JAR_VERSION="0.13.1"
 JAR_URL="https://github.com/DenisovAV/flutter_gemma/releases/download/v${JAR_VERSION}/${JAR_NAME}"
-JAR_CHECKSUM="c43018ff29516d522f03dc0d6dad07065e439e5c0c8a58fc2730acf25f45ce55"
+JAR_CHECKSUM="97e01020f921c098f7cfc0a9509e4b207b8bc326703ae2f26bbce3c11b957430"
 
 # Plugin root (parent of linux/)
 PLUGIN_ROOT=$(dirname "$PLUGIN_DIR")
@@ -81,8 +81,8 @@ verify_checksum() {
     elif command -v shasum &> /dev/null; then
         actual=$(shasum -a 256 "$file" | awk '{print $1}')
     else
-        echo "WARNING: No sha256sum or shasum available, skipping checksum verification"
-        return 0
+        echo "ERROR: No sha256sum or shasum available, cannot verify checksum"
+        return 1
     fi
 
     if [ "$actual" != "$expected" ]; then
@@ -177,6 +177,15 @@ setup_jar() {
     if [ -z "$JAR_SOURCE" ]; then
         local CACHED_JAR="$CACHE_DIR/jar/$JAR_NAME"
 
+        if [ -f "$CACHED_JAR" ] && [ -n "$JAR_CHECKSUM" ]; then
+            # Verify cached JAR checksum
+            echo "Verifying cached JAR checksum..."
+            if ! verify_checksum "$CACHED_JAR" "$JAR_CHECKSUM"; then
+                echo "Cached JAR checksum mismatch, re-downloading..."
+                rm -f "$CACHED_JAR"
+            fi
+        fi
+
         if [ ! -f "$CACHED_JAR" ]; then
             echo "Downloading JAR from $JAR_URL..."
             curl -L --progress-bar -o "$CACHED_JAR" "$JAR_URL" || {
@@ -186,13 +195,17 @@ setup_jar() {
             }
 
             # Verify checksum
-            echo "Verifying JAR checksum..."
-            if ! verify_checksum "$CACHED_JAR" "$JAR_CHECKSUM"; then
-                rm -f "$CACHED_JAR"
-                exit 1
+            if [ -n "$JAR_CHECKSUM" ]; then
+                echo "Verifying JAR checksum..."
+                if ! verify_checksum "$CACHED_JAR" "$JAR_CHECKSUM"; then
+                    rm -f "$CACHED_JAR"
+                    exit 1
+                fi
+            else
+                echo "WARNING: JAR checksum not set, skipping verification"
             fi
         else
-            echo "Using cached JAR"
+            echo "Using cached JAR (checksum verified)"
         fi
 
         JAR_SOURCE="$CACHED_JAR"
@@ -245,6 +258,73 @@ extract_natives() {
     fi
 }
 
+# === Download and install TFLite C library (for desktop embeddings) ===
+install_tflite() {
+    local TFLITE_DIR="$OUTPUT_DIR/lib/tflite"
+    local TFLITE_LIB="$TFLITE_DIR/libtensorflowlite_c.so"
+
+    if [ -f "$TFLITE_LIB" ]; then
+        echo "TFLite C library already installed"
+        return
+    fi
+
+    local TFLITE_VERSION="0.12.7"
+    local TFLITE_ARTIFACT=""
+    local TFLITE_CHECKSUM=""
+    case "$ARCH" in
+        x86_64)
+            TFLITE_ARTIFACT="libtensorflowlite_c_linux_amd64.so"
+            TFLITE_CHECKSUM="f98dcaa2f8033794725413542625a396744928dc5c0a6fd90ff3c0c5b1209327"
+            ;;
+        aarch64)
+            TFLITE_ARTIFACT="libtensorflowlite_c_linux_arm64.so"
+            TFLITE_CHECKSUM="602a0aea312d36697adc042058b3231875b84b7679461214450030f6eace0999"
+            ;;
+        *)
+            echo "WARNING: TFLite C library not available for $ARCH"
+            echo "Desktop embeddings will not work on this architecture"
+            return ;;
+    esac
+
+    local TFLITE_URL="https://github.com/DenisovAV/flutter_gemma/releases/download/v${TFLITE_VERSION}/${TFLITE_ARTIFACT}"
+    local TFLITE_CACHE="$CACHE_DIR/tflite"
+
+    mkdir -p "$TFLITE_CACHE" "$TFLITE_DIR"
+
+    local CACHED="$TFLITE_CACHE/$TFLITE_ARTIFACT"
+    if [ ! -f "$CACHED" ]; then
+        echo "Downloading TFLite C library..."
+        curl -L --progress-bar -o "$CACHED" "$TFLITE_URL" || {
+            echo "WARNING: Failed to download TFLite C library"
+            rm -f "$CACHED"
+            return
+        }
+
+        # Verify checksum if available
+        if [ -n "$TFLITE_CHECKSUM" ]; then
+            echo "Verifying TFLite checksum..."
+            if ! verify_checksum "$CACHED" "$TFLITE_CHECKSUM"; then
+                rm -f "$CACHED"
+                echo "Desktop embeddings will not work"
+                return
+            fi
+        else
+            echo "WARNING: TFLite checksum not set, skipping verification"
+        fi
+    else
+        echo "Using cached TFLite C library"
+    fi
+
+    # CI artifact is a single .so (not an archive)
+    cp "$CACHED" "$TFLITE_LIB"
+
+    if [ -f "$TFLITE_LIB" ]; then
+        echo "TFLite C library installed: $(du -h "$TFLITE_LIB" | cut -f1)"
+    else
+        echo "WARNING: libtensorflowlite_c.so not found after copy"
+    fi
+}
+
 # === Main ===
 echo ""
 echo "=== Starting setup ==="
@@ -262,9 +342,14 @@ echo "Step 3: Extracting native libraries..."
 extract_natives
 
 echo ""
+echo "Step 4: Installing TFLite C library..."
+install_tflite
+
+echo ""
 echo "========================================"
 echo "=== Setup complete ==="
 echo "========================================"
 echo "JRE:     $OUTPUT_DIR/jre"
 echo "JAR:     $OUTPUT_DIR/data/$JAR_NAME"
 echo "Natives: $OUTPUT_DIR/litertlm"
+echo "TFLite:  $OUTPUT_DIR/lib/tflite"

@@ -87,9 +87,9 @@ $JreChecksums = @{
 
 # JAR settings
 $JarName = "litertlm-server.jar"
-$JarVersion = "0.12.6"
+$JarVersion = "0.13.1"
 $JarUrl = "https://github.com/DenisovAV/flutter_gemma/releases/download/v$JarVersion/$JarName"
-$JarChecksum = "fefc53d076533de164b5ce07c65f9aedc4739f83efc93e67625f0d90029ae5b7"
+$JarChecksum = "97e01020f921c098f7cfc0a9509e4b207b8bc326703ae2f26bbce3c11b957430"
 $JarCacheDir = "$env:LOCALAPPDATA\flutter_gemma\jar"
 $PluginRoot = Split-Path -Parent $PluginDir
 
@@ -386,9 +386,23 @@ function Setup-Jar {
         # Check cache first
         $cachedJar = "$JarCacheDir\$JarName"
         if (Test-Path $cachedJar) {
-            Write-Host "Using cached JAR" -ForegroundColor Green
-            $jarSource = $cachedJar
-        } else {
+            # Verify cached JAR checksum before reuse
+            if ($JarChecksum) {
+                $actualChecksum = (Get-FileHash -Path $cachedJar -Algorithm SHA256).Hash.ToLower()
+                if ($actualChecksum -ne $JarChecksum.ToLower()) {
+                    Write-Host "Cached JAR checksum mismatch, re-downloading..." -ForegroundColor Yellow
+                    Remove-Item -Path $cachedJar -Force
+                } else {
+                    Write-Host "Using cached JAR (checksum verified)" -ForegroundColor Green
+                    $jarSource = $cachedJar
+                }
+            } else {
+                Write-Host "Using cached JAR" -ForegroundColor Green
+                $jarSource = $cachedJar
+            }
+        }
+        # Download if no valid cached JAR (missing or checksum mismatch)
+        if (-not $jarSource) {
             $jarSource = Download-Jar
             if (-not $jarSource) {
                 Write-Error "Could not obtain JAR (build failed, download failed)"
@@ -527,6 +541,63 @@ function Install-DXC {
     }
 }
 
+# === Download and install TFLite C library (for desktop embeddings) ===
+function Install-TfLite {
+    $tfliteDir = "$OutputDir\tflite"
+    $tfliteDll = "$tfliteDir\tensorflowlite_c.dll"
+
+    if (Test-Path $tfliteDll) {
+        Write-Host "  TFLite C library already installed" -ForegroundColor Green
+        return
+    }
+
+    $tfliteVersion = "0.12.7"
+    $tfliteArtifact = "tensorflowlite_c_windows_amd64.dll"
+    $tfliteUrl = "https://github.com/DenisovAV/flutter_gemma/releases/download/v$tfliteVersion/$tfliteArtifact"
+    $tfliteCacheDir = "$env:LOCALAPPDATA\flutter_gemma\tflite"
+
+    New-Item -ItemType Directory -Force -Path $tfliteCacheDir | Out-Null
+    New-Item -ItemType Directory -Force -Path $tfliteDir | Out-Null
+
+    # SHA256 checksum from CI build (LiteRT 2.1.3)
+    $tfliteChecksum = "e185a3170109a33e3b29fe64beeff9eaa162fa1f9dc47a618fa708e21d458bcf"
+
+    $cachedDll = "$tfliteCacheDir\$tfliteArtifact"
+    if (-not (Test-Path $cachedDll)) {
+        Write-Host "  Downloading TFLite C library..."
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+            Invoke-WebRequest -Uri $tfliteUrl -OutFile $cachedDll -UseBasicParsing
+        } catch {
+            Write-Warning "  Failed to download TFLite C library: $_"
+            Write-Host "  Desktop embeddings will not work" -ForegroundColor Yellow
+            return
+        }
+
+        # Verify checksum if available
+        if ($tfliteChecksum) {
+            Write-Host "  Verifying TFLite checksum..."
+            $actualChecksum = Get-SHA256Hash -FilePath $cachedDll
+            if ($actualChecksum -ne $tfliteChecksum.ToLower()) {
+                Remove-Item $cachedDll -Force -ErrorAction SilentlyContinue
+                Write-Warning "  TFLite checksum mismatch! Expected: $tfliteChecksum, Got: $actualChecksum"
+                Write-Host "  Desktop embeddings will not work" -ForegroundColor Yellow
+                return
+            }
+            Write-Host "  Checksum verified" -ForegroundColor Green
+        } else {
+            Write-Host "  WARNING: TFLite checksum not set, skipping verification" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "  Using cached TFLite C library" -ForegroundColor Green
+    }
+
+    # CI artifact is a single DLL (not an archive)
+    Copy-Item -Path $cachedDll -Destination $tfliteDll -Force
+    $sizeMB = [math]::Round((Get-Item $tfliteDll).Length / 1MB, 1)
+    Write-Host "  TFLite C library installed ($sizeMB MB)" -ForegroundColor Green
+}
+
 # === Main ===
 Write-Host ""
 Write-Host "=== Starting setup ===" -ForegroundColor Cyan
@@ -549,6 +620,10 @@ try {
     Install-DXC
 
     Write-Host ""
+    Write-Host "Step 5: Installing TFLite C library..." -ForegroundColor Gray
+    Install-TfLite
+
+    Write-Host ""
     Write-Host "========================================" -ForegroundColor Green
     Write-Host "=== Setup complete ===" -ForegroundColor Green
     Write-Host "========================================" -ForegroundColor Green
@@ -556,6 +631,7 @@ try {
     Write-Host "JAR: $OutputDir\data\$JarName"
     Write-Host "Natives: $OutputDir\litertlm"
     Write-Host "DXC: $OutputDir\litertlm (dxil.dll, dxcompiler.dll)"
+    Write-Host "TFLite: $OutputDir\tflite"
 
 } catch {
     Write-Host ""

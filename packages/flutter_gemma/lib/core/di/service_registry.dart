@@ -22,11 +22,13 @@ import 'package:flutter_gemma/core/handlers/web_file_source_handler_stub.dart'
 import 'package:flutter_gemma/core/handlers/source_handler_registry.dart';
 import 'package:flutter_gemma/core/infrastructure/platform_file_system_service.dart';
 import 'package:flutter_gemma/core/infrastructure/web_file_system_service.dart';
-import 'package:flutter_gemma/core/infrastructure/flutter_asset_loader.dart';
+import 'package:flutter_gemma/core/infrastructure/flutter_asset_loader_stub.dart'
+    if (dart.library.io) 'package:flutter_gemma/core/infrastructure/flutter_asset_loader.dart';
 import 'package:flutter_gemma/core/infrastructure/shared_preferences_model_repository.dart';
 import 'package:flutter_gemma/core/infrastructure/in_memory_model_repository.dart';
 import 'package:flutter_gemma/core/services/vector_store_repository.dart';
-import 'package:flutter_gemma/core/infrastructure/mobile_vector_store_repository.dart';
+import 'package:flutter_gemma/core/infrastructure/dart_vector_store_repository_stub.dart'
+    if (dart.library.ffi) 'package:flutter_gemma/core/infrastructure/dart_vector_store_repository.dart';
 import 'package:flutter_gemma/core/infrastructure/web_vector_store_repository_stub.dart'
     if (dart.library.js_interop) 'package:flutter_gemma/core/infrastructure/web_vector_store_repository.dart';
 import 'package:flutter_gemma/core/infrastructure/web_download_service_stub.dart'
@@ -318,7 +320,7 @@ class ServiceRegistry {
     _vectorStoreRepository = vectorStoreRepository ??
       (kIsWeb
         ? WebVectorStoreRepository()  // SQLite WASM for web
-        : MobileVectorStoreRepository());
+        : DartVectorStoreRepository());
 
     // Initialize handlers with dependencies
     _networkHandler = _createNetworkSourceHandler(

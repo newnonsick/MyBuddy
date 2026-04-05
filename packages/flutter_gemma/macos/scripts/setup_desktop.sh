@@ -58,9 +58,9 @@ JRE_CHECKSUM_X64="4a36280b411db58952bc97a26f96b184222b23d36ea5008a6ee34744989ff9
 
 # JAR settings
 JAR_NAME="litertlm-server.jar"
-JAR_VERSION="0.12.6"
+JAR_VERSION="0.13.1"
 JAR_URL="https://github.com/DenisovAV/flutter_gemma/releases/download/v${JAR_VERSION}/${JAR_NAME}"
-JAR_CHECKSUM="fefc53d076533de164b5ce07c65f9aedc4739f83efc93e67625f0d90029ae5b7"
+JAR_CHECKSUM="97e01020f921c098f7cfc0a9509e4b207b8bc326703ae2f26bbce3c11b957430"
 JAR_CACHE_DIR="$HOME/Library/Caches/flutter_gemma/jar"
 
 echo "Plugin root: $PLUGIN_ROOT"
@@ -313,10 +313,20 @@ setup_jar() {
 
     # 3. Download as fallback
     if [[ -z "$jar_source" ]]; then
-        # Check cache first
+        # Check cache first (with checksum verification)
         local cached_jar="$JAR_CACHE_DIR/$JAR_NAME"
         if [[ -f "$cached_jar" ]]; then
-            echo "Using cached JAR"
+            if [[ -n "$JAR_CHECKSUM" ]]; then
+                local actual_checksum
+                actual_checksum=$(shasum -a 256 "$cached_jar" | awk '{print $1}')
+                if [[ "$actual_checksum" != "$JAR_CHECKSUM" ]]; then
+                    echo "Cached JAR checksum mismatch, re-downloading..." >&2
+                    rm -f "$cached_jar"
+                fi
+            fi
+        fi
+        if [[ -f "$cached_jar" ]]; then
+            echo "Using cached JAR (checksum verified)"
             jar_source="$cached_jar"
         else
             if jar_source=$(download_jar); then
@@ -470,10 +480,80 @@ ENTITLEMENTS
     echo "JRE signed with sandbox inheritance"
 }
 
+# === Download and install TFLite C library (for desktop embeddings) ===
+setup_tflite() {
+    local tflite_dest="$RESOURCES_DIR/tflite"
+    local tflite_lib="$tflite_dest/libtensorflowlite_c.dylib"
+
+    if [[ -f "$tflite_lib" ]]; then
+        echo "TFLite C library already in app bundle"
+        return 0
+    fi
+
+    if [[ "$ARCH" != "arm64" ]]; then
+        echo "WARNING: TFLite C library not available for $ARCH macOS"
+        echo "Desktop embeddings will not work on this architecture"
+        return 0
+    fi
+
+    local TFLITE_VERSION="0.12.7"
+    local archive_name="libtensorflowlite_c_darwin_arm64.dylib"
+    local tflite_url="https://github.com/DenisovAV/flutter_gemma/releases/download/v${TFLITE_VERSION}/${archive_name}"
+    local tflite_cache="$HOME/Library/Caches/flutter_gemma/tflite"
+
+    echo "Setting up TFLite C library..."
+    mkdir -p "$tflite_cache" "$tflite_dest"
+
+    # SHA256 checksum (fill from CI artifacts after build)
+    local TFLITE_CHECKSUM="13bcd426b62a0b8b12fb10b6c540cd30f4c2858dd0ce42c0ed67090eb7a60ed1"
+
+    local cached="$tflite_cache/$archive_name"
+    if [[ ! -f "$cached" ]]; then
+        echo "Downloading TFLite C library from $tflite_url..."
+        if ! curl -L -o "$cached" "$tflite_url" --fail --retry 3 --progress-bar; then
+            echo "WARNING: Failed to download TFLite C library"
+            rm -f "$cached"
+            return 0
+        fi
+
+        # Verify checksum if available
+        if [[ -n "$TFLITE_CHECKSUM" ]]; then
+            echo "Verifying TFLite checksum..."
+            local actual_checksum
+            actual_checksum=$(shasum -a 256 "$cached" | awk '{print $1}')
+            if [[ "$actual_checksum" != "$TFLITE_CHECKSUM" ]]; then
+                rm -f "$cached"
+                echo "ERROR: TFLite checksum mismatch!"
+                echo "  Expected: $TFLITE_CHECKSUM"
+                echo "  Got: $actual_checksum"
+                return 1
+            fi
+            echo "Checksum verified"
+        else
+            echo "WARNING: TFLite checksum not set, skipping verification"
+        fi
+    else
+        echo "Using cached TFLite C library"
+    fi
+
+    # CI artifact is a single dylib (not an archive)
+    cp "$cached" "$tflite_lib"
+
+    if [[ -f "$tflite_lib" ]]; then
+        # Remove quarantine and sign
+        xattr -r -d com.apple.quarantine "$tflite_lib" 2>/dev/null || true
+        codesign --force --sign - "$tflite_lib"
+        echo "TFLite C library installed and signed: $(du -h "$tflite_lib" | cut -f1)"
+    else
+        echo "WARNING: libtensorflowlite_c.dylib not found after extraction"
+    fi
+}
+
 # Run setup
 download_jre
 setup_jar
 extract_natives
+setup_tflite
 remove_quarantine
 sign_jre
 

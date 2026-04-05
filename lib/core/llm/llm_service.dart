@@ -394,7 +394,6 @@ class LlmService {
     bool isMessageAdded = false;
 
     try {
-
       if (message != null) {
         debugPrint(
           'in _generateAndHandleFunctionCalls Adding query chunk to chat: ${message.text}',
@@ -415,14 +414,18 @@ class LlmService {
           buffer.write(response.token);
         } else if (response is FunctionCallResponse) {
           pendingFunctionCall = response;
+        } else if (response is ParallelFunctionCallResponse) {
+          for (final funcCall in response.calls) {
+            pendingFunctionCall = funcCall;
+            break;
+          }
         }
       }
     } catch (e) {
       if (_isSessionNotCreatedError(e)) {
-        try{
+        try {
           await chat.session.close();
-        }
-        catch(_){}
+        } catch (_) {}
         chat.session = await chat.sessionCreator!();
         return _generateAndHandleFunctionCalls(
           chat,

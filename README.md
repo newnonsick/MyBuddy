@@ -22,6 +22,8 @@
   <a href="#license">License</a>
 </p>
 
+> This project uses FVM and is pinned to Flutter 3.41.6 in `.fvmrc`. Use `fvm flutter` for Flutter commands in this repository.
+
 ---
 
 ## Overview
@@ -116,7 +118,8 @@ Key runtime boundaries:
 
 ### Core Tooling
 
-- Flutter SDK compatible with Dart `^3.9.2`
+- FVM installed locally
+- Flutter SDK 3.41.6 via FVM
 - Android Studio or Visual Studio Code with Flutter tooling
 - JDK 11 for Android builds
 - Android SDK and NDK `29.0.13113456`
@@ -143,22 +146,28 @@ git clone https://github.com/newnonsick/MyBuddy.git
 cd MyBuddy
 ```
 
-### 2. Install Flutter Dependencies
+### 2. Install the pinned Flutter SDK
 
 ```bash
-flutter pub get
+fvm install
 ```
 
-### 3. Prepare Android Tooling
+### 3. Install Flutter Dependencies
 
-Confirm that `android/local.properties` points to a valid Android SDK and Flutter SDK. The Android project expects:
+```bash
+fvm flutter pub get
+```
+
+### 4. Prepare Android Tooling
+
+Confirm that `android/local.properties` points to a valid Android SDK and the FVM-managed Flutter SDK. The Android project expects:
 
 - compile SDK 36
 - min SDK 24
 - target SDK 36
 - NDK `29.0.13113456`
 
-### 4. Configure Build-Time Variables
+### 5. Configure Build-Time Variables
 
 Copy the example environment file and fill in your values:
 
@@ -169,7 +178,7 @@ cp env.json.example env.json
 Pass it at run time with `--dart-define-from-file`:
 
 ```bash
-flutter run --dart-define-from-file=env.json
+fvm flutter run --dart-define-from-file=env.json
 ```
 
 `env.json` is gitignored. `env.json.example` is the committed template showing every supported key.
@@ -185,10 +194,10 @@ Supported keys:
 
 When `MODEL_CATALOG_URL` or `STT_CATALOG_URL` are omitted the app falls back to built-in default URLs.
 
-### 5. Launch the App
+### 6. Launch the App
 
 ```bash
-flutter run --dart-define-from-file=env.json
+fvm flutter run --dart-define-from-file=env.json
 ```
 
 ---
@@ -231,15 +240,15 @@ Unity avatar support depends on the exported `android/unityLibrary` module being
 ### Development Run
 
 ```bash
-flutter run -d android --dart-define-from-file=env.json
+fvm flutter run -d android --dart-define-from-file=env.json
 ```
 
 ### Useful Variants
 
 ```bash
-flutter run --release
-flutter run -d chrome
-flutter run -d windows
+fvm flutter run --release
+fvm flutter run -d chrome
+fvm flutter run -d windows
 ```
 
 Use non-Android targets for general UI work only. The full product experience, including embedded Unity avatar and overlay, is currently Android-focused.
@@ -259,19 +268,19 @@ Use non-Android targets for general UI work only. The full product experience, i
 ### Android APK
 
 ```bash
-flutter build apk --release --dart-define-from-file=env.json
+fvm flutter build apk --release --dart-define-from-file=env.json
 ```
 
 ### Android App Bundle
 
 ```bash
-flutter build appbundle --release --dart-define-from-file=env.json
+fvm flutter build appbundle --release --dart-define-from-file=env.json
 ```
 
 ### iOS Build
 
 ```bash
-flutter build ios --release --dart-define-from-file=env.json
+fvm flutter build ios --release --dart-define-from-file=env.json
 ```
 
 iOS builds do not include the Android overlay or Unity Android library path.
@@ -321,20 +330,20 @@ On Windows:
 ### Analyze
 
 ```bash
-flutter analyze
+fvm flutter analyze
 ```
 
 ### Test
 
 ```bash
-flutter test
+fvm flutter test
 ```
 
 ### Regenerate or Refresh Native Dependencies
 
 ```bash
-flutter clean
-flutter pub get
+fvm flutter clean
+fvm flutter pub get
 ```
 
 When the Unity export changes, sync the `android/unityLibrary` and `android/launcher` modules from the companion Unity repository export before rebuilding Android.
@@ -365,6 +374,12 @@ When the Unity export changes, sync the `android/unityLibrary` and `android/laun
 
 - verify `--dart-define` values are present at run or build time
 - confirm OAuth credentials are configured for the correct platform package or bundle ID
+
+### Flutter commands use the wrong SDK
+
+- run `fvm install` from the project root
+- use `fvm flutter ...` instead of `flutter ...`
+- if your editor is still using a global SDK, point it to `.fvm/flutter_sdk`
 
 ---
 

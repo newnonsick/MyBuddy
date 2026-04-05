@@ -17,6 +17,9 @@ external JSPromise _loadLiteRtEmbeddingsJS(
 @JS('generateEmbedding')
 external JSPromise _generateEmbeddingJS(JSString text);
 
+@JS('generateDocumentEmbedding')
+external JSPromise _generateDocumentEmbeddingJS(JSString text);
+
 @JS('generateEmbeddings')
 external JSPromise _generateEmbeddingsJS(JSArray texts);
 
@@ -84,7 +87,7 @@ class LiteRTWebEmbeddings {
   ///
   /// [text] - Text to embed
   ///
-  /// Returns [List<double>] - Embedding vector (768 dimensions)
+  /// Returns `List<double>` - Embedding vector (768 dimensions)
   ///
   /// Throws [Exception] if not initialized or generation fails
   static Future<List<double>> generateEmbedding(String text) async {
@@ -115,11 +118,43 @@ class LiteRTWebEmbeddings {
     }
   }
 
+  /// Generate document embedding for a single text (uses document prefix).
+  ///
+  /// [text] - Text to embed
+  ///
+  /// Returns `List<double>` - Embedding vector (768 dimensions)
+  ///
+  /// Throws [Exception] if not initialized or generation fails
+  static Future<List<double>> generateDocumentEmbedding(String text) async {
+    if (!isInitialized()) {
+      throw StateError('LiteRT embeddings not initialized. Call initialize() first.');
+    }
+
+    if (text.trim().isEmpty) {
+      throw ArgumentError('Text must not be empty');
+    }
+
+    try {
+      final jsResult = await _generateDocumentEmbeddingJS(text.toJS).toDart;
+      final jsArray = jsResult as JSFloat32Array;
+      final length = jsArray.length.toDartInt;
+      final result = List<double>.filled(length, 0.0);
+
+      for (int i = 0; i < length; i++) {
+        result[i] = jsArray[i.toJS].toDartDouble;
+      }
+
+      return result;
+    } catch (e) {
+      throw Exception('Failed to generate document embedding: $e');
+    }
+  }
+
   /// Generate embeddings for multiple texts (batch processing).
   ///
   /// [texts] - List of texts to embed
   ///
-  /// Returns [List<List<double>>] - List of embedding vectors
+  /// Returns `List<List<double>>` - List of embedding vectors
   ///
   /// Throws [Exception] if not initialized or generation fails
   static Future<List<List<double>>> generateEmbeddings(List<String> texts) async {

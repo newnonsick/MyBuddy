@@ -12,10 +12,8 @@ import 'model.dart';
 
 // Constants
 /// Maximum length for function call buffer before flushing as text.
-/// 150 characters is sufficient for most JSON function calls while preventing
-/// infinite buffering of malformed JSON that never completes.
-/// Typical function call: {"name": "func_name", "parameters": {...}} ≈ 50-120 chars
-const int _maxFunctionBufferLength = 150;
+/// Must accommodate verbose formats (DeepSeek tags, parallel calls).
+const int _maxFunctionBufferLength = 1024;
 
 class InferenceChat {
   final Future<InferenceModelSession> Function()? sessionCreator;
@@ -27,13 +25,15 @@ class InferenceChat {
   final ModelType modelType; // Add modelType parameter
   final bool isThinking; // Add isThinking flag for thinking models
   final ModelFileType fileType; // Add fileType parameter
+  final ToolChoice toolChoice; // Tool calling mode
   late InferenceModelSession session;
   final List<Tool> tools;
 
   final List<Message> _fullHistory = [];
   final List<Message> _modelHistory = [];
   int _currentTokens = 0;
-  bool _toolsInstructionSent = false; // Flag to track if tools instruction was sent
+  bool _toolsInstructionSent =
+      false; // Flag to track if tools instruction was sent
 
   /// Determines if model history should be cleared after each turn
   /// FunctionGemma requires single-turn mode (no multi-turn context)
@@ -47,9 +47,15 @@ class InferenceChat {
     this.supportAudio = false,
     this.supportsFunctionCalls = false,
     this.tools = const [],
-    this.modelType = ModelType.gemmaIt, // Default to gemmaIt for backward compatibility
+    this.modelType =
+        ModelType.gemmaIt, // Default to gemmaIt for backward compatibility
     this.isThinking = false, // Default to false for backward compatibility
-    this.fileType = ModelFileType.task, // Default to task for backward compatibility
+    this.fileType =
+        ModelFileType.task, // Default to task for backward compatibility
+    this.toolChoice =
+        ToolChoice.auto, // Default to auto for backward compatibility
+    String?
+        systemInstruction, // kept for API compatibility, forwarded to session via sessionCreator
   });
 
   List<Message> get fullHistory => List.unmodifiable(_fullHistory);
@@ -64,6 +70,7 @@ class InferenceChat {
 
   Future<void> addQueryChunk(Message message, [bool noTool = false]) async {
     var messageToSend = message;
+
     // Only add tools prompt for the first user text message (not a tool response)
     // and only if the model supports function calls
     if (message.isUser &&
@@ -71,18 +78,20 @@ class InferenceChat {
         !_toolsInstructionSent &&
         tools.isNotEmpty &&
         !noTool &&
-        supportsFunctionCalls) {
+        supportsFunctionCalls &&
+        toolChoice != ToolChoice.none) {
       _toolsInstructionSent = true;
       // final toolsPrompt = createToolsPrompt();
 
       // For FunctionGemma, manually construct the full prompt with turn markers
       // because tools prompt already has developer turn markers
       if (modelType == ModelType.functionGemma) {
-        final newText = '$startTurn$userPrefix\n${message.text}\n$endTurn\n$startTurn$modelPrefix\n';
-        messageToSend = message.copyWith(text: newText);
+        final newText =
+            '$startTurn$userPrefix\n${messageToSend.text}\n$endTurn\n$startTurn$modelPrefix\n';
+        messageToSend = messageToSend.copyWith(text: newText);
       } else {
-        final newText = message.text;
-        messageToSend = message.copyWith(text: newText);
+        final newText = messageToSend.text;
+        messageToSend = messageToSend.copyWith(text: newText);
       }
     } else if (!supportsFunctionCalls && tools.isNotEmpty && !noTool) {
       // Log warning if model doesn't support function calls but tools are provided
@@ -100,9 +109,11 @@ class InferenceChat {
 
     await session.addQueryChunk(messageToSend);
 
-    // Add the message that was actually sent to the model to history
+    // Store original message in _modelHistory (not messageToSend) so that
+    // _recreateSessionWithReducedChunks replay does not double-apply transformations
+    // (e.g. systemInstruction prepend, tools prompt) when the session is recreated.
     _fullHistory.add(messageToSend);
-    _modelHistory.add(messageToSend);
+    _modelHistory.add(message);
   }
 
   Future<ModelResponse> generateChatResponse() async {
@@ -112,7 +123,8 @@ class InferenceChat {
         isThinking: isThinking, modelType: modelType, fileType: fileType);
 
     if (cleanedResponse.isEmpty) {
-      debugPrint('InferenceChat: Raw response from native model is EMPTY after cleaning.');
+      debugPrint(
+          'InferenceChat: Raw response from native model is EMPTY after cleaning.');
       return const TextResponse(''); // Return TextResponse instead of String
     }
 
@@ -120,18 +132,25 @@ class InferenceChat {
         'InferenceChat: Raw response from native model:\n--- START ---\n$cleanedResponse\n--- END ---');
 
     // Try to parse as function call if tools are available and model supports function calls
-    if (tools.isNotEmpty && supportsFunctionCalls) {
-      final functionCall = FunctionCallParser.parse(
+    if (tools.isNotEmpty &&
+        supportsFunctionCalls &&
+        toolChoice != ToolChoice.none) {
+      final allCalls = FunctionCallParser.parseAll(
         cleanedResponse,
         modelType: modelType,
       );
-      if (functionCall != null) {
-        debugPrint('InferenceChat: Detected function call in sync response');
+      if (allCalls.isNotEmpty) {
+        debugPrint(
+            'InferenceChat: Detected ${allCalls.length} function call(s) in sync response');
         final toolCallMessage = Message.toolCall(text: cleanedResponse);
         _fullHistory.add(toolCallMessage);
         _modelHistory.add(toolCallMessage);
-        debugPrint('InferenceChat: Added tool call to history: ${toolCallMessage.text}');
-        return functionCall;
+        debugPrint(
+            'InferenceChat: Added tool call to history: ${toolCallMessage.text}');
+        if (allCalls.length == 1) {
+          return allCalls.first;
+        }
+        return ParallelFunctionCallResponse(calls: allCalls);
       }
     }
 
@@ -142,7 +161,8 @@ class InferenceChat {
 
     // Clear model history for single-turn models (e.g., FunctionGemma)
     if (_isSingleTurnModel) {
-      debugPrint('InferenceChat: Single-turn model detected, clearing model history...');
+      debugPrint(
+          'InferenceChat: Single-turn model detected, clearing model history...');
       _modelHistory.clear();
       _currentTokens = 0;
       _toolsInstructionSent = false;
@@ -153,7 +173,8 @@ class InferenceChat {
       debugPrint('InferenceChat: Model history cleared and session recreated');
     }
 
-    return TextResponse(cleanedResponse); // Return TextResponse instead of String
+    return TextResponse(
+        cleanedResponse); // Return TextResponse instead of String
   }
 
   Stream<ModelResponse> generateChatResponseAsync() async* {
@@ -165,14 +186,25 @@ class InferenceChat {
 
     debugPrint('InferenceChat: Starting to iterate over native tokens...');
 
-    final originalStream = session.getResponseAsync().map((token) => TextResponse(token));
+    // Track if we emitted a function call (to record correct history and skip session clearing)
+    bool emittedFunctionCall = false;
+    String lastFuncBuffer =
+        ''; // Preserve funcBuffer content for history recording
+
+    final originalStream =
+        session.getResponseAsync().map((token) => TextResponse(token));
 
     // Apply thinking filter if needed using ModelThinkingFilter
     final Stream<ModelResponse> filteredStream = isThinking
-        ? ModelThinkingFilter.filterThinkingStream(originalStream, modelType: modelType)
+        ? ModelThinkingFilter.filterThinkingStream(originalStream,
+            modelType: modelType)
         : originalStream;
 
-    await for (final response in filteredStream) {
+    // Apply stop token filter for .litertlm on iOS (MediaPipe doesn't handle stop tokens)
+    final Stream<ModelResponse> stopFilteredStream =
+        StopTokenFilter.filterStopTokens(filteredStream, fileType: fileType);
+
+    await for (final response in stopFilteredStream) {
       if (response is TextResponse) {
         final token = response.token;
         debugPrint('InferenceChat: Received filtered token: "$token"');
@@ -181,7 +213,9 @@ class InferenceChat {
         bool shouldAddToBuffer = true;
 
         // Continuous scanning for function calls in text - for models like DeepSeek
-        if (tools.isNotEmpty && supportsFunctionCalls) {
+        if (tools.isNotEmpty &&
+            supportsFunctionCalls &&
+            toolChoice != ToolChoice.none) {
           // Check if we're currently buffering potential JSON
           if (funcBuffer.isNotEmpty) {
             // We're already buffering - add token and check for completion
@@ -190,36 +224,47 @@ class InferenceChat {
                 'InferenceChat: Buffering token: "$token", total: ${funcBuffer.length} chars');
 
             // Check if we now have a complete JSON
-            if (FunctionCallParser.isFunctionCallComplete(funcBuffer, modelType: modelType)) {
+            if (FunctionCallParser.isFunctionCallComplete(funcBuffer,
+                modelType: modelType)) {
               // First try to extract message from any JSON with message field
               try {
                 final jsonData = jsonDecode(funcBuffer);
-                if (jsonData is Map<String, dynamic> && jsonData.containsKey('message')) {
+                if (jsonData is Map<String, dynamic> &&
+                    jsonData.containsKey('message')) {
                   // Found JSON with message field - extract and display the message
                   final message = jsonData['message'] as String;
-                  debugPrint('InferenceChat: Extracted message from JSON: "$message"');
+                  debugPrint(
+                      'InferenceChat: Extracted message from JSON: "$message"');
                   yield TextResponse(message);
                   funcBuffer = '';
                   shouldAddToBuffer = false; // Don't add JSON tokens to buffer
                   continue;
                 }
               } catch (e) {
-                debugPrint('InferenceChat: Failed to parse JSON for message extraction: $e');
+                debugPrint(
+                    'InferenceChat: Failed to parse JSON for message extraction: $e');
               }
 
-              // If no message field found, try parsing as function call
-              final functionCall = FunctionCallParser.parse(
+              // If no message field found, try parsing as function call(s)
+              final allCalls = FunctionCallParser.parseAll(
                 funcBuffer,
                 modelType: modelType,
               );
-              if (functionCall != null) {
-                debugPrint('InferenceChat: Found function call in complete buffer!');
-                yield functionCall;
+              if (allCalls.isNotEmpty) {
+                debugPrint(
+                    'InferenceChat: Found ${allCalls.length} function call(s) in complete buffer!');
+                emittedFunctionCall = true;
+                lastFuncBuffer = funcBuffer;
+                if (allCalls.length == 1) {
+                  yield allCalls.first;
+                } else {
+                  yield ParallelFunctionCallResponse(calls: allCalls);
+                }
                 funcBuffer = '';
-                shouldAddToBuffer = false; // Don't add function call tokens to buffer
+                shouldAddToBuffer = false;
                 continue;
               } else {
-                // Not a valid JSON - emit as text and clear buffer
+                // Not a valid function call - emit as text and clear buffer
                 debugPrint('InferenceChat: Invalid JSON, emitting as text');
                 yield TextResponse(funcBuffer);
                 funcBuffer = '';
@@ -230,7 +275,8 @@ class InferenceChat {
 
             // If buffer gets too long without completing, flush as text
             if (funcBuffer.length > _maxFunctionBufferLength) {
-              debugPrint('InferenceChat: Buffer too long without completion, flushing as text');
+              debugPrint(
+                  'InferenceChat: Buffer too long without completion, flushing as text');
               yield TextResponse(funcBuffer);
               funcBuffer = '';
               shouldAddToBuffer = false;
@@ -240,11 +286,14 @@ class InferenceChat {
             // Still buffering, don't emit yet
             shouldAddToBuffer = false;
           } else {
-            // Not currently buffering - check if this token starts JSON
-            if (token.contains('{') || token.contains('```')) {
-              debugPrint('InferenceChat: Found potential JSON start in token: "$token"');
+            // Not currently buffering - check if this token starts a function call
+            if (FunctionCallParser.isFunctionCallStart(token,
+                modelType: modelType)) {
+              debugPrint(
+                  'InferenceChat: Found potential function call start in token: "$token"');
               funcBuffer = token;
-              shouldAddToBuffer = false; // Don't add to main buffer while we determine if it's JSON
+              shouldAddToBuffer =
+                  false; // Don't add to main buffer while we determine if it's JSON
             } else {
               // Normal text token - emit immediately
               debugPrint('InferenceChat: Emitting text token: "$token"');
@@ -254,7 +303,8 @@ class InferenceChat {
           }
         } else {
           // No function processing happening - emit token directly
-          debugPrint('InferenceChat: No function processing, emitting token as text: "$token"');
+          debugPrint(
+              'InferenceChat: No function processing, emitting token as text: "$token"');
           yield response;
           shouldAddToBuffer = true; // Add to main buffer for history
         }
@@ -273,9 +323,6 @@ class InferenceChat {
     final response = buffer.toString();
     debugPrint('InferenceChat: Complete response accumulated: "$response"');
 
-    // Track if we emitted a function call (to skip history clearing)
-    bool emittedFunctionCall = false;
-
     // Handle end of stream - process any remaining buffer
     if (funcBuffer.isNotEmpty) {
       debugPrint(
@@ -289,29 +336,38 @@ class InferenceChat {
           : funcBuffer;
 
       // First try to extract message from JSON if it has message field
-      if (FunctionCallParser.isFunctionCallComplete(contentToCheck, modelType: modelType)) {
+      if (FunctionCallParser.isFunctionCallComplete(contentToCheck,
+          modelType: modelType)) {
         try {
           // For JSON parsing, use funcBuffer (the actual JSON part)
           // For FunctionGemma parsing, use contentToCheck (full function call)
           if (modelType != ModelType.functionGemma) {
             final jsonData = jsonDecode(funcBuffer);
-            if (jsonData is Map<String, dynamic> && jsonData.containsKey('message')) {
+            if (jsonData is Map<String, dynamic> &&
+                jsonData.containsKey('message')) {
               final message = jsonData['message'] as String;
-              debugPrint('InferenceChat: Extracted message from end-of-stream JSON: "$message"');
+              debugPrint(
+                  'InferenceChat: Extracted message from end-of-stream JSON: "$message"');
               yield TextResponse(message);
               return;
             }
           }
 
-          // Try to parse as function call
-          final functionCall = FunctionCallParser.parse(
+          // Try to parse as function call(s)
+          final allCalls = FunctionCallParser.parseAll(
             contentToCheck,
             modelType: modelType,
           );
-          if (functionCall != null) {
-            debugPrint('InferenceChat: Function call found at end of stream');
+          if (allCalls.isNotEmpty) {
+            debugPrint(
+                'InferenceChat: ${allCalls.length} function call(s) found at end of stream');
             emittedFunctionCall = true;
-            yield functionCall;
+            lastFuncBuffer = contentToCheck;
+            if (allCalls.length == 1) {
+              yield allCalls.first;
+            } else {
+              yield ParallelFunctionCallResponse(calls: allCalls);
+            }
           } else {
             yield TextResponse(funcBuffer);
           }
@@ -320,7 +376,8 @@ class InferenceChat {
           yield TextResponse(funcBuffer);
         }
       } else {
-        debugPrint('InferenceChat: No complete JSON at end of stream, emitting remaining as text');
+        debugPrint(
+            'InferenceChat: No complete JSON at end of stream, emitting remaining as text');
         yield TextResponse(funcBuffer);
       }
     }
@@ -343,8 +400,13 @@ class InferenceChat {
 
     try {
       debugPrint('InferenceChat: Adding message to history...');
-      final chatMessage = Message(text: response, isUser: false);
-      debugPrint('InferenceChat: Created message object: ${chatMessage.text}');
+      // Use toolCall message for function calls, text message otherwise
+      final chatMessage = emittedFunctionCall
+          ? Message.toolCall(
+              text: lastFuncBuffer.isNotEmpty ? lastFuncBuffer : response)
+          : Message(text: response, isUser: false);
+      debugPrint(
+          'InferenceChat: Created message object (toolCall=$emittedFunctionCall): ${chatMessage.text}');
       _fullHistory.add(chatMessage);
       debugPrint('InferenceChat: Added to full history');
       _modelHistory.add(chatMessage);
@@ -354,7 +416,8 @@ class InferenceChat {
       // Clear model history for single-turn models (e.g., FunctionGemma)
       // BUT only if this was NOT a function call - we need context for tool response
       if (_isSingleTurnModel && !emittedFunctionCall) {
-        debugPrint('InferenceChat: Single-turn model detected (text response), clearing model history...');
+        debugPrint(
+            'InferenceChat: Single-turn model detected (text response), clearing model history...');
         _modelHistory.clear();
         _currentTokens = 0;
         _toolsInstructionSent = false;
@@ -362,20 +425,24 @@ class InferenceChat {
         // Recreate session to clear native state
         await session.close();
         session = await sessionCreator!();
-        debugPrint('InferenceChat: Model history cleared and session recreated');
+        debugPrint(
+            'InferenceChat: Model history cleared and session recreated');
       } else if (_isSingleTurnModel && emittedFunctionCall) {
-        debugPrint('InferenceChat: Single-turn model with function call - keeping history for tool response');
+        debugPrint(
+            'InferenceChat: Single-turn model with function call - keeping history for tool response');
       }
     } catch (e) {
       debugPrint('InferenceChat: Error adding message to history: $e');
       rethrow;
     }
 
-    debugPrint('InferenceChat: generateChatResponseAsync completed successfully');
+    debugPrint(
+        'InferenceChat: generateChatResponseAsync completed successfully');
   }
 
   Future<void> _recreateSessionWithReducedChunks() async {
-    while (_currentTokens >= (maxTokens - tokenBuffer) && _modelHistory.isNotEmpty) {
+    while (_currentTokens >= (maxTokens - tokenBuffer) &&
+        _modelHistory.isNotEmpty) {
       final removedMessage = _modelHistory.removeAt(0);
       final size = await session.sizeInTokens(removedMessage.text);
       _currentTokens -= size;
@@ -397,7 +464,7 @@ class InferenceChat {
     _fullHistory.clear();
     _modelHistory.clear();
     _currentTokens = 0;
-    _toolsInstructionSent = false; // Reset the flag when clearing history
+    _toolsInstructionSent = false;
     await session.close();
     session = await sessionCreator!();
 
@@ -414,11 +481,18 @@ class InferenceChat {
 
   Future<void> stopGeneration() => session.stopGeneration();
 
-  /// Creates tools prompt based on model type.
+  Future<void> close() => session.close();
+
+  /// Creates tools prompt based on model type and tool choice.
   /// Made package-private for testing.
   @visibleForTesting
   String createToolsPrompt() {
     if (tools.isEmpty) {
+      return '';
+    }
+
+    // ToolChoice.none — don't inject tools prompt at all
+    if (toolChoice == ToolChoice.none) {
       return '';
     }
 
@@ -432,16 +506,27 @@ class InferenceChat {
 
   String _createJsonToolsPrompt() {
     final toolsPrompt = StringBuffer();
-    toolsPrompt.writeln(
-        'You have access to functions. ONLY call a function when the user explicitly requests an action or command (like "change color", "show alert", "set title"). For regular conversation, greetings, and questions, respond normally without calling any functions.');
+
+    // Instruction varies by ToolChoice mode
+    switch (toolChoice) {
+      case ToolChoice.auto:
+        toolsPrompt.writeln(
+            'You have access to functions. ONLY call a function when the user explicitly requests an action or command (like "change color", "show alert", "set title"). For regular conversation, greetings, and questions, respond normally without calling any functions.');
+      case ToolChoice.required:
+        toolsPrompt.writeln(
+            'You have access to functions. You MUST respond with a function call. Do not respond with plain text. Always select the most appropriate function based on the user\'s message.');
+      case ToolChoice.none:
+        return ''; // Should not reach here, but defensive
+    }
+
     toolsPrompt.writeln(
         'When you do need to call a function, respond with ONLY the JSON in this format: {"name": function_name, "parameters": {argument: value}}');
     toolsPrompt.writeln(
         'After the function is executed, you will get a response. Then provide a helpful message to the user about what was accomplished.');
     toolsPrompt.writeln('<tool_code>');
     for (final tool in tools) {
-      toolsPrompt
-          .writeln('${tool.name}: ${tool.description} Parameters: ${jsonEncode(tool.parameters)}');
+      toolsPrompt.writeln(
+          '${tool.name}: ${tool.description} Parameters: ${jsonEncode(tool.parameters)}');
     }
     toolsPrompt.writeln('</tool_code>');
     return toolsPrompt.toString();
@@ -469,8 +554,7 @@ class InferenceChat {
         final paramEntries = <String>[];
         properties.forEach((name, schema) {
           if (schema is Map<String, dynamic>) {
-            final type =
-                (schema['type'] as String?)?.toUpperCase() ?? 'STRING';
+            final type = (schema['type'] as String?)?.toUpperCase() ?? 'STRING';
             final desc = schema['description'];
             final enumValues = schema['enum'] as List<dynamic>?;
 
@@ -510,7 +594,8 @@ class InferenceChat {
               .join(',');
           toolsPrompt.write(',required:[$requiredStr]');
         }
-        toolsPrompt.write(',type:${functionGemmaEscape}OBJECT$functionGemmaEscape}');
+        toolsPrompt
+            .write(',type:${functionGemmaEscape}OBJECT$functionGemmaEscape}');
       }
 
       toolsPrompt.writeln('}$functionGemmaEndDecl');
@@ -518,5 +603,75 @@ class InferenceChat {
 
     toolsPrompt.write('$endTurn\n');
     return toolsPrompt.toString();
+  }
+}
+
+/// Filters stop tokens from model response stream.
+/// For .litertlm on iOS, MediaPipe doesn't handle `<end_of_turn>` —
+/// this filter detects and terminates the stream at the stop token,
+/// with buffering for partial tag matches.
+class StopTokenFilter {
+  static const String _stopToken = '<end_of_turn>';
+
+  static Stream<ModelResponse> filterStopTokens(
+    Stream<ModelResponse> originalStream, {
+    required ModelFileType fileType,
+  }) async* {
+    // Only apply for litertlm on iOS
+    if (fileType != ModelFileType.litertlm ||
+        kIsWeb ||
+        defaultTargetPlatform != TargetPlatform.iOS) {
+      yield* originalStream;
+      return;
+    }
+
+    String buffer = '';
+
+    await for (final response in originalStream) {
+      if (response is TextResponse) {
+        buffer += response.token;
+
+        // Check if buffer contains the stop token
+        final stopIndex = buffer.indexOf(_stopToken);
+        if (stopIndex >= 0) {
+          // Emit text before stop token, then stop
+          final textBefore = buffer.substring(0, stopIndex);
+          if (textBefore.isNotEmpty) {
+            yield TextResponse(textBefore);
+          }
+          return;
+        }
+
+        // Check if buffer ends with a partial match of the stop token
+        int partialLen = 0;
+        for (int i = 1; i <= _stopToken.length && i <= buffer.length; i++) {
+          if (buffer.endsWith(_stopToken.substring(0, i))) {
+            partialLen = i;
+          }
+        }
+
+        if (partialLen > 0) {
+          // Emit safe portion, keep potential partial match
+          final safe = buffer.substring(0, buffer.length - partialLen);
+          if (safe.isNotEmpty) {
+            yield TextResponse(safe);
+          }
+          buffer = buffer.substring(buffer.length - partialLen);
+        } else {
+          // No partial match, emit everything
+          if (buffer.isNotEmpty) {
+            yield TextResponse(buffer);
+          }
+          buffer = '';
+        }
+      } else {
+        yield response;
+      }
+    }
+
+    // Emit any remaining buffer (wasn't a complete stop token)
+    if (buffer.isNotEmpty) {
+      yield TextResponse(buffer);
+    }
   }
 }

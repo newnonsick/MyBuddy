@@ -54,3 +54,11 @@ env.json
 **/.cxx/
 **/.gradle/
 **/build/
+
+.agent
+
+thesis
+thesis_tools
+
+# FVM Version Cache
+.fvm/

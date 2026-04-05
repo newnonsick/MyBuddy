@@ -1,3 +1,50 @@
+## 0.13.1
+- **LiteRT-LM 0.10.0**: Updated Android and JVM SDK from 0.9.0 to 0.10.0
+- **Gemma 4 Thinking Mode**: `isThinking: true` now works with Gemma 4 E2B/E4B models (Android, iOS, Desktop; not Web)
+- **Fix cancel download**: Cancel download now works correctly (#196)
+- **Fix `large_file_handler` platform support**: Conditional imports for pub.dev platform analysis compatibility
+
+## 0.13.0
+- **Gemma 4 E2B/E4B**: Added support for next-gen multimodal models (text + image + audio)
+- **systemInstruction**: New parameter in `createChat()` and `createSession()` for setting system-level context
+- **ModelFileType.litertlm**: New file type to properly handle `.litertlm` models across platforms
+- **iOS LiteRT-LM support**: `.litertlm` models now work on iOS
+- **stopGeneration on iOS**: Supported for `.litertlm` models
+- **MediaPipe GenAI 0.10.33**: Updated iOS (from 0.10.24) and Android (from 0.10.29)
+  - iOS: GPU backend selection via `preferredBackend` (Metal delegate now activated)
+  - iOS: Audio modality support (`addAudio` + `enableAudioModality`)
+  - Android: Unified inference engine (CPU-only path removed), improved error handling
+  - Web: Updated to 0.10.27
+- **Example WASM compatibility**: Replaced direct `dart:io` imports with conditional imports for WASM compilation support
+- **Benchmark integration test**: `example/integration_test/benchmark_comparison_test.dart` for comparing model performance on device
+
+## 0.12.8
+- **ToolChoice enum**: `auto` / `required` / `none` parameter in `createChat()` to control tool calling behavior
+- **Parallel Tool Calls**: `ParallelFunctionCallResponse` for multiple function calls in one response
+- **Strategy Pattern Parser**: Per-model `FunctionCallFormat` implementations (Gemma, Qwen, DeepSeek, Llama, Phi, FunctionGemma)
+- **`<tool_call>` Format**: Qwen/Mistral-style function call parsing
+- **ModelType.phi**: Dedicated model type for Phi-4 with `<|tool_calls|>` format support
+- **NPU Fix**: Pass `nativeLibraryDir` to LiteRT-LM `Backend.NPU()`
+- **Embeddings**: Models return L2-normalized vectors (dot product = cosine similarity)
+- **Windows/Linux Embeddings Fix**: TFLite C library now correctly copied to build output (#200)
+
+## 0.12.7
+- **Dual-Prefix Embeddings (TaskType)**: Improved RAG retrieval quality with query/document prefixes
+  - `TaskType.retrievalQuery` (default) — for search queries
+  - `TaskType.retrievalDocument` — for document indexing
+  - Follows Google RAG SDK convention (`EmbedData.TaskType`)
+  - All platforms: Android, iOS, Web, Desktop
+  - `addDocument()` automatically uses document prefix
+- **Desktop Embeddings**: Run `.tflite` embedding models (EmbeddingGemma, Gecko) on macOS, Windows, Linux
+  - LiteRT C API via `dart:ffi` — no gRPC, no JVM overhead
+  - Pure Dart tokenizer via `dart_sentencepiece_tokenizer` (BPE + Unigram, auto-detect format)
+  - LiteRT C library built from google-ai-edge/LiteRT v2.1.3
+  - XNNPACK delegate with default options (QS8/QU8 quantization support)
+  - Desktop scores match Android/Python exactly (cosine similarity 0.708)
+  - CI workflow for building LiteRT C library on all 4 platform/arch combinations
+- **Unified VectorStore**: Single Dart implementation using `sqlite3` dart:ffi replacing platform-specific code
+- **Test Migration**: Removed `patrol` dependency, migrated all integration tests to standard `integration_test`
+
 ## 0.12.6
 - **LiteRT-LM 0.9.0-beta**: Updated from 0.9.0-alpha02 on Android and Desktop (JVM)
   - Breaking API change: Backend enum to Backend factory constructors

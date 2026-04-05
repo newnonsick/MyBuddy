@@ -53,7 +53,20 @@ extension MessageExtension on Message {
       return result;
     }
 
-    // .bin/.tflite files - apply manual formatting based on model type
+    // .litertlm files - platform-dependent behavior
+    if (fileType == ModelFileType.litertlm) {
+      // iOS: MediaPipe doesn't handle turn markers for .litertlm → format manually (like binary)
+      // Android/Desktop/Web: LiteRT-LM SDK handles templates → return raw text (like task)
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+        // Fall through to manual formatting below
+      } else {
+        final result = _formatToolResponseContent();
+        debugPrint('[transformToChatPrompt] litertlm non-iOS, using raw text, result length=${result.length}');
+        return result;
+      }
+    }
+
+    // .bin/.tflite files (and .litertlm on iOS) - apply manual formatting based on model type
     final result = switch (type) {
       ModelType.general => _transformGeneral(),
       ModelType.gemmaIt => _transformGemmaIt(),
@@ -62,6 +75,7 @@ extension MessageExtension on Message {
       ModelType.llama => _transformLlama(),
       ModelType.hammer => _transformHammer(),
       ModelType.functionGemma => _transformFunctionGemma(),
+      ModelType.phi => _transformGeneral(),
     };
     return result;
   }
@@ -176,8 +190,8 @@ extension MessageExtension on Message {
 
 // Filter class for thinking models
 class ModelThinkingFilter {
-  /// Filters ModelResponse stream for models with thinking support
-  /// Only supports DeepSeek models with <think>...</think> blocks
+  /// Filters ModelResponse stream for models with thinking support.
+  /// Supports DeepSeek (`<think>...</think>`) and Gemma 4 (`<|channel>thought\n...<channel|>`) models.
   static Stream<ModelResponse> filterThinkingStream(Stream<ModelResponse> originalStream,
       {required ModelType modelType}) async* {
     switch (modelType) {
@@ -230,12 +244,74 @@ class ModelThinkingFilter {
         }
         break;
 
-      case ModelType.general:
       case ModelType.gemmaIt:
+        // Gemma 4 E2B/E4B: <|channel>thought\n...<channel|>
+        const startMarker = '<|channel>thought\n';
+        const endMarker = '<channel|>';
+        bool gemmaInsideThinking = false;
+        String gemmaBuffer = '';
+
+        await for (final response in originalStream) {
+          if (response is TextResponse) {
+            gemmaBuffer += response.token;
+
+            while (gemmaBuffer.isNotEmpty) {
+              if (gemmaInsideThinking) {
+                final endIdx = gemmaBuffer.indexOf(endMarker);
+                if (endIdx >= 0) {
+                  final thinkingContent = gemmaBuffer.substring(0, endIdx);
+                  if (thinkingContent.isNotEmpty) {
+                    yield ThinkingResponse(thinkingContent);
+                  }
+                  gemmaBuffer = gemmaBuffer.substring(endIdx + endMarker.length);
+                  gemmaInsideThinking = false;
+                } else {
+                  // Check for partial end marker at tail
+                  final partial = _findPartialSuffix(gemmaBuffer, endMarker);
+                  final safe = gemmaBuffer.substring(0, gemmaBuffer.length - partial);
+                  if (safe.isNotEmpty) {
+                    yield ThinkingResponse(safe);
+                  }
+                  gemmaBuffer = gemmaBuffer.substring(gemmaBuffer.length - partial);
+                  break;
+                }
+              } else {
+                final startIdx = gemmaBuffer.indexOf(startMarker);
+                if (startIdx >= 0) {
+                  final textBefore = gemmaBuffer.substring(0, startIdx);
+                  if (textBefore.isNotEmpty) {
+                    yield TextResponse(textBefore);
+                  }
+                  gemmaBuffer = gemmaBuffer.substring(startIdx + startMarker.length);
+                  gemmaInsideThinking = true;
+                } else {
+                  // Check for partial start marker at tail
+                  final partial = _findPartialSuffix(gemmaBuffer, startMarker);
+                  final safe = gemmaBuffer.substring(0, gemmaBuffer.length - partial);
+                  if (safe.isNotEmpty) {
+                    yield TextResponse(safe);
+                  }
+                  gemmaBuffer = gemmaBuffer.substring(gemmaBuffer.length - partial);
+                  break;
+                }
+              }
+            }
+          } else {
+            yield response;
+          }
+        }
+        // Flush remaining buffer
+        if (gemmaBuffer.isNotEmpty) {
+          yield gemmaInsideThinking ? ThinkingResponse(gemmaBuffer) : TextResponse(gemmaBuffer);
+        }
+        break;
+
+      case ModelType.general:
       case ModelType.qwen:
       case ModelType.llama:
       case ModelType.hammer:
       case ModelType.functionGemma:
+      case ModelType.phi:
         // For all other models just pass original stream
         // Thinking not supported
         yield* originalStream;
@@ -243,8 +319,9 @@ class ModelThinkingFilter {
     }
   }
 
-  /// Removes thinking blocks from final text
-  /// Only supports DeepSeek (<think>...</think>) models
+  /// Removes thinking blocks from final text.
+  /// Supports DeepSeek (`<think>...</think>`) and Gemma 4 (`<|channel>thought\n...<channel|>`) models.
+  /// Note: For streaming thinking output, use [filterThinkingStream] with generateChatResponseAsync() instead.
   static String removeThinkingFromText(String text, {required ModelType modelType}) {
     switch (modelType) {
       case ModelType.deepSeek:
@@ -252,12 +329,17 @@ class ModelThinkingFilter {
         RegExp thinkingRegex = RegExp(r'<think>.*?</think>', dotAll: true);
         return text.replaceAll(thinkingRegex, '').trim();
 
-      case ModelType.general:
       case ModelType.gemmaIt:
+        // Remove all <|channel>thought\n...<channel|> blocks (Gemma 4 E2B/E4B)
+        return text.replaceAll(
+          RegExp(r'<\|channel>thought\n.*?<channel\|>', dotAll: true), '').trim();
+
+      case ModelType.general:
       case ModelType.qwen:
       case ModelType.llama:
       case ModelType.hammer:
       case ModelType.functionGemma:
+      case ModelType.phi:
         // For all other models return text without changes
         // Thinking not supported
         return text;
@@ -279,23 +361,45 @@ class ModelThinkingFilter {
       return cleaned.trim();
     }
 
-    // For .bin/.tflite files, apply model-specific cleaning
+    // For .litertlm files - platform-dependent cleaning
+    if (fileType == ModelFileType.litertlm) {
+      // iOS: MediaPipe doesn't strip turn markers → clean like binary
+      // Android/Desktop/Web: LiteRT-LM SDK handles cleanup → just trim
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+        // Fall through to model-specific cleaning below
+      } else {
+        return cleaned.trim();
+      }
+    }
+
+    // For .bin/.tflite files (and .litertlm on iOS), apply model-specific cleaning
     switch (modelType) {
       case ModelType.general:
         // General models - no special cleaning needed
         return cleaned.trim();
       case ModelType.gemmaIt:
         // Remove trailing <end_of_turn> tags and trim whitespace
-        return cleaned.replaceAll(RegExp(r'<end_of_turn>\\s*\$'), '').trim();
+        return cleaned.replaceAll(RegExp(r'<end_of_turn>\s*$'), '').trim();
       case ModelType.qwen:
         // Remove trailing <|im_end|> tags and trim whitespace
-        return cleaned.replaceAll(RegExp(r'<\\|im_end\\|>\\s*\$'), '').trim();
+        return cleaned.replaceAll(RegExp(r'<\|im_end\|>\s*$'), '').trim();
       case ModelType.llama:
       case ModelType.hammer:
       case ModelType.deepSeek:
       case ModelType.functionGemma:
+      case ModelType.phi:
         // These models don't use special end tags, just trim whitespace
         return cleaned.trim();
     }
+  }
+
+  /// Returns length of the longest suffix of [text] that is a prefix of [marker].
+  static int _findPartialSuffix(String text, String marker) {
+    for (int i = marker.length.clamp(0, text.length); i >= 1; i--) {
+      if (text.endsWith(marker.substring(0, i))) {
+        return i;
+      }
+    }
+    return 0;
   }
 }
