@@ -6,16 +6,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../../app/app_controller.dart';
+import '../../app/assistant_runtime_controller.dart';
+import '../../app/model_controller.dart';
 import '../audio/audio_recorder_service.dart';
 import '../stt/stt_service.dart';
 
-class OverlayAppProxy extends AppController {
-  OverlayAppProxy({
-    required super.models,
-    required super.llm,
-    required super.memory,
-  });
+class OverlayAppProxy extends AssistantRuntimeController {
+  OverlayAppProxy({required this.models});
+
+  final ModelController models;
 
   StreamSubscription<dynamic>? _responseSubscription;
   final Map<String, Completer<String>> _chatPending = {};
@@ -23,6 +22,27 @@ class OverlayAppProxy extends AppController {
   final Map<String, Completer<String>> _recordingPending = {};
   final Map<String, Completer<void>> _modelSwitchPending = {};
   bool _isListening = false;
+
+  bool _llmInstalled = false;
+  bool _installingLlm = false;
+  String? _llmError;
+  bool _generatingResponse = false;
+  bool _transcribingAudio = false;
+  final List<Map<String, String>> _conversation = [];
+
+  @override
+  bool get llmInstalled => _llmInstalled;
+  @override
+  bool get installingLlm => _installingLlm;
+  @override
+  String? get llmError => _llmError;
+  @override
+  bool get generatingResponse => _generatingResponse;
+  @override
+  bool get transcribingAudio => _transcribingAudio;
+  @override
+  List<Map<String, String>> get conversation =>
+      List.unmodifiable(_conversation);
 
   void startListening(Stream<dynamic> overlayStream) {
     _responseSubscription?.cancel();
@@ -47,6 +67,8 @@ class OverlayAppProxy extends AppController {
         _handleRecordingResponse(map);
       } else if (type == 'model_switch_response') {
         _handleModelSwitchResponse(map);
+      } else if (type == 'runtime_status') {
+        _handleRuntimeStatus(map);
       }
     } catch (e) {
       debugPrint('OverlayAppProxy: failed to parse response: $e');
@@ -130,14 +152,22 @@ class OverlayAppProxy extends AppController {
     }
   }
 
-  @override
-  bool get llmInstalled => true;
-
-  @override
-  bool get installingLlm => false;
-
-  @override
-  String? get llmError => null;
+  void _handleRuntimeStatus(Map<String, dynamic> map) {
+    _llmInstalled = map['llmInstalled'] as bool? ?? _llmInstalled;
+    _installingLlm = map['installingLlm'] as bool? ?? _installingLlm;
+    _llmError = map['llmError'] as String?;
+    _generatingResponse =
+        map['generatingResponse'] as bool? ?? _generatingResponse;
+    _transcribingAudio =
+        map['transcribingAudio'] as bool? ?? _transcribingAudio;
+    if (map['conversation'] != null) {
+      _conversation.clear();
+      for (final item in map['conversation']) {
+        _conversation.add(Map<String, String>.from(item));
+      }
+    }
+    notifyListeners();
+  }
 
   @override
   Future<String> chatOnce(String userText) async {
@@ -166,7 +196,7 @@ class OverlayAppProxy extends AppController {
     }
 
     return completer.future.timeout(
-      const Duration(seconds: 60),
+      const Duration(minutes: 5),
       onTimeout: () {
         _chatPending.remove(id);
         debugPrint('OverlayAppProxy.chatOnce: timed out id=$id');
@@ -307,15 +337,22 @@ class OverlayAppProxy extends AppController {
   }
 
   @override
-  Future<void> startup() async {
-    // No-op — overlay doesn't load models.
-  }
-
-  @override
   Future<void> activateSelectedModel() async {
     final selected = models.selectedModelId;
     if (selected == null) return;
     await switchModel(selected);
+  }
+
+  @override
+  void beginTranscribing() {
+    _transcribingAudio = true;
+    notifyListeners();
+  }
+
+  @override
+  void endTranscribing() {
+    _transcribingAudio = false;
+    notifyListeners();
   }
 
   Future<void> switchModel(String modelId) async {

@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../app/app_controller.dart';
+import '../../../../app/assistant_runtime_controller.dart';
 import '../../../../app/providers.dart';
 import '../../../../core/audio/audio_recorder_service.dart';
 import '../../../../core/overlay/overlay_app_proxy.dart';
@@ -32,6 +32,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
   final TtsService _tts = TtsService();
   late final AudioRecorderService _recorder;
   final TextEditingController _textController = TextEditingController();
+  late final AssistantRuntimeController _appController;
   late final ChatSessionController _session;
 
   StreamSubscription<dynamic>? _overlaySubscription;
@@ -56,15 +57,16 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
   @override
   void initState() {
     super.initState();
-    final appController = ref.read(appControllerProvider);
+    _appController = ref.read(assistantRuntimeProvider);
+    final appController = _appController;
     _recorder = appController is OverlayAppProxy
         ? OverlayAudioRecorderService(appController)
         : AudioRecorderService();
     debugPrint(
-      'OverlayChatPage: using recorder=${_recorder.runtimeType} (appController=${appController.runtimeType})',
+      'OverlayChatPage: using recorder=${_recorder.runtimeType} (appController=${_appController.runtimeType})',
     );
     _session = ChatSessionController(
-      appController: ref.read(appControllerProvider),
+      appController: _appController,
       sttModelController: ref.read(sttModelControllerProvider),
       sttService: ref.read(sttServiceProvider),
       recorder: _recorder,
@@ -75,6 +77,8 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
       onStopSpeaking: () => _tts.stop(),
       onError: _showSnack,
     );
+    _appController.addListener(_onAppRuntimeUpdated);
+    _onAppRuntimeUpdated();
     _bootstrap();
     _overlaySubscription = ref
         .read(overlayMessageStreamProvider)
@@ -142,6 +146,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
 
   @override
   void dispose() {
+    _appController.removeListener(_onAppRuntimeUpdated);
     _overlaySubscription?.cancel();
     _stopBubbleTracking();
     _session.dispose();
@@ -149,6 +154,11 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     unawaited(_recorder.dispose());
     _textController.dispose();
     super.dispose();
+  }
+
+  void _onAppRuntimeUpdated() {
+    _session.syncFromAppConversation();
+    if (mounted) setState(() {});
   }
 
   @override
@@ -160,7 +170,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
       );
     }
 
-    final app = ref.watch(appControllerProvider);
+    final app = ref.watch(assistantRuntimeProvider);
 
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 250),
@@ -181,7 +191,10 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     );
   }
 
-  Widget _buildCollapsedState(AppController app, {required Key key}) {
+  Widget _buildCollapsedState(
+    AssistantRuntimeController app, {
+    required Key key,
+  }) {
     return Material(
       key: key,
       color: Colors.transparent,
@@ -202,7 +215,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
   }
 
   Widget _buildExpandedState(
-    AppController app,
+    AssistantRuntimeController app,
     BuildContext context, {
     required Key key,
   }) {
@@ -281,7 +294,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     );
   }
 
-  Widget _buildHeader(AppController app, {required bool compact}) {
+  Widget _buildHeader(AssistantRuntimeController app, {required bool compact}) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -334,7 +347,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     );
   }
 
-  Widget _buildCollapsedBubble(AppController app) {
+  Widget _buildCollapsedBubble(AssistantRuntimeController app) {
     final isProcessing = _session.sending || app.generatingResponse;
     final isRecording = _session.recording;
 
@@ -416,7 +429,15 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
   }
 
   Widget _buildMinimalPreview({required bool compact}) {
-    final latest = _session.chat.isEmpty ? null : _session.chat.last;
+    final pendingText = _session.pendingUserText;
+    final latest = pendingText != null && pendingText.isNotEmpty
+        ? _ChatPreviewLine(text: pendingText, isUser: true)
+        : (_session.chat.isEmpty
+              ? null
+              : _ChatPreviewLine(
+                  text: _session.chat.last.text,
+                  isUser: _session.chat.last.isUser,
+                ));
     final isUser = latest?.isUser ?? false;
 
     return Container(
@@ -486,7 +507,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     );
   }
 
-  Widget _buildTranscript(AppController app) {
+  Widget _buildTranscript(AssistantRuntimeController app) {
     if (!app.llmInstalled) {
       return Center(
         child: Text(
@@ -496,15 +517,44 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
       );
     }
 
-    if (_session.chat.isEmpty) {
+    final pendingText = _session.pendingUserText;
+    final showPending =
+        pendingText != null &&
+        pendingText.isNotEmpty &&
+        (_session.chat.isEmpty ||
+            !(_session.chat.last.isUser &&
+                _session.chat.last.text == pendingText));
+    final itemCount = _session.chat.length + (showPending ? 1 : 0);
+
+    if (itemCount == 0) {
       return const Center(child: Text('Ready to chat.'));
     }
 
     return ListView.builder(
       reverse: true,
-      itemCount: _session.chat.length,
+      itemCount: itemCount,
       itemBuilder: (context, index) {
-        final line = _session.chat[_session.chat.length - 1 - index];
+        if (showPending && index == 0) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Opacity(
+                opacity: 0.55,
+                child: GlassChatBubble(
+                  borderRadius: BorderRadius.circular(14),
+                  tint: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.24),
+                  child: Text(pendingText),
+                ),
+              ),
+            ),
+          );
+        }
+
+        final chatIndex = showPending ? index - 1 : index;
+        final line = _session.chat[_session.chat.length - 1 - chatIndex];
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Align(
@@ -527,7 +577,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
   }
 
   Widget _buildComposer(
-    AppController app, {
+    AssistantRuntimeController app, {
     required bool isNarrow,
     required bool compact,
   }) {
@@ -631,7 +681,7 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
     );
   }
 
-  String _statusText(AppController app) {
+  String _statusText(AssistantRuntimeController app) {
     if (_session.recording) return 'Listening... tap mic to send';
     if (_session.transcribing || app.transcribingAudio) {
       return 'Transcribing...';
@@ -670,18 +720,14 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
   }
 
   Future<void> _openQuickSettings() async {
-    final app = ref.read(appControllerProvider);
+    final app = ref.read(assistantRuntimeProvider);
     final models = ref.read(modelControllerProvider);
     final stt = ref.read(sttModelControllerProvider);
     final overlayService = ref.read(overlayServiceProvider);
     final overlayPrefs = overlayService.preferences;
 
-    if (models.installedModels.isEmpty) {
-      await models.loadLocalState();
-      if (models.installedModels.isEmpty) {
-        await models.refreshInstalled();
-      }
-    }
+    await models.loadLocalState();
+    await models.refreshInstalled();
 
     if (stt.installedModels.isEmpty) {
       await stt.loadLocalState();
@@ -1253,4 +1299,11 @@ class _OverlayChatPageState extends ConsumerState<OverlayChatPage> {
       SnackBar(content: Text(text), behavior: SnackBarBehavior.floating),
     );
   }
+}
+
+class _ChatPreviewLine {
+  const _ChatPreviewLine({required this.text, required this.isUser});
+
+  final String text;
+  final bool isUser;
 }

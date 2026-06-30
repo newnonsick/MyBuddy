@@ -302,6 +302,7 @@ class _BuddyHomePageState extends ConsumerState<BuddyHomePage> {
         scrollController: _scrollController,
         sending: _session.sending || controller.generatingResponse,
         hideChatLog: controller.hideChatLog,
+        pendingUserText: _session.pendingUserText,
       ),
     );
   }

@@ -169,12 +169,22 @@ class MobileInferenceModelSession extends InferenceModelSession {
       if (message != null) {
         await addQueryChunk(message);
       }
-      unawaited(_platformService.generateResponseAsync());
+      try {
+        await _platformService.generateResponseAsync();
+      } catch (e, st) {
+        if (!controller.isClosed) {
+          controller.addError(e, st);
+          await controller.close();
+        }
+        rethrow;
+      }
 
       yield* controller.stream;
     } finally {
       completer.complete();
       _asyncResponseController = null;
+      await _eventSubscription?.cancel();
+      _eventSubscription = null;
     }
   }
 

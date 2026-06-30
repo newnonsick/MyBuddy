@@ -9,7 +9,7 @@ import 'app/providers.dart';
 import 'core/notification/app_lifecycle_observer.dart';
 import 'core/notification/notification_service.dart';
 import 'core/overlay/overlay_chat_relay.dart';
-import 'core/overlay/overlay_service.dart';
+
 import 'features/overlay/presentation/pages/overlay_host_app.dart';
 
 @pragma('vm:entry-point')
@@ -50,16 +50,16 @@ class _AppWithLifecycle extends ConsumerStatefulWidget {
 
 class _AppWithLifecycleState extends ConsumerState<_AppWithLifecycle> {
   late final AppLifecycleObserver _lifecycleObserver;
-  final OverlayService _overlayService = OverlayService();
   OverlayChatRelay? _chatRelay;
 
   @override
   void initState() {
     super.initState();
-    unawaited(_overlayService.initialize());
+    // Read via provider to ensure the singleton is initialized exactly once.
+    final overlayService = ref.read(overlayServiceProvider);
     _lifecycleObserver = AppLifecycleObserver(
       notificationService: widget.notificationService,
-      overlayService: _overlayService,
+      overlayService: overlayService,
       onResume: _onAppResumed,
     )..initialize();
     final appController = ref.read(appControllerProvider);

@@ -4,12 +4,14 @@ import 'package:flutter_riverpod/legacy.dart';
 
 import '../core/google/google_auth_service.dart';
 import '../core/google/google_calendar_service.dart';
+import '../core/llm/llm_platform.dart';
 import '../core/llm/llm_service.dart';
 import '../core/memory/memory_service.dart';
 import '../core/overlay/overlay_service.dart';
 import '../core/stt/stt_service.dart';
 import '../core/unity/unity_bridge.dart';
 import 'app_controller.dart';
+import 'assistant_runtime_controller.dart';
 import 'model_controller.dart';
 import 'stt_model_controller.dart';
 
@@ -54,13 +56,19 @@ final overlayServiceProvider = ChangeNotifierProvider<OverlayService>((ref) {
   return service;
 });
 
+final llmPlatformProvider = Provider<LlmPlatform>((ref) {
+  return const FlutterGemmaLlmPlatform();
+});
+
 final llmServiceProvider = Provider<LlmService>((ref) {
   final unityBridge = ref.read(unityBridgeProvider);
   final memoryService = ref.read(memoryServiceProvider);
   final googleAuthService = ref.read(googleAuthServiceProvider);
   final googleCalendarService = ref.read(googleCalendarServiceProvider);
+  final platform = ref.read(llmPlatformProvider);
 
   return LlmService(
+    platform: platform,
     unityBridge: unityBridge,
     memoryService: memoryService,
     googleAuthService: googleAuthService,
@@ -74,4 +82,8 @@ final appControllerProvider = ChangeNotifierProvider<AppController>((ref) {
   final llm = ref.read(llmServiceProvider);
 
   return AppController(models: models, llm: llm, memory: memory);
+});
+
+final assistantRuntimeProvider = Provider<AssistantRuntimeController>((ref) {
+  return ref.watch(appControllerProvider);
 });

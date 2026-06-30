@@ -36,7 +36,10 @@ class FunctionCallHandler {
     FunctionCallResponse call,
   ) async {
     final animationName = call.args['animation'] as String?;
-    final animateCount = call.args['animate_count'] as int? ?? 1;
+    final rawAnimateCount = call.args['animate_count'];
+    final animateCount = rawAnimateCount is int
+        ? rawAnimateCount
+        : int.tryParse('${rawAnimateCount ?? ''}') ?? 1;
     final responseText = call.args['response_text'] as String?;
 
     final animation = CharacterAnimation.fromName(animationName);

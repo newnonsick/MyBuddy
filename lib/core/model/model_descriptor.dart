@@ -13,7 +13,7 @@ class LlmModelConfig {
     required this.topP,
     required this.isThinking,
     required this.supportsFunctionCalls,
-    required this.fileType
+    required this.fileType,
   });
 
   final String type;

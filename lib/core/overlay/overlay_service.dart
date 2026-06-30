@@ -88,10 +88,12 @@ class OverlayService extends ChangeNotifier {
       final granted = await requestPermission();
       if (!granted) return;
     }
-    
+
     final micGranted = await AudioRecorder().hasPermission();
     if (!micGranted) {
-      debugPrint('OverlayService: Microphone permission denied, cannot start overlay');
+      debugPrint(
+        'OverlayService: Microphone permission denied, cannot start overlay',
+      );
       return;
     }
 
@@ -147,10 +149,10 @@ class OverlayService extends ChangeNotifier {
   Future<void> onAppLifecycleChanged(AppLifecycleState state) async {
     if (!isSupported) return;
 
-    final bool isForegrounding = 
-        (_lastLifecycleState == AppLifecycleState.paused || 
-         _lastLifecycleState == AppLifecycleState.hidden ||
-         _lastLifecycleState == AppLifecycleState.detached) && 
+    final bool isForegrounding =
+        (_lastLifecycleState == AppLifecycleState.paused ||
+            _lastLifecycleState == AppLifecycleState.hidden ||
+            _lastLifecycleState == AppLifecycleState.detached) &&
         state == AppLifecycleState.inactive;
 
     _lastLifecycleState = state;
@@ -159,8 +161,9 @@ class OverlayService extends ChangeNotifier {
 
     if (state == AppLifecycleState.resumed || isForegrounding) {
       try {
-        await FlutterOverlayWindow.closeOverlay()
-            .timeout(const Duration(seconds: 2));
+        await FlutterOverlayWindow.closeOverlay().timeout(
+          const Duration(seconds: 2),
+        );
       } catch (_) {
         // Ignore when no overlay is currently attached or timed out.
       }

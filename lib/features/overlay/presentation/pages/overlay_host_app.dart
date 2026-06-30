@@ -7,8 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app/model_controller.dart';
 import '../../../../app/my_app.dart';
 import '../../../../app/providers.dart';
-import '../../../../core/llm/llm_service.dart';
-import '../../../../core/memory/memory_service.dart';
 import '../../../../core/overlay/overlay_app_proxy.dart';
 import 'overlay_chat_page.dart';
 
@@ -27,6 +25,7 @@ class _OverlayHostAppState extends State<OverlayHostApp> {
   late final OverlayAppProxy _proxy;
   late final StreamController<dynamic> _broadcastController;
   StreamSubscription<dynamic>? _rawSubscription;
+  late final ModelController _modelController;
 
   @override
   void initState() {
@@ -38,12 +37,24 @@ class _OverlayHostAppState extends State<OverlayHostApp> {
       onError: _broadcastController.addError,
     );
 
-    _proxy = OverlayAppProxy(
-      models: ModelController(),
-      llm: LlmService.dummy(),
-      memory: MemoryService(),
-    );
+    _modelController = ModelController();
+    _proxy = OverlayAppProxy(models: _modelController);
     _proxy.startListening(_broadcastController.stream);
+    unawaited(_loadModelState());
+  }
+
+  Future<void> _loadModelState() async {
+    try {
+      await _modelController.loadLocalState();
+      await _modelController.refreshInstalled();
+      debugPrint(
+        'OverlayHostApp: model state loaded - '
+        'installed=${_modelController.installedModels.length}, '
+        'selected=${_modelController.selectedModelId}',
+      );
+    } catch (e) {
+      debugPrint('OverlayHostApp: failed to load model state: $e');
+    }
   }
 
   @override
@@ -58,7 +69,8 @@ class _OverlayHostAppState extends State<OverlayHostApp> {
   Widget build(BuildContext context) {
     return ProviderScope(
       overrides: [
-        appControllerProvider.overrideWith((_) => _proxy),
+        assistantRuntimeProvider.overrideWithValue(_proxy),
+        modelControllerProvider.overrideWith((ref) => _modelController),
         sttServiceProvider.overrideWithValue(OverlaySttService(_proxy)),
         overlayMessageStreamProvider.overrideWithValue(
           _broadcastController.stream,

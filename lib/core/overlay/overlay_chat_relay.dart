@@ -15,11 +15,17 @@ class OverlayChatRelay {
   final AppController appController;
   final SttService sttService;
   Future<void>? _ensureReadyFuture;
+  Timer? _statusBroadcastTimer;
 
   static const _channel = BasicMessageChannel<dynamic>(
     'x-slayer/overlay_messenger',
     JSONMessageCodec(),
   );
+
+  final Set<String> _inFlightChatRequests = {};
+  final Set<String> _inFlightSttRequests = {};
+  final Set<String> _inFlightModelSwitchRequests = {};
+  final Set<String> _inFlightRecordingRequests = {};
 
   void start() {
     _channel.setMessageHandler((dynamic message) async {
@@ -30,11 +36,39 @@ class OverlayChatRelay {
       await _onMessage(message);
       return message;
     });
+    appController.addListener(_broadcastStatus);
+    _broadcastStatus();
     debugPrint('OverlayChatRelay: started listening (direct handler)');
   }
 
   void dispose() {
+    _statusBroadcastTimer?.cancel();
+    _statusBroadcastTimer = null;
     _channel.setMessageHandler(null);
+    appController.removeListener(_broadcastStatus);
+  }
+
+  void _broadcastStatus() {
+    _statusBroadcastTimer?.cancel();
+    _statusBroadcastTimer = Timer(
+      const Duration(milliseconds: 80),
+      _doBroadcastStatus,
+    );
+  }
+
+  void _doBroadcastStatus() {
+    final payload = <String, Object?>{
+      'type': 'runtime_status',
+      'llmInstalled': appController.llmInstalled,
+      'installingLlm': appController.installingLlm,
+      'llmError': appController.llmError,
+      'generatingResponse': appController.generatingResponse,
+      'transcribingAudio': appController.transcribingAudio,
+      'conversation': appController.conversation,
+    };
+    FlutterOverlayWindow.shareData(jsonEncode(payload)).catchError((e) {
+      debugPrint('OverlayChatRelay: failed to broadcast status: $e');
+    });
   }
 
   Future<void> _onMessage(dynamic raw) async {
@@ -78,8 +112,21 @@ class OverlayChatRelay {
 
     debugPrint('OverlayChatRelay: chat_request id=$requestId text=$text');
 
+    if (requestId.isEmpty) return;
+    if (_inFlightChatRequests.contains(requestId)) {
+      debugPrint(
+        'OverlayChatRelay: chat_request already in flight: $requestId',
+      );
+      return;
+    }
+    _inFlightChatRequests.add(requestId);
+
     if (text == null || text.isEmpty) {
-      await _sendResponse(requestId: requestId, error: 'Empty message');
+      try {
+        await _sendResponse(requestId: requestId, error: 'Empty message');
+      } finally {
+        _inFlightChatRequests.remove(requestId);
+      }
       return;
     }
 
@@ -102,6 +149,8 @@ class OverlayChatRelay {
     } catch (e) {
       debugPrint('OverlayChatRelay: chatOnce error: $e');
       await _sendResponse(requestId: requestId, error: '$e');
+    } finally {
+      _inFlightChatRequests.remove(requestId);
     }
   }
 
@@ -114,11 +163,22 @@ class OverlayChatRelay {
 
     debugPrint('OverlayChatRelay: stt_request id=$requestId audio=$audioPath');
 
+    if (requestId.isEmpty) return;
+    if (_inFlightSttRequests.contains(requestId)) {
+      debugPrint('OverlayChatRelay: stt_request already in flight: $requestId');
+      return;
+    }
+    _inFlightSttRequests.add(requestId);
+
     if (audioPath == null || modelPath == null) {
-      await _sendSttResponse(
-        requestId: requestId,
-        error: 'Missing audio or model path',
-      );
+      try {
+        await _sendSttResponse(
+          requestId: requestId,
+          error: 'Missing audio or model path',
+        );
+      } finally {
+        _inFlightSttRequests.remove(requestId);
+      }
       return;
     }
 
@@ -143,6 +203,8 @@ class OverlayChatRelay {
     } catch (e) {
       debugPrint('OverlayChatRelay: STT error: $e');
       await _sendSttResponse(requestId: requestId, error: '$e');
+    } finally {
+      _inFlightSttRequests.remove(requestId);
     }
   }
 
@@ -162,7 +224,11 @@ class OverlayChatRelay {
   Future<void> _doEnsureAppReadyForOverlayChat() async {
     await appController.startup();
 
-    if (appController.llmInstalled || appController.installingLlm) {
+    while (appController.installingLlm) {
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+    }
+
+    if (appController.llmInstalled) {
       return;
     }
 
@@ -221,10 +287,20 @@ class OverlayChatRelay {
     final requestId = map['requestId'] as String? ?? '';
     debugPrint('OverlayChatRelay: recording_start_request id=$requestId');
 
+    if (requestId.isEmpty) return;
+    if (_inFlightRecordingRequests.contains(requestId)) {
+      debugPrint(
+        'OverlayChatRelay: recording_start_request already in flight: $requestId',
+      );
+      return;
+    }
+    _inFlightRecordingRequests.add(requestId);
+
     try {
       final temp = await getTemporaryDirectory();
       final dir = '${temp.path}/stt_recordings';
-      final fileName = 'rec_${DateTime.now().toUtc().millisecondsSinceEpoch}.wav';
+      final fileName =
+          'rec_${DateTime.now().toUtc().millisecondsSinceEpoch}.wav';
       final outPath = '$dir/$fileName';
 
       final path = await FlutterOverlayWindow.startOverlayRecording(outPath);
@@ -233,6 +309,8 @@ class OverlayChatRelay {
     } catch (e) {
       debugPrint('OverlayChatRelay: recording start error: $e');
       await _sendRecordingResponse(requestId: requestId, error: '$e');
+    } finally {
+      _inFlightRecordingRequests.remove(requestId);
     }
   }
 
@@ -240,16 +318,24 @@ class OverlayChatRelay {
     final requestId = map['requestId'] as String? ?? '';
     debugPrint('OverlayChatRelay: recording_stop_request id=$requestId');
 
+    if (requestId.isEmpty) return;
+    if (_inFlightRecordingRequests.contains(requestId)) {
+      debugPrint(
+        'OverlayChatRelay: recording_stop_request already in flight: $requestId',
+      );
+      return;
+    }
+    _inFlightRecordingRequests.add(requestId);
+
     try {
       final path = await FlutterOverlayWindow.stopOverlayRecording();
       debugPrint('OverlayChatRelay: native recording stopped at $path');
-      await _sendRecordingResponse(
-        requestId: requestId,
-        path: path ?? '',
-      );
+      await _sendRecordingResponse(requestId: requestId, path: path ?? '');
     } catch (e) {
       debugPrint('OverlayChatRelay: recording stop error: $e');
       await _sendRecordingResponse(requestId: requestId, error: '$e');
+    } finally {
+      _inFlightRecordingRequests.remove(requestId);
     }
   }
 
@@ -288,11 +374,24 @@ class OverlayChatRelay {
       'OverlayChatRelay: model_switch_request id=$requestId model=$modelId',
     );
 
-    if (modelId == null || modelId.trim().isEmpty) {
-      await _sendModelSwitchResponse(
-        requestId: requestId,
-        error: 'Missing model ID',
+    if (requestId.isEmpty) return;
+    if (_inFlightModelSwitchRequests.contains(requestId)) {
+      debugPrint(
+        'OverlayChatRelay: model_switch_request already in flight: $requestId',
       );
+      return;
+    }
+    _inFlightModelSwitchRequests.add(requestId);
+
+    if (modelId == null || modelId.trim().isEmpty) {
+      try {
+        await _sendModelSwitchResponse(
+          requestId: requestId,
+          error: 'Missing model ID',
+        );
+      } finally {
+        _inFlightModelSwitchRequests.remove(requestId);
+      }
       return;
     }
 
@@ -306,6 +405,8 @@ class OverlayChatRelay {
     } catch (e) {
       debugPrint('OverlayChatRelay: model switch error: $e');
       await _sendModelSwitchResponse(requestId: requestId, error: '$e');
+    } finally {
+      _inFlightModelSwitchRequests.remove(requestId);
     }
   }
 
@@ -318,15 +419,11 @@ class OverlayChatRelay {
       'requestId': requestId,
       if (error != null) 'error': error,
     };
-    debugPrint(
-      'OverlayChatRelay: sending model_switch_response id=$requestId',
-    );
+    debugPrint('OverlayChatRelay: sending model_switch_response id=$requestId');
     try {
       await FlutterOverlayWindow.shareData(jsonEncode(payload));
     } catch (e) {
-      debugPrint(
-        'OverlayChatRelay: model_switch_response send failed: $e',
-      );
+      debugPrint('OverlayChatRelay: model_switch_response send failed: $e');
     }
   }
 }

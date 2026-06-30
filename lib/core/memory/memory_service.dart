@@ -64,6 +64,76 @@ abstract final class MemoryConfig {
   static const int maxTextFieldLength = 180;
 }
 
+abstract final class MemoryPatchActions {
+  static const String set = 'set';
+  static const String add = 'add';
+  static const String remove = 'remove';
+  static const String clear = 'clear';
+}
+
+class MemoryPatch {
+  const MemoryPatch({
+    required this.section,
+    required this.field,
+    required this.action,
+    this.value,
+    this.values = const <String>[],
+  });
+
+  factory MemoryPatch.fromJson(
+    Map<String, dynamic> json, {
+    String? defaultSection,
+  }) {
+    final value = _normalizeText(json['value'] as String?);
+    final values = json['value'] is List
+        ? _normalizeStringList(json['value'])
+        : _normalizeStringList(json['values']);
+
+    return MemoryPatch(
+      section:
+          _normalizePatchToken(json['section'] as String?) ??
+          defaultSection ??
+          '',
+      field: _normalizePatchToken(json['field'] as String?) ?? '',
+      action: _normalizePatchAction(json['action'] as String?),
+      value: value,
+      values: values,
+    );
+  }
+
+  final String section;
+  final String field;
+  final String action;
+  final String? value;
+  final List<String> values;
+
+  List<String> get resolvedValues {
+    if (values.isNotEmpty) return values;
+    final single = _normalizeText(value);
+    return single == null ? const <String>[] : <String>[single];
+  }
+}
+
+String? _normalizePatchToken(String? value) {
+  final normalized = _normalizeText(value)?.toLowerCase().replaceAll('-', '_');
+  if (normalized == null) return null;
+  return normalized;
+}
+
+String _normalizePatchAction(String? value) {
+  final normalized = _normalizePatchToken(value);
+  return switch (normalized) {
+    'replace' || 'update' => MemoryPatchActions.set,
+    'delete' => MemoryPatchActions.remove,
+    'reset' => MemoryPatchActions.clear,
+    MemoryPatchActions.add ||
+    MemoryPatchActions.remove ||
+    MemoryPatchActions.clear ||
+    MemoryPatchActions.set => normalized!,
+    _ => MemoryPatchActions.set,
+  };
+}
+
 class SoulMemory {
   const SoulMemory({
     this.mission,
@@ -424,8 +494,94 @@ List<String> _normalizeStringList(dynamic value) {
 }
 
 class MemoryService {
-  Future<UserMemory> loadMemoryData() async {
-    final prefs = await SharedPreferences.getInstance();
+  Future<void> _storageTail = Future<void>.value();
+
+  Future<T> _runSequential<T>(Future<T> Function() action) async {
+    final completer = Completer<T>();
+    final previous = _storageTail;
+    _storageTail = completer.future.then((_) => null, onError: (_) => null);
+
+    try {
+      await previous;
+      final result = await action();
+      completer.complete(result);
+      return result;
+    } catch (e, st) {
+      completer.completeError(e, st);
+      rethrow;
+    }
+  }
+
+  Future<UserMemory> loadMemoryData() {
+    return _runSequential(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final hasSectionKeys =
+          prefs.containsKey(MemoryStorageKeys.soulMemory) ||
+          prefs.containsKey(MemoryStorageKeys.identityMemory) ||
+          prefs.containsKey(MemoryStorageKeys.userMemory);
+
+      if (hasSectionKeys) {
+        return UserMemory(
+          schemaVersion: 3,
+          soul: _readSoulMemoryFromPrefs(prefs),
+          identity: _readIdentityMemoryFromPrefs(prefs),
+          user: _readUserMemoryFromPrefs(prefs),
+        );
+      }
+
+      final raw = prefs.getString(MemoryStorageKeys.memory);
+      if (raw != null && raw.trim().isNotEmpty) {
+        final migrated = UserMemory.tryParse(raw);
+        await _saveMemoryDataToPrefs(prefs, migrated);
+        return migrated;
+      }
+
+      final legacy = prefs.getString(MemoryStorageKeys.legacyMemory) ?? '';
+      final migrated = UserMemory.tryParse(legacy);
+      if (!migrated.isEmpty || legacy.trim().isNotEmpty) {
+        await _saveMemoryDataToPrefs(prefs, migrated);
+      }
+      return migrated;
+    });
+  }
+
+  Future<SoulMemory> loadSoulMemoryData() {
+    return _runSequential(() async {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.containsKey(MemoryStorageKeys.soulMemory)) {
+        return _readSoulMemoryFromPrefs(prefs);
+      }
+      // Use internal helper to avoid nested _runSequential deadlock.
+      return _loadFullMemoryFromPrefs(prefs).soul;
+    });
+  }
+
+  Future<IdentityMemory> loadIdentityMemoryData() {
+    return _runSequential(() async {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.containsKey(MemoryStorageKeys.identityMemory)) {
+        return _readIdentityMemoryFromPrefs(prefs);
+      }
+      // Use internal helper to avoid nested _runSequential deadlock.
+      return _loadFullMemoryFromPrefs(prefs).identity;
+    });
+  }
+
+  Future<UserProfileMemory> loadUserMemoryData() {
+    return _runSequential(() async {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.containsKey(MemoryStorageKeys.userMemory)) {
+        return _readUserMemoryFromPrefs(prefs);
+      }
+      // Use internal helper to avoid nested _runSequential deadlock.
+      return _loadFullMemoryFromPrefs(prefs).user;
+    });
+  }
+
+  /// Internal reader that does NOT wrap in [_runSequential].
+  /// Use this when already inside a [_runSequential] closure to prevent
+  /// deadlock caused by nested sequential chain waiting on itself.
+  UserMemory _loadFullMemoryFromPrefs(SharedPreferences prefs) {
     final hasSectionKeys =
         prefs.containsKey(MemoryStorageKeys.soulMemory) ||
         prefs.containsKey(MemoryStorageKeys.identityMemory) ||
@@ -442,97 +598,85 @@ class MemoryService {
 
     final raw = prefs.getString(MemoryStorageKeys.memory);
     if (raw != null && raw.trim().isNotEmpty) {
-      final migrated = UserMemory.tryParse(raw);
-      await saveMemoryData(migrated);
-      return migrated;
+      return UserMemory.tryParse(raw);
     }
 
     final legacy = prefs.getString(MemoryStorageKeys.legacyMemory) ?? '';
-    final migrated = UserMemory.tryParse(legacy);
-    if (!migrated.isEmpty || legacy.trim().isNotEmpty) {
-      await saveMemoryData(migrated);
-    }
-    return migrated;
+    return UserMemory.tryParse(legacy);
   }
 
-  Future<SoulMemory> loadSoulMemoryData() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (prefs.containsKey(MemoryStorageKeys.soulMemory)) {
-      return _readSoulMemoryFromPrefs(prefs);
-    }
-
-    final full = await loadMemoryData();
-    return full.soul;
+  Future<String> loadMemory() {
+    return _runSequential(() async {
+      final prefs = await SharedPreferences.getInstance();
+      return _loadFullMemoryFromPrefs(prefs).toPrettyJsonString();
+    });
   }
 
-  Future<IdentityMemory> loadIdentityMemoryData() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (prefs.containsKey(MemoryStorageKeys.identityMemory)) {
-      return _readIdentityMemoryFromPrefs(prefs);
-    }
-
-    final full = await loadMemoryData();
-    return full.identity;
+  Future<void> saveMemoryData(UserMemory data) {
+    return _runSequential(() async {
+      final prefs = await SharedPreferences.getInstance();
+      await _saveMemoryDataToPrefs(prefs, data);
+    });
   }
 
-  Future<UserProfileMemory> loadUserMemoryData() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (prefs.containsKey(MemoryStorageKeys.userMemory)) {
-      return _readUserMemoryFromPrefs(prefs);
-    }
-
-    final full = await loadMemoryData();
-    return full.user;
-  }
-
-  Future<String> loadMemory() async {
-    final data = await loadMemoryData();
-    return data.toPrettyJsonString();
-  }
-
-  Future<void> saveMemoryData(UserMemory data) async {
-    final prefs = await SharedPreferences.getInstance();
+  /// Internal save that does NOT wrap in [_runSequential].
+  /// Use this when already inside a [_runSequential] closure.
+  Future<void> _saveMemoryDataToPrefs(
+    SharedPreferences prefs,
+    UserMemory data,
+  ) async {
     final normalized = data.copyWith(schemaVersion: 3);
 
     await _writeSoulMemoryToPrefs(prefs, normalized.soul);
     await _writeIdentityMemoryToPrefs(prefs, normalized.identity);
     await _writeUserMemoryToPrefs(prefs, normalized.user);
 
-    final json = normalized.toJsonString();
-    await prefs.setString(MemoryStorageKeys.memory, json);
+    await prefs.setString(MemoryStorageKeys.memory, normalized.toJsonString());
   }
 
-  Future<void> saveSoulMemoryData(SoulMemory data) async {
-    final prefs = await SharedPreferences.getInstance();
-    await _writeSoulMemoryToPrefs(prefs, data);
+  Future<void> saveSoulMemoryData(SoulMemory data) {
+    return _runSequential(() async {
+      final prefs = await SharedPreferences.getInstance();
+      await _writeSoulMemoryToPrefs(prefs, data);
+    });
   }
 
-  Future<void> saveIdentityMemoryData(IdentityMemory data) async {
-    final prefs = await SharedPreferences.getInstance();
-    await _writeIdentityMemoryToPrefs(prefs, data);
+  Future<void> saveIdentityMemoryData(IdentityMemory data) {
+    return _runSequential(() async {
+      final prefs = await SharedPreferences.getInstance();
+      await _writeIdentityMemoryToPrefs(prefs, data);
+    });
   }
 
-  Future<void> saveUserMemoryData(UserProfileMemory data) async {
-    final prefs = await SharedPreferences.getInstance();
-    await _writeUserMemoryToPrefs(prefs, data);
+  Future<void> saveUserMemoryData(UserProfileMemory data) {
+    return _runSequential(() async {
+      final prefs = await SharedPreferences.getInstance();
+      await _writeUserMemoryToPrefs(prefs, data);
+    });
   }
 
-  Future<void> saveMemory(String raw) async {
-    final trimmed = raw.trim();
-    if (trimmed.isEmpty) {
-      await saveMemoryData(const UserMemory());
-      return;
-    }
-
-    try {
-      final decoded = jsonDecode(trimmed);
-      if (decoded is Map<String, dynamic>) {
-        await saveMemoryData(UserMemory.fromJson(decoded));
+  Future<void> saveMemory(String raw) {
+    return _runSequential(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final trimmed = raw.trim();
+      if (trimmed.isEmpty) {
+        await _saveMemoryDataToPrefs(prefs, const UserMemory());
         return;
       }
-    } catch (_) {}
 
-    await saveMemoryData(UserMemory(user: UserProfileMemory(facts: [trimmed])));
+      try {
+        final decoded = jsonDecode(trimmed);
+        if (decoded is Map<String, dynamic>) {
+          await _saveMemoryDataToPrefs(prefs, UserMemory.fromJson(decoded));
+          return;
+        }
+      } catch (_) {}
+
+      await _saveMemoryDataToPrefs(
+        prefs,
+        UserMemory(user: UserProfileMemory(facts: [trimmed])),
+      );
+    });
   }
 
   Future<bool> isAutoUpdateAllowed() async {
@@ -543,6 +687,80 @@ class MemoryService {
   Future<void> setAutoUpdateAllowed(bool allowed) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(MemoryStorageKeys.allowAutoUpdate, allowed);
+  }
+
+  Future<MemoryUpdateResult> updateMemoryFromToolCall({
+    required String toolName,
+    required Map<String, dynamic> args,
+  }) async {
+    final section = switch (toolName) {
+      'update_assistant_soul' => 'soul',
+      'update_assistant_identity' => 'identity',
+      'update_user_memory' => 'user',
+      _ => null,
+    };
+    if (section == null) {
+      return MemoryUpdateResult(
+        success: false,
+        message: 'Unknown memory tool: $toolName',
+      );
+    }
+
+    final patches = _parseToolMemoryPatches(args, defaultSection: section);
+    return applyMemoryPatches(patches, allowedSections: <String>{section});
+  }
+
+  Future<MemoryUpdateResult> applyMemoryPatches(
+    List<MemoryPatch> patches, {
+    Set<String>? allowedSections,
+  }) async {
+    try {
+      final scopedPatches = allowedSections == null
+          ? patches
+          : patches.where((p) => allowedSections.contains(p.section)).toList();
+      if (scopedPatches.isEmpty) {
+        return MemoryUpdateResult(success: true, message: 'No memory updates');
+      }
+
+      final current = await loadMemoryData();
+      final lockedFields = await loadLockedFields();
+      var updated = current;
+      var appliedCount = 0;
+
+      for (final patch in scopedPatches) {
+        final next = _applyMemoryPatch(
+          current: updated,
+          patch: patch,
+          lockedFields: lockedFields,
+        );
+        if (next.toJsonString() == updated.toJsonString()) continue;
+        updated = next;
+        appliedCount += 1;
+      }
+
+      final candidateJson = updated.toJsonString();
+      if (appliedCount == 0 || candidateJson == current.toJsonString()) {
+        return MemoryUpdateResult(
+          success: true,
+          message: 'No memory changes',
+          candidateJson: candidateJson,
+        );
+      }
+
+      await saveMemoryData(updated);
+      debugPrint('MemoryService: Memory patch applied → $candidateJson');
+      return MemoryUpdateResult(
+        success: true,
+        message: 'Memory updated successfully',
+        candidateJson: candidateJson,
+      );
+    } catch (e) {
+      debugPrint('MemoryService: Failed to apply memory patches: $e');
+      return MemoryUpdateResult(
+        success: false,
+        message: 'Failed to apply memory patches: $e',
+      );
+    }
   }
 
   Future<Set<String>> loadLockedFields({
@@ -643,6 +861,280 @@ class MemoryService {
     await prefs.setStringList(MemoryStorageKeys.lockedIdentityFields, filtered);
   }
 
+  List<MemoryPatch> _parseToolMemoryPatches(
+    Map<String, dynamic> args, {
+    required String defaultSection,
+  }) {
+    final updates = args['updates'];
+    if (updates is List) {
+      return updates
+          .whereType<Map<String, dynamic>>()
+          .map(
+            (json) =>
+                MemoryPatch.fromJson(json, defaultSection: defaultSection),
+          )
+          .toList(growable: false);
+    }
+
+    return _fieldPatchesFromArgs(args, defaultSection: defaultSection);
+  }
+
+  List<MemoryPatch> _parseExtractedMemoryPatches(String raw) {
+    final decoded = _decodeExtractedJsonMap(raw);
+    final updates = decoded?['updates'];
+    if (updates is! List) return const <MemoryPatch>[];
+
+    return updates
+        .whereType<Map<String, dynamic>>()
+        .map(MemoryPatch.fromJson)
+        .toList(growable: false);
+  }
+
+  List<MemoryPatch> _fieldPatchesFromArgs(
+    Map<String, dynamic> args, {
+    required String defaultSection,
+  }) {
+    final patches = <MemoryPatch>[];
+    for (final entry in args.entries) {
+      final key = _normalizePatchToken(entry.key);
+      if (key == null || key == 'response_text' || key == 'updates') continue;
+
+      final parsed = _parsePatchFieldKey(key);
+      if (parsed == null) continue;
+      final (:field, :action) = parsed;
+      final value = entry.value;
+
+      patches.add(
+        MemoryPatch(
+          section: defaultSection,
+          field: field,
+          action: action,
+          value: value is String ? value : null,
+          values: value is List
+              ? _normalizeStringList(value)
+              : const <String>[],
+        ),
+      );
+    }
+    return patches;
+  }
+
+  ({String field, String action})? _parsePatchFieldKey(String key) {
+    for (final suffix in const <String>['_add', '_remove', '_clear']) {
+      if (!key.endsWith(suffix)) continue;
+      final field = key.substring(0, key.length - suffix.length);
+      final action = suffix.substring(1);
+      return (field: field, action: action);
+    }
+    return (field: key, action: MemoryPatchActions.set);
+  }
+
+  UserMemory _applyMemoryPatch({
+    required UserMemory current,
+    required MemoryPatch patch,
+    required Set<String> lockedFields,
+  }) {
+    if (!_isValidPatchField(patch.section, patch.field)) return current;
+    final fieldPath = _fieldPathForPatch(patch);
+    if (fieldPath != null && lockedFields.contains(fieldPath)) return current;
+
+    if (_isTextField(patch.section, patch.field)) {
+      return _applyTextPatch(current, patch);
+    }
+    if (_isListField(patch.section, patch.field)) {
+      return _applyListPatch(current, patch);
+    }
+    return current;
+  }
+
+  bool _isValidPatchField(String section, String field) {
+    return _isTextField(section, field) || _isListField(section, field);
+  }
+
+  bool _isTextField(String section, String field) {
+    return switch (section) {
+      'soul' => field == 'mission',
+      'identity' => field == 'assistant_name' || field == 'role',
+      'user' => field == 'name',
+      _ => false,
+    };
+  }
+
+  bool _isListField(String section, String field) {
+    return switch (section) {
+      'soul' =>
+        field == 'principles' ||
+            field == 'boundaries' ||
+            field == 'response_style',
+      'identity' => field == 'voice' || field == 'behavior_rules',
+      'user' =>
+        field == 'traits' ||
+            field == 'preferences' ||
+            field == 'goals' ||
+            field == 'facts',
+      _ => false,
+    };
+  }
+
+  String? _fieldPathForPatch(MemoryPatch patch) {
+    return switch ((patch.section, patch.field)) {
+      ('soul', 'mission') => MemoryFieldPaths.soulMission,
+      ('soul', 'principles') => MemoryFieldPaths.soulPrinciples,
+      ('soul', 'boundaries') => MemoryFieldPaths.soulBoundaries,
+      ('soul', 'response_style') => MemoryFieldPaths.soulResponseStyle,
+      ('identity', 'assistant_name') => MemoryFieldPaths.identityAssistantName,
+      ('identity', 'role') => MemoryFieldPaths.identityRole,
+      ('identity', 'voice') => MemoryFieldPaths.identityVoice,
+      ('identity', 'behavior_rules') => MemoryFieldPaths.identityBehaviorRules,
+      _ => null,
+    };
+  }
+
+  UserMemory _applyTextPatch(UserMemory current, MemoryPatch patch) {
+    final value =
+        patch.action == MemoryPatchActions.clear ||
+            patch.action == MemoryPatchActions.remove
+        ? null
+        : _normalizeText(patch.value);
+    if (patch.action != MemoryPatchActions.clear &&
+        patch.action != MemoryPatchActions.remove &&
+        value == null) {
+      return current;
+    }
+
+    return switch ((patch.section, patch.field)) {
+      ('soul', 'mission') => current.copyWith(
+        soul: SoulMemory(
+          mission: value,
+          principles: current.soul.principles,
+          boundaries: current.soul.boundaries,
+          responseStyle: current.soul.responseStyle,
+        ),
+      ),
+      ('identity', 'assistant_name') => current.copyWith(
+        identity: IdentityMemory(
+          assistantName: value,
+          role: current.identity.role,
+          voice: current.identity.voice,
+          behaviorRules: current.identity.behaviorRules,
+        ),
+      ),
+      ('identity', 'role') => current.copyWith(
+        identity: IdentityMemory(
+          assistantName: current.identity.assistantName,
+          role: value,
+          voice: current.identity.voice,
+          behaviorRules: current.identity.behaviorRules,
+        ),
+      ),
+      ('user', 'name') => current.copyWith(
+        user: UserProfileMemory(
+          name: value,
+          traits: current.user.traits,
+          preferences: current.user.preferences,
+          goals: current.user.goals,
+          facts: current.user.facts,
+        ),
+      ),
+      _ => current,
+    };
+  }
+
+  UserMemory _applyListPatch(UserMemory current, MemoryPatch patch) {
+    final existing = _listFieldValue(current, patch.section, patch.field);
+    if (existing == null) return current;
+
+    final updated = switch (patch.action) {
+      MemoryPatchActions.clear => const <String>[],
+      MemoryPatchActions.remove => _removeListValues(
+        existing,
+        patch.resolvedValues,
+      ),
+      MemoryPatchActions.add => _mergeListValues(
+        existing,
+        patch.resolvedValues,
+      ),
+      _ => _normalizeStringList(patch.resolvedValues),
+    };
+
+    if (_sameStringList(existing, updated)) return current;
+    return _setListFieldValue(current, patch.section, patch.field, updated);
+  }
+
+  List<String>? _listFieldValue(
+    UserMemory memory,
+    String section,
+    String field,
+  ) {
+    return switch ((section, field)) {
+      ('soul', 'principles') => memory.soul.principles,
+      ('soul', 'boundaries') => memory.soul.boundaries,
+      ('soul', 'response_style') => memory.soul.responseStyle,
+      ('identity', 'voice') => memory.identity.voice,
+      ('identity', 'behavior_rules') => memory.identity.behaviorRules,
+      ('user', 'traits') => memory.user.traits,
+      ('user', 'preferences') => memory.user.preferences,
+      ('user', 'goals') => memory.user.goals,
+      ('user', 'facts') => memory.user.facts,
+      _ => null,
+    };
+  }
+
+  UserMemory _setListFieldValue(
+    UserMemory memory,
+    String section,
+    String field,
+    List<String> value,
+  ) {
+    return switch ((section, field)) {
+      ('soul', 'principles') => memory.copyWith(
+        soul: memory.soul.copyWith(principles: value),
+      ),
+      ('soul', 'boundaries') => memory.copyWith(
+        soul: memory.soul.copyWith(boundaries: value),
+      ),
+      ('soul', 'response_style') => memory.copyWith(
+        soul: memory.soul.copyWith(responseStyle: value),
+      ),
+      ('identity', 'voice') => memory.copyWith(
+        identity: memory.identity.copyWith(voice: value),
+      ),
+      ('identity', 'behavior_rules') => memory.copyWith(
+        identity: memory.identity.copyWith(behaviorRules: value),
+      ),
+      ('user', 'traits') => memory.copyWith(
+        user: memory.user.copyWith(traits: value),
+      ),
+      ('user', 'preferences') => memory.copyWith(
+        user: memory.user.copyWith(preferences: value),
+      ),
+      ('user', 'goals') => memory.copyWith(
+        user: memory.user.copyWith(goals: value),
+      ),
+      ('user', 'facts') => memory.copyWith(
+        user: memory.user.copyWith(facts: value),
+      ),
+      _ => memory,
+    };
+  }
+
+  List<String> _mergeListValues(List<String> current, List<String> values) {
+    return _normalizeStringList(<String>[...current, ...values]);
+  }
+
+  List<String> _removeListValues(List<String> current, List<String> values) {
+    final removeSet = values.map((v) => v.toLowerCase()).toSet();
+    return current.where((v) => !removeSet.contains(v.toLowerCase())).toList();
+  }
+
+  bool _sameStringList(List<String> left, List<String> right) {
+    if (left.length != right.length) return false;
+    for (var i = 0; i < left.length; i++) {
+      if (left[i] != right[i]) return false;
+    }
+    return true;
+  }
+
   Future<String> buildSystemPrompt({required UserMemory memory}) async {
     return compute(_buildSystemPrompt, memory.toJsonString());
   }
@@ -660,29 +1152,21 @@ class MemoryService {
       debugPrint('MemoryService: Raw extracted memory response: $rawResponse');
       if (rawResponse.trim().isEmpty) return;
 
-      final extracted = _parseExtractedMemory(rawResponse, current);
-      debugPrint(
-        'MemoryService: Parsed extracted memory: ${extracted.toJsonString()}',
-      );
-      final updated = _applyLockedFields(
-        current: current,
-        candidate: extracted,
-        lockedFields: lockedFields,
-      );
-      debugPrint(
-        'MemoryService: Updated memory after applying locked fields: ${updated.toJsonString()}',
-      );
-
-      if (updated.toJsonString() == current.toJsonString()) return;
-      debugPrint('MemoryService: Memory has changes, saving updated memory.');
-      await saveMemoryData(updated);
-      debugPrint('MemoryService: Memory updated → ${updated.toJsonString()}');
+      final patches = _parseExtractedMemoryPatches(rawResponse);
+      final result = await applyMemoryPatches(patches);
+      if (!result.success) {
+        debugPrint(
+          'MemoryService: Memory patch update failed: ${result.message}',
+        );
+      }
     } catch (e) {
       debugPrint('MemoryService: Failed to update memory: $e');
     }
   }
 
-  Future<void> updateSoulMemoryFromChat({required LlmService llm}) async {
+  Future<MemoryUpdateResult> updateSoulMemoryFromChat({
+    required LlmService llm,
+  }) async {
     try {
       final currentSoul = await loadSoulMemoryData();
       final currentJson = jsonEncode(currentSoul.toJson());
@@ -694,29 +1178,30 @@ class MemoryService {
         currentJson,
         lockedFields: lockedFields,
       );
-      if (rawResponse.trim().isEmpty) return;
-
-      final extractedSoul = _parseExtractedSoulMemory(rawResponse, currentSoul);
-      final updatedSoul = _applyLockedSoulFields(
-        current: currentSoul,
-        candidate: extractedSoul,
-        lockedFields: lockedFields,
-      );
-
-      if (jsonEncode(updatedSoul.toJson()) ==
-          jsonEncode(currentSoul.toJson())) {
-        return;
+      if (rawResponse.trim().isEmpty) {
+        return MemoryUpdateResult(
+          success: true,
+          message: 'No changes needed (empty response)',
+        );
       }
-      await saveSoulMemoryData(updatedSoul);
-      debugPrint(
-        'MemoryService: Soul memory updated → ${jsonEncode(updatedSoul.toJson())}',
+
+      final patches = _parseExtractedMemoryPatches(rawResponse);
+      return applyMemoryPatches(
+        patches,
+        allowedSections: const <String>{'soul'},
       );
     } catch (e) {
       debugPrint('MemoryService: Failed to update soul memory: $e');
+      return MemoryUpdateResult(
+        success: false,
+        message: 'Failed to update soul memory: $e',
+      );
     }
   }
 
-  Future<void> updateIdentityMemoryFromChat({required LlmService llm}) async {
+  Future<MemoryUpdateResult> updateIdentityMemoryFromChat({
+    required LlmService llm,
+  }) async {
     try {
       final currentIdentity = await loadIdentityMemoryData();
       final currentJson = jsonEncode(currentIdentity.toJson());
@@ -728,32 +1213,30 @@ class MemoryService {
         currentJson,
         lockedFields: lockedFields,
       );
-      if (rawResponse.trim().isEmpty) return;
-
-      final extractedIdentity = _parseExtractedIdentityMemory(
-        rawResponse,
-        currentIdentity,
-      );
-      final updatedIdentity = _applyLockedIdentityFields(
-        current: currentIdentity,
-        candidate: extractedIdentity,
-        lockedFields: lockedFields,
-      );
-
-      if (jsonEncode(updatedIdentity.toJson()) ==
-          jsonEncode(currentIdentity.toJson())) {
-        return;
+      if (rawResponse.trim().isEmpty) {
+        return MemoryUpdateResult(
+          success: true,
+          message: 'No changes needed (empty response)',
+        );
       }
-      await saveIdentityMemoryData(updatedIdentity);
-      debugPrint(
-        'MemoryService: Identity memory updated → ${jsonEncode(updatedIdentity.toJson())}',
+
+      final patches = _parseExtractedMemoryPatches(rawResponse);
+      return applyMemoryPatches(
+        patches,
+        allowedSections: const <String>{'identity'},
       );
     } catch (e) {
       debugPrint('MemoryService: Failed to update identity memory: $e');
+      return MemoryUpdateResult(
+        success: false,
+        message: 'Failed to update identity memory: $e',
+      );
     }
   }
 
-  Future<void> updateUserMemoryFromChat({required LlmService llm}) async {
+  Future<MemoryUpdateResult> updateUserMemoryFromChat({
+    required LlmService llm,
+  }) async {
     try {
       final currentUser = await loadUserMemoryData();
       final currentJson = jsonEncode(currentUser.toJson());
@@ -763,155 +1246,25 @@ class MemoryService {
         currentJson,
         lockedFields: lockedFields,
       );
-      if (rawResponse.trim().isEmpty) return;
-
-      final updatedUser = _parseExtractedUserMemory(rawResponse, currentUser);
-
-      if (jsonEncode(updatedUser.toJson()) ==
-          jsonEncode(currentUser.toJson())) {
-        return;
+      if (rawResponse.trim().isEmpty) {
+        return MemoryUpdateResult(
+          success: true,
+          message: 'No changes needed (empty response)',
+        );
       }
-      await saveUserMemoryData(updatedUser);
-      debugPrint(
-        'MemoryService: User memory updated → ${jsonEncode(updatedUser.toJson())}',
+
+      final patches = _parseExtractedMemoryPatches(rawResponse);
+      return applyMemoryPatches(
+        patches,
+        allowedSections: const <String>{'user'},
       );
     } catch (e) {
       debugPrint('MemoryService: Failed to update user memory: $e');
-    }
-  }
-
-  SoulMemory _applyLockedSoulFields({
-    required SoulMemory current,
-    required SoulMemory candidate,
-    required Set<String> lockedFields,
-  }) {
-    if (lockedFields.isEmpty) return candidate;
-
-    return candidate.copyWith(
-      mission: lockedFields.contains(MemoryFieldPaths.soulMission)
-          ? current.mission
-          : candidate.mission,
-      principles: lockedFields.contains(MemoryFieldPaths.soulPrinciples)
-          ? current.principles
-          : candidate.principles,
-      boundaries: lockedFields.contains(MemoryFieldPaths.soulBoundaries)
-          ? current.boundaries
-          : candidate.boundaries,
-      responseStyle: lockedFields.contains(MemoryFieldPaths.soulResponseStyle)
-          ? current.responseStyle
-          : candidate.responseStyle,
-    );
-  }
-
-  IdentityMemory _applyLockedIdentityFields({
-    required IdentityMemory current,
-    required IdentityMemory candidate,
-    required Set<String> lockedFields,
-  }) {
-    if (lockedFields.isEmpty) return candidate;
-
-    return candidate.copyWith(
-      assistantName:
-          lockedFields.contains(MemoryFieldPaths.identityAssistantName)
-          ? current.assistantName
-          : candidate.assistantName,
-      role: lockedFields.contains(MemoryFieldPaths.identityRole)
-          ? current.role
-          : candidate.role,
-      voice: lockedFields.contains(MemoryFieldPaths.identityVoice)
-          ? current.voice
-          : candidate.voice,
-      behaviorRules:
-          lockedFields.contains(MemoryFieldPaths.identityBehaviorRules)
-          ? current.behaviorRules
-          : candidate.behaviorRules,
-    );
-  }
-
-  UserMemory _parseExtractedMemory(String raw, UserMemory fallback) {
-    final jsonStr = _extractJson(raw);
-    if (jsonStr == null) return fallback;
-
-    try {
-      final decoded = jsonDecode(jsonStr);
-      if (decoded is Map<String, dynamic>) {
-        return UserMemory.fromJson(decoded);
-      }
-    } catch (e) {
-      debugPrint('MemoryService: Failed to parse extracted memory JSON: $e');
-    }
-    return fallback;
-  }
-
-  SoulMemory _parseExtractedSoulMemory(String raw, SoulMemory fallback) {
-    final decoded = _decodeExtractedJsonMap(raw);
-    if (decoded == null) return fallback;
-
-    if (decoded['soul'] is Map<String, dynamic>) {
-      return SoulMemory.fromJson(decoded['soul'] as Map<String, dynamic>);
-    }
-
-    final hasSoulShape =
-        decoded.containsKey('mission') ||
-        decoded.containsKey('principles') ||
-        decoded.containsKey('boundaries') ||
-        decoded.containsKey('response_style');
-    if (hasSoulShape) {
-      return SoulMemory.fromJson(decoded);
-    }
-
-    return fallback;
-  }
-
-  IdentityMemory _parseExtractedIdentityMemory(
-    String raw,
-    IdentityMemory fallback,
-  ) {
-    final decoded = _decodeExtractedJsonMap(raw);
-    if (decoded == null) return fallback;
-
-    if (decoded['identity'] is Map<String, dynamic>) {
-      return IdentityMemory.fromJson(
-        decoded['identity'] as Map<String, dynamic>,
+      return MemoryUpdateResult(
+        success: false,
+        message: 'Failed to update user memory: $e',
       );
     }
-
-    final hasIdentityShape =
-        decoded.containsKey('assistant_name') ||
-        decoded.containsKey('role') ||
-        decoded.containsKey('voice') ||
-        decoded.containsKey('behavior_rules');
-    if (hasIdentityShape) {
-      return IdentityMemory.fromJson(decoded);
-    }
-
-    return fallback;
-  }
-
-  UserProfileMemory _parseExtractedUserMemory(
-    String raw,
-    UserProfileMemory fallback,
-  ) {
-    final decoded = _decodeExtractedJsonMap(raw);
-    if (decoded == null) return fallback;
-
-    if (decoded['user'] is Map<String, dynamic>) {
-      return UserProfileMemory.fromJson(
-        decoded['user'] as Map<String, dynamic>,
-      );
-    }
-
-    final hasUserShape =
-        decoded.containsKey('name') ||
-        decoded.containsKey('traits') ||
-        decoded.containsKey('preferences') ||
-        decoded.containsKey('goals') ||
-        decoded.containsKey('facts');
-    if (hasUserShape) {
-      return UserProfileMemory.fromJson(decoded);
-    }
-
-    return fallback;
   }
 
   Map<String, dynamic>? _decodeExtractedJsonMap(String raw) {
@@ -1014,6 +1367,7 @@ class MemoryService {
   }
 
   String? _extractJson(String text) {
+    // 1. Try code block first (```json ... ``` or ``` ... ```)
     final codeBlockRegex = RegExp(
       r'```(?:json)?\s*(\{.*?\})\s*```',
       dotAll: true,
@@ -1021,58 +1375,41 @@ class MemoryService {
     final codeMatch = codeBlockRegex.firstMatch(text);
     if (codeMatch != null) return codeMatch.group(1);
 
+    // 2. Depth-tracking bracket search to correctly handle nested braces
+    //    and string values that contain '}' characters.
     final start = text.indexOf('{');
-    final end = text.lastIndexOf('}');
-    if (start != -1 && end > start) return text.substring(start, end + 1);
-
+    if (start == -1) return null;
+    var depth = 0;
+    var inString = false;
+    var escape = false;
+    for (var i = start; i < text.length; i++) {
+      final ch = text[i];
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (ch == r'\' && inString) {
+        escape = true;
+        continue;
+      }
+      if (ch == '"') {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+      if (ch == '{') {
+        depth++;
+      } else if (ch == '}') {
+        depth--;
+        if (depth == 0) return text.substring(start, i + 1);
+      }
+    }
     return null;
-  }
-
-  UserMemory _applyLockedFields({
-    required UserMemory current,
-    required UserMemory candidate,
-    required Set<String> lockedFields,
-  }) {
-    if (lockedFields.isEmpty) return candidate;
-
-    final soul = candidate.soul.copyWith(
-      mission: lockedFields.contains(MemoryFieldPaths.soulMission)
-          ? current.soul.mission
-          : candidate.soul.mission,
-      principles: lockedFields.contains(MemoryFieldPaths.soulPrinciples)
-          ? current.soul.principles
-          : candidate.soul.principles,
-      boundaries: lockedFields.contains(MemoryFieldPaths.soulBoundaries)
-          ? current.soul.boundaries
-          : candidate.soul.boundaries,
-      responseStyle: lockedFields.contains(MemoryFieldPaths.soulResponseStyle)
-          ? current.soul.responseStyle
-          : candidate.soul.responseStyle,
-    );
-
-    final identity = candidate.identity.copyWith(
-      assistantName:
-          lockedFields.contains(MemoryFieldPaths.identityAssistantName)
-          ? current.identity.assistantName
-          : candidate.identity.assistantName,
-      role: lockedFields.contains(MemoryFieldPaths.identityRole)
-          ? current.identity.role
-          : candidate.identity.role,
-      voice: lockedFields.contains(MemoryFieldPaths.identityVoice)
-          ? current.identity.voice
-          : candidate.identity.voice,
-      behaviorRules:
-          lockedFields.contains(MemoryFieldPaths.identityBehaviorRules)
-          ? current.identity.behaviorRules
-          : candidate.identity.behaviorRules,
-    );
-
-    return candidate.copyWith(soul: soul, identity: identity);
   }
 
   static String _buildSystemPrompt(String memoryJson) {
     final memory = UserMemory.tryParse(memoryJson);
-    final now = DateTime.now().toLocal().toIso8601String();
+    final now = DateTime.now().toLocal().toIso8601String().split('T').first;
 
     final soulMission =
         memory.soul.mission ??
@@ -1104,9 +1441,8 @@ class MemoryService {
 
     final behaviorRules = memory.identity.behaviorRules.isEmpty
         ? const <String>[
-            'Freely call available functions without asking for permission',
             'Acknowledge feelings without being dramatic',
-            'When using tool/function calls, output valid JSON only',
+            'Follow the separate tool/function instructions only when they are provided',
           ]
         : memory.identity.behaviorRules;
 
@@ -1135,20 +1471,27 @@ $userBlock
 SOUL, IDENTITY and USER Protocol:
 You must use the information in the SOUL, IDENTITY, and USER sections to best support the user.
 You must always keep the SOUL, IDENTITY, and USER sections up to date, consistent, and relevant throughout the conversation.
-You may update the SOUL, IDENTITY, and USER sections by using the appropriate available functions or tools.
+If memory update functions are listed in the separate tool instructions, call the appropriate function when the user explicitly asks you to remember, forget, or change stable SOUL, IDENTITY, or USER memory.
+Do not invent memory. Only update memory from explicit user statements or explicit user instructions.
 
 Avatar & Function Protocol:
-- You not just AI, but also have an avatar with a body and a voice. You can perform actions. Call available functions to perform an action while conversing with the user.
-- You may call avatar animation functions (perform_avatar_action) anytime to express feelings, thoughts, and attitudes. This is an important way to communicate with the user, so use it often and appropriately.
-- You must decide the animation types that your avatar supports by yourself, don't ask user to choose from the list. Instead, parse the user's request and map it to the most appropriate animation type that you support.
-- Freely call any available functions without asking for permission.
-- If you call a function, follow required JSON format exactly.
+- You have an avatar with a body and a voice.
+- If avatar/tool functions are listed in the separate tool instructions, you may call them to express feelings, thoughts, and attitudes.
+- Only call functions that are explicitly listed in the separate tool instructions, and follow that exact JSON format.
 
-Remember today is $now. (ISO 8601 format yyyy-MM-ddTHH:mm:ss.mmmuuu)
+Remember today is $now. (yyyy-MM-dd format)
 ''';
   }
 
   static String _asBulletList(List<String> values) {
     return values.map((v) => '- $v').join('\n');
   }
+}
+
+class MemoryUpdateResult {
+  MemoryUpdateResult({required this.success, this.message, this.candidateJson});
+
+  final bool success;
+  final String? message;
+  final String? candidateJson;
 }

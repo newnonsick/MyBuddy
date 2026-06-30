@@ -86,10 +86,39 @@ abstract final class LlmTools {
   static const Tool updateAssistantSoul = Tool(
     name: 'update_assistant_soul',
     description:
-        'Update SOUL memory that represent your core personality, values, behavior rules, and boundaries',
+        'Update SOUL memory when the user explicitly asks to change your core mission, principles, boundaries, or response style.',
     parameters: {
       'type': 'object',
       'properties': {
+        'updates': {
+          'type': 'array',
+          'description':
+              'Memory patches to apply. Valid fields: mission, principles, boundaries, response_style. Use set for mission, add/remove/clear/set for list fields.',
+          'items': {
+            'type': 'object',
+            'properties': {
+              'field': {
+                'type': 'string',
+                'enum': [
+                  'mission',
+                  'principles',
+                  'boundaries',
+                  'response_style',
+                ],
+              },
+              'action': {
+                'type': 'string',
+                'enum': ['set', 'add', 'remove', 'clear'],
+              },
+              'value': {'type': 'string'},
+              'values': {
+                'type': 'array',
+                'items': {'type': 'string'},
+              },
+            },
+            'required': ['field', 'action'],
+          },
+        },
         'response_text': {
           'type': 'string',
           'description':
@@ -103,10 +132,34 @@ abstract final class LlmTools {
   static const Tool updateAssistantIdentity = Tool(
     name: 'update_assistant_identity',
     description:
-        'Update INDENTITY memory that represents your name, tone, style, and presentation',
+        'Update IDENTITY memory when the user explicitly asks to change your name, role, voice, tone, or behavior rules.',
     parameters: {
       'type': 'object',
       'properties': {
+        'updates': {
+          'type': 'array',
+          'description':
+              'Memory patches to apply. Valid fields: assistant_name, role, voice, behavior_rules. Use set for assistant_name/role, add/remove/clear/set for list fields.',
+          'items': {
+            'type': 'object',
+            'properties': {
+              'field': {
+                'type': 'string',
+                'enum': ['assistant_name', 'role', 'voice', 'behavior_rules'],
+              },
+              'action': {
+                'type': 'string',
+                'enum': ['set', 'add', 'remove', 'clear'],
+              },
+              'value': {'type': 'string'},
+              'values': {
+                'type': 'array',
+                'items': {'type': 'string'},
+              },
+            },
+            'required': ['field', 'action'],
+          },
+        },
         'response_text': {
           'type': 'string',
           'description':
@@ -120,10 +173,34 @@ abstract final class LlmTools {
   static const Tool updateUserMemory = Tool(
     name: 'update_user_memory',
     description:
-        'Update USER memory that represents user profile, preferences, goals, and interaction style, and context',
+        'Update USER memory when the user shares stable personal information, preferences, goals, traits, or facts that should be remembered.',
     parameters: {
       'type': 'object',
       'properties': {
+        'updates': {
+          'type': 'array',
+          'description':
+              'Memory patches to apply. Valid fields: name, traits, preferences, goals, facts. Use set for name, add/remove/clear/set for list fields.',
+          'items': {
+            'type': 'object',
+            'properties': {
+              'field': {
+                'type': 'string',
+                'enum': ['name', 'traits', 'preferences', 'goals', 'facts'],
+              },
+              'action': {
+                'type': 'string',
+                'enum': ['set', 'add', 'remove', 'clear'],
+              },
+              'value': {'type': 'string'},
+              'values': {
+                'type': 'array',
+                'items': {'type': 'string'},
+              },
+            },
+            'required': ['field', 'action'],
+          },
+        },
         'response_text': {
           'type': 'string',
           'description':

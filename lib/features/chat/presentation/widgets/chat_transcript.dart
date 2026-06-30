@@ -11,6 +11,7 @@ class ChatTranscript extends StatelessWidget {
     required this.scrollController,
     required this.sending,
     required this.hideChatLog,
+    this.pendingUserText,
   });
 
   final List<ChatLine> chat;
@@ -18,19 +19,52 @@ class ChatTranscript extends StatelessWidget {
   final bool sending;
   final bool hideChatLog;
 
+  /// Optimistic user message shown while [sending] is true and the message
+  /// has not yet been reflected in [chat] via [ChatSessionController.syncFromAppConversation].
+  final String? pendingUserText;
+
   @override
   Widget build(BuildContext context) {
     if (hideChatLog) {
       return const SizedBox.shrink();
     }
 
+    // Combine authoritative chat lines with optional optimistic pending bubble.
+    final showPending =
+        pendingUserText != null &&
+        pendingUserText!.isNotEmpty &&
+        (chat.isEmpty || !(chat.last.isUser && chat.last.text == pendingUserText));
+
+    final totalCount = chat.length + (showPending ? 1 : 0);
+
     return IgnorePointer(
       ignoring: sending,
       child: ListView.builder(
         controller: scrollController,
         padding: const EdgeInsets.only(top: 6, bottom: 6),
-        itemCount: chat.length,
+        itemCount: totalCount,
         itemBuilder: (context, index) {
+          // Render optimistic pending bubble after all confirmed messages.
+          if (showPending && index == totalCount - 1) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: Opacity(
+                    opacity: 0.55,
+                    child: ChatBubble(
+                      isUser: true,
+                      tint: Colors.white.withValues(alpha: 0.18),
+                      text: pendingUserText!,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
+
           final line = chat[index];
           final hideBubbles = hideChatLog;
           final bubbleColor = line.isUser
@@ -72,6 +106,7 @@ class ChatTranscript extends StatelessWidget {
     );
   }
 }
+
 
 class ChatBubble extends StatelessWidget {
   const ChatBubble({

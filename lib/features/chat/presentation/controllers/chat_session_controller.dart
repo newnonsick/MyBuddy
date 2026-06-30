@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-import '../../../../app/app_controller.dart';
+import '../../../../app/assistant_runtime_controller.dart';
 import '../../../../app/stt_model_controller.dart';
 import '../../../../core/audio/audio_recorder_service.dart';
 import '../../../../core/stt/stt_service.dart';
@@ -14,7 +14,7 @@ typedef ChatErrorHandler = void Function(String message);
 
 class ChatSessionController extends ChangeNotifier {
   ChatSessionController({
-    required AppController appController,
+    required AssistantRuntimeController appController,
     required SttModelController sttModelController,
     required SttService sttService,
     required AudioRecorderService recorder,
@@ -31,7 +31,7 @@ class ChatSessionController extends ChangeNotifier {
     syncFromAppConversation();
   }
 
-  final AppController _appController;
+  final AssistantRuntimeController _appController;
   final SttModelController _sttModelController;
   final SttService _sttService;
   final AudioRecorderService _recorder;
@@ -41,6 +41,11 @@ class ChatSessionController extends ChangeNotifier {
 
   final List<ChatLine> _chat = <ChatLine>[];
   List<ChatLine> get chat => List<ChatLine>.unmodifiable(_chat);
+
+  /// Text that has been submitted but not yet reflected in [_appController.conversation].
+  /// Used to show an optimistic user bubble immediately on send.
+  String? _pendingUserText;
+  String? get pendingUserText => _pendingUserText;
 
   bool _sending = false;
   bool get sending => _sending;
@@ -63,6 +68,13 @@ class ChatSessionController extends ChangeNotifier {
         .map(_mapConversationLine)
         .whereType<ChatLine>()
         .toList(growable: false);
+
+    // Once the user's message has made it into the authoritative conversation,
+    // clear the optimistic pending bubble to avoid showing it twice.
+    if (_pendingUserText != null &&
+        next.any((l) => l.isUser && l.text == _pendingUserText)) {
+      _pendingUserText = null;
+    }
 
     if (_isSameChat(next)) return;
 
@@ -111,7 +123,9 @@ class ChatSessionController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      debugPrint('ChatSessionController: calling _recorder.start() (type=${_recorder.runtimeType})');
+      debugPrint(
+        'ChatSessionController: calling _recorder.start() (type=${_recorder.runtimeType})',
+      );
       await _recorder.start();
       if (generation != _recordGeneration) return;
       _recordStartedAt = DateTime.now();
@@ -156,7 +170,9 @@ class ChatSessionController extends ChangeNotifier {
     try {
       final audioPath = await _recorder.stop();
       if (generation != _recordGeneration) return;
-      debugPrint('ChatSessionController: _recorder.stop() returned path=$audioPath');
+      debugPrint(
+        'ChatSessionController: _recorder.stop() returned path=$audioPath',
+      );
 
       if (audioPath == null || audioPath.trim().isEmpty) {
         throw StateError('No audio file recorded.');
@@ -175,7 +191,9 @@ class ChatSessionController extends ChangeNotifier {
       final audioFile = File(audioPath);
       final exists = await audioFile.exists();
       final bytes = exists ? await audioFile.length() : 0;
-      debugPrint('ChatSessionController: file=$audioPath exists=$exists bytes=$bytes');
+      debugPrint(
+        'ChatSessionController: file=$audioPath exists=$exists bytes=$bytes',
+      );
       if (bytes < 2048) {
         throw StateError('Recording is too short (file is ${bytes}B).');
       }
@@ -221,27 +239,26 @@ class ChatSessionController extends ChangeNotifier {
     if (text.isEmpty || _sending || _appController.generatingResponse) return;
 
     _sending = true;
-    _chat.add(ChatLine.user(text));
+    // Set the pending text so the UI can show an optimistic user bubble
+    // immediately, before chatOnce() adds the message to _conversation.
+    _pendingUserText = text;
     notifyListeners();
 
     try {
       final reply = await _appController.chatOnce(text);
+      // chatOnce() adds the user + assistant messages to _conversation and
+      // calls notifyListeners(), which triggers syncFromAppConversation() in
+      // BuddyHomePage._onAppConversationUpdated(). That sync rebuilds _chat
+      // from _conversation, so we must NOT add to _chat manually here.
 
       final trimmed = reply.trim();
       if (trimmed.isEmpty) {
-        _chat.add(ChatLine.assistant('[No response from model]'));
-        notifyListeners();
+        // Edge case: empty reply — add placeholder only if sync didn't cover it.
+        if (_chat.isEmpty || !_chat.last.isAssistant) {
+          _chat.add(ChatLine.assistant('[No response from model]'));
+          notifyListeners();
+        }
         return;
-      }
-
-      final alreadyAppendedBySync =
-          _chat.isNotEmpty &&
-          _chat.last.isAssistant &&
-          _chat.last.text == trimmed;
-
-      if (!alreadyAppendedBySync) {
-        _chat.add(ChatLine.assistant(trimmed));
-        notifyListeners();
       }
 
       if (_onSpeak != null) {
@@ -265,6 +282,7 @@ class ChatSessionController extends ChangeNotifier {
       _chat.add(ChatLine.assistant('Error: $e'));
       notifyListeners();
     } finally {
+      _pendingUserText = null;
       _sending = false;
       notifyListeners();
     }

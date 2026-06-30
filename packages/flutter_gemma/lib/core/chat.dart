@@ -341,7 +341,8 @@ class InferenceChat {
         try {
           // For JSON parsing, use funcBuffer (the actual JSON part)
           // For FunctionGemma parsing, use contentToCheck (full function call)
-          if (modelType != ModelType.functionGemma) {
+          if (modelType != ModelType.functionGemma &&
+              funcBuffer.trim().startsWith('{')) {
             final jsonData = jsonDecode(funcBuffer);
             if (jsonData is Map<String, dynamic> &&
                 jsonData.containsKey('message')) {
