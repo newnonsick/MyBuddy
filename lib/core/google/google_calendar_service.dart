@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
 
+import 'calendar_event_gateway.dart';
 import 'google_auth_service.dart';
 
 class CalendarEvent {
@@ -12,6 +13,7 @@ class CalendarEvent {
     required this.startTime,
     required this.endTime,
     this.isAllDay = false,
+    this.timeZoneId,
     this.location,
     this.colorId,
   });
@@ -53,6 +55,7 @@ class CalendarEvent {
   final DateTime startTime;
   final DateTime endTime;
   final bool isAllDay;
+  final String? timeZoneId;
   final String? location;
   final String? colorId;
 
@@ -62,13 +65,12 @@ class CalendarEvent {
     event.description = description;
     event.location = location;
 
-    final timeZoneInfo = await FlutterTimezone.getLocalTimezone();
-    final timeZoneName = timeZoneInfo.identifier;
-
     if (isAllDay) {
       event.start = calendar.EventDateTime(date: startTime);
       event.end = calendar.EventDateTime(date: endTime);
     } else {
+      final timeZoneName =
+          timeZoneId ?? (await FlutterTimezone.getLocalTimezone()).identifier;
       event.start = calendar.EventDateTime(
         dateTime: startTime,
         timeZone: timeZoneName,
@@ -83,18 +85,20 @@ class CalendarEvent {
   }
 }
 
-class CalendarResult<T> {
-  CalendarResult.success(this.data) : error = null;
-  CalendarResult.failure(this.error) : data = null;
+final class CalendarResult<T> {
+  const CalendarResult.success(this.data) : failure = null;
+  const CalendarResult.failure(this.failure) : data = null;
 
   final T? data;
-  final String? error;
+  final CalendarFailure? failure;
 
-  bool get isSuccess => error == null;
-  bool get isFailure => error != null;
+  String? get error => failure?.message;
+  bool get isSuccess => failure == null;
+  bool get isFailure => failure != null;
 }
 
-class GoogleCalendarService extends ChangeNotifier {
+class GoogleCalendarService extends ChangeNotifier
+    implements CalendarEventGateway {
   GoogleCalendarService({required this.authService}) {
     authService.addListener(_onAuthChanged);
   }
@@ -118,6 +122,9 @@ class GoogleCalendarService extends ChangeNotifier {
   DateTime get selectedDate => _selectedDate;
 
   bool get isReady => authService.isSignedIn && _calendarApi != null;
+
+  @override
+  bool get isAvailable => isReady;
 
   void _onAuthChanged() {
     if (authService.isSignedIn && authService.authClient != null) {
@@ -151,14 +158,20 @@ class GoogleCalendarService extends ChangeNotifier {
     _events.sort((a, b) => a.startTime.compareTo(b.startTime));
   }
 
-  Future<String?> _ensureFreshApi() async {
+  Future<CalendarFailure?> _ensureFreshApi() async {
     if (!authService.isSignedIn) {
-      return 'Please sign in to access your calendar.';
+      return const CalendarFailure(
+        CalendarFailureCode.notAuthenticated,
+        'Please sign in to access your calendar.',
+      );
     }
 
     final tokenValid = await authService.ensureValidToken();
     if (!tokenValid) {
-      return 'Session expired. Please sign in again.';
+      return const CalendarFailure(
+        CalendarFailureCode.notAuthenticated,
+        'Session expired. Please sign in again.',
+      );
     }
 
     if (_calendarApi == null ||
@@ -174,9 +187,9 @@ class GoogleCalendarService extends ChangeNotifier {
     DateTime? startDate,
     DateTime? endDate,
   }) async {
-    final error = await _ensureFreshApi();
-    if (error != null) {
-      return CalendarResult.failure(error);
+    final failure = await _ensureFreshApi();
+    if (failure != null) {
+      return CalendarResult.failure(failure);
     }
 
     try {
@@ -205,11 +218,15 @@ class GoogleCalendarService extends ChangeNotifier {
 
       return CalendarResult.success(fetchedEvents);
     } catch (e) {
-      debugPrint('GoogleCalendarService: Failed to fetch events: $e');
-      final error = _parseApiError(e);
-      _setError(error);
+      final failure = mapGoogleCalendarFailure(e);
+      if (kDebugMode) {
+        debugPrint(
+          'GoogleCalendarService: fetch failed code=${failure.code.name}',
+        );
+      }
+      _setError(failure.message);
       _setLoading(false);
-      return CalendarResult.failure(error);
+      return CalendarResult.failure(failure);
     }
   }
 
@@ -237,11 +254,12 @@ class GoogleCalendarService extends ChangeNotifier {
     required DateTime startTime,
     required DateTime endTime,
     bool isAllDay = false,
+    String? timeZoneId,
     String? location,
   }) async {
-    final error = await _ensureFreshApi();
-    if (error != null) {
-      return CalendarResult.failure(error);
+    final failure = await _ensureFreshApi();
+    if (failure != null) {
+      return CalendarResult.failure(failure);
     }
 
     _setLoading(true);
@@ -255,6 +273,7 @@ class GoogleCalendarService extends ChangeNotifier {
         startTime: startTime,
         endTime: endTime,
         isAllDay: isAllDay,
+        timeZoneId: timeZoneId,
         location: location,
       );
 
@@ -272,12 +291,34 @@ class GoogleCalendarService extends ChangeNotifier {
       _setLoading(false);
       return CalendarResult.success(newEvent);
     } catch (e) {
-      debugPrint('GoogleCalendarService: Failed to create event: $e');
-      final error = _parseApiError(e);
-      _setError(error);
+      final failure = mapGoogleCalendarFailure(e);
+      if (kDebugMode) {
+        debugPrint(
+          'GoogleCalendarService: create failed code=${failure.code.name}',
+        );
+      }
+      _setError(failure.message);
       _setLoading(false);
-      return CalendarResult.failure(error);
+      return CalendarResult.failure(failure);
     }
+  }
+
+  @override
+  Future<CalendarCreateResult> createCalendarEvent(
+    CalendarCreateRequest request,
+  ) async {
+    final result = await createEvent(
+      title: request.title,
+      description: request.description,
+      startTime: request.startTime,
+      endTime: request.endTime,
+      isAllDay: request.isAllDay,
+      timeZoneId: request.timeZoneId,
+      location: request.location,
+    );
+    final failure = result.failure;
+    if (failure != null) return CalendarCreateResult.failure(failure);
+    return CalendarCreateResult.success(eventId: result.data?.id);
   }
 
   Future<CalendarResult<CalendarEvent>> updateEvent({
@@ -289,9 +330,9 @@ class GoogleCalendarService extends ChangeNotifier {
     bool isAllDay = false,
     String? location,
   }) async {
-    final error = await _ensureFreshApi();
-    if (error != null) {
-      return CalendarResult.failure(error);
+    final failure = await _ensureFreshApi();
+    if (failure != null) {
+      return CalendarResult.failure(failure);
     }
 
     _setLoading(true);
@@ -328,18 +369,22 @@ class GoogleCalendarService extends ChangeNotifier {
       _setLoading(false);
       return CalendarResult.success(updatedCalendarEvent);
     } catch (e) {
-      debugPrint('GoogleCalendarService: Failed to update event: $e');
-      final error = _parseApiError(e);
-      _setError(error);
+      final failure = mapGoogleCalendarFailure(e);
+      if (kDebugMode) {
+        debugPrint(
+          'GoogleCalendarService: update failed code=${failure.code.name}',
+        );
+      }
+      _setError(failure.message);
       _setLoading(false);
-      return CalendarResult.failure(error);
+      return CalendarResult.failure(failure);
     }
   }
 
   Future<CalendarResult<void>> deleteEvent(String eventId) async {
-    final error = await _ensureFreshApi();
-    if (error != null) {
-      return CalendarResult.failure(error);
+    final failure = await _ensureFreshApi();
+    if (failure != null) {
+      return CalendarResult.failure(failure);
     }
 
     _setLoading(true);
@@ -351,13 +396,17 @@ class GoogleCalendarService extends ChangeNotifier {
       _events.removeWhere((e) => e.id == eventId);
 
       _setLoading(false);
-      return CalendarResult.success(null);
+      return const CalendarResult.success(null);
     } catch (e) {
-      debugPrint('GoogleCalendarService: Failed to delete event: $e');
-      final error = _parseApiError(e);
-      _setError(error);
+      final failure = mapGoogleCalendarFailure(e);
+      if (kDebugMode) {
+        debugPrint(
+          'GoogleCalendarService: delete failed code=${failure.code.name}',
+        );
+      }
+      _setError(failure.message);
       _setLoading(false);
-      return CalendarResult.failure(error);
+      return CalendarResult.failure(failure);
     }
   }
 
@@ -401,34 +450,50 @@ class GoogleCalendarService extends ChangeNotifier {
     }
   }
 
-  String _parseApiError(dynamic error) {
-    final message = error.toString().toLowerCase();
-
-    if (message.contains('network') || message.contains('socket')) {
-      return 'Network error. Please check your connection.';
-    }
-    if (message.contains('401') || message.contains('unauthorized')) {
-      return 'Authentication failed. Please sign in again.';
-    }
-    if (message.contains('403') || message.contains('forbidden')) {
-      return 'Access denied. Please check calendar permissions.';
-    }
-    if (message.contains('404') || message.contains('not found')) {
-      return 'Calendar or event not found.';
-    }
-    if (message.contains('429') || message.contains('rate')) {
-      return 'Too many requests. Please wait and try again.';
-    }
-    if (message.contains('500') || message.contains('server')) {
-      return 'Google Calendar is temporarily unavailable.';
-    }
-
-    return 'An error occurred. Please try again.';
-  }
-
   @override
   void dispose() {
     authService.removeListener(_onAuthChanged);
     super.dispose();
   }
+}
+
+@visibleForTesting
+CalendarFailure mapGoogleCalendarFailure(Object error) {
+  if (error is calendar.DetailedApiRequestError) {
+    return switch (error.status) {
+      401 => const CalendarFailure(
+        CalendarFailureCode.notAuthenticated,
+        'Authentication failed. Please sign in again.',
+      ),
+      403 => const CalendarFailure(
+        CalendarFailureCode.permissionDenied,
+        'Access denied. Please check calendar permissions.',
+      ),
+      429 => const CalendarFailure(
+        CalendarFailureCode.rateLimited,
+        'Too many requests. Please wait and try again.',
+      ),
+      final status when status != null && status >= 500 =>
+        const CalendarFailure(
+          CalendarFailureCode.serviceUnavailable,
+          'Google Calendar is temporarily unavailable.',
+        ),
+      _ => const CalendarFailure(
+        CalendarFailureCode.unknown,
+        'An error occurred. Please try again.',
+      ),
+    };
+  }
+
+  final message = error.toString().toLowerCase();
+  if (message.contains('network') || message.contains('socket')) {
+    return const CalendarFailure(
+      CalendarFailureCode.networkUnavailable,
+      'Network error. Please check your connection.',
+    );
+  }
+  return const CalendarFailure(
+    CalendarFailureCode.unknown,
+    'An error occurred. Please try again.',
+  );
 }

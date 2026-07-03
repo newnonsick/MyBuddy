@@ -282,8 +282,6 @@ class AppController extends AssistantRuntimeController {
       _conversation.add(_createMessage('assistant', assistant));
       notifyListeners();
 
-      debugPrint('LLM assistant response:\n$assistant');
-
       unawaited(_handleMemoryTurnProgress());
 
       return assistant;

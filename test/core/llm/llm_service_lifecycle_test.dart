@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mybuddy/core/google/calendar_event_gateway.dart';
 import 'package:mybuddy/core/llm/llm_service.dart';
+import 'package:mybuddy/core/llm/temporal_context.dart';
 import 'package:mybuddy/core/memory/memory_service.dart';
 import 'package:mybuddy/core/unity/unity_bridge.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -152,15 +154,16 @@ void main() {
       supportsFunctionCalls: true,
     );
     fakePlatform.asyncResponseBatches.add([
-      '<|tool_call|>call:update_user_memory{response_text:<escape>Memory queued.<escape>}<|/tool_call|>',
+      '<|tool_call|>call:perform_avatar_action{animation:<escape>think<escape>,animate_count:1}<|/tool_call|>',
     ]);
+    fakePlatform.asyncResponseBatches.add(['Tool handled.']);
 
     final reply = await service.generateChat(
       systemText: 'system',
       userText: 'remember this',
     );
 
-    expect(reply, 'Memory queued.');
+    expect(reply, 'Tool handled.');
     expect(reply, isNot(contains('<|tool_call')));
   });
 
@@ -174,8 +177,9 @@ void main() {
       supportsFunctionCalls: true,
     );
     fakePlatform.asyncResponseBatches.add([
-      '{"name":"update_user_memory","parameters":{"response_text":"I will remember that.","updates":[{"field":"preferences","action":"add","value":"prefers concise answers"}]}}',
+      '{"name":"update_user_memory","parameters":{"updates":[{"field":"preferences","action":"add","value":"prefers concise answers"}]}}',
     ]);
+    fakePlatform.asyncResponseBatches.add(['I will remember that.']);
 
     final reply = await service.generateChat(
       systemText: 'system',
@@ -203,8 +207,9 @@ void main() {
         supportsFunctionCalls: false,
       );
       fakePlatform.asyncResponseBatches.add([
-        '<|tool_call>call:function_avatar_action{animation:<|"|>think<|"|>,animate_count:1,response_text_text:<|"|>I can certainly help you with that. I\'ll make a reminder for you to grab milk on your way home tonight. Is there anything else I can assist you with right now?<|"|>}<tool_call|>',
+        '<|tool_call>call:function_avatar_action{animation:<|"|>think<|"|>,animate_count:1}<tool_call|>',
       ]);
+      fakePlatform.asyncResponseBatches.add(['Avatar handled.']);
       fakePlatform.asyncResponseBatches.add(['clean next response']);
 
       final reply = await service.generateChat(
@@ -212,10 +217,7 @@ void main() {
         userText: 'remember this too',
       );
 
-      expect(
-        reply,
-        'I can certainly help you with that. I\'ll make a reminder for you to grab milk on your way home tonight. Is there anything else I can assist you with right now?',
-      );
+      expect(reply, 'Avatar handled.');
       expect(reply, isNot(contains('<|tool_call')));
 
       final next = await service.generateChat(
@@ -223,7 +225,7 @@ void main() {
         userText: 'next turn',
       );
       expect(next, 'clean next response');
-      expect(fakePlatform.createChatCount, 2);
+      expect(fakePlatform.createChatCount, 1);
 
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(unityChannel, null);
@@ -245,8 +247,9 @@ void main() {
         supportsFunctionCalls: false,
       );
       fakePlatform.asyncResponseBatches.add([
-        '{"name":"perform_avatar_action","parameters":{"animation":"think","animate_count":1,"response_text":"JSON handled."}}',
+        '{"name":"perform_avatar_action","parameters":{"animation":"think","animate_count":1}}',
       ]);
+      fakePlatform.asyncResponseBatches.add(['JSON handled.']);
 
       final reply = await service.generateChat(
         systemText: 'system',
@@ -259,4 +262,173 @@ void main() {
           .setMockMethodCallHandler(unityChannel, null);
     },
   );
+
+  test('executes every tool in a JSON array before final response', () async {
+    const unityChannel = MethodChannel('unity_bridge_parallel_test');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(unityChannel, (_) async => null);
+    final memoryService = MemoryService();
+    service = LlmService(
+      platform: fakePlatform,
+      unityBridge: UnityBridge(channel: unityChannel),
+      memoryService: memoryService,
+      modelType: ModelType.qwen,
+      supportsFunctionCalls: true,
+    );
+    fakePlatform.asyncResponseBatches.add([
+      '[{"name":"perform_avatar_action","parameters":{"animation":"greet"}},'
+          '{"name":"update_user_memory","parameters":{"updates":[{"field":"preferences","action":"add","value":"likes tea"}]}}]',
+    ]);
+    fakePlatform.asyncResponseBatches.add(['Both actions completed.']);
+
+    final reply = await service.generateChat(
+      systemText: 'system',
+      userText: 'Greet me and remember I like tea',
+    );
+
+    expect(reply, 'Both actions completed.');
+    expect(
+      (await memoryService.loadMemoryData()).user.preferences,
+      contains('likes tea'),
+    );
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(unityChannel, null);
+  });
+
+  test(
+    'calendar turn reuses one temporal snapshot without memory leak',
+    () async {
+      final temporalSource = _FakeTemporalContextSource();
+      final calendarGateway = _FakeCalendarGateway();
+      service = LlmService(
+        platform: fakePlatform,
+        unityBridge: UnityBridge(),
+        memoryService: MemoryService(),
+        calendarEventGateway: calendarGateway,
+        temporalContextSource: temporalSource,
+        modelType: ModelType.qwen,
+        supportsFunctionCalls: true,
+      );
+      fakePlatform.asyncResponseBatches.add([
+        '{"name":"create_calendar_event","parameters":{"title":"Review",'
+            '"start":{"year":2026,"month":7,"day":2,"hour":16}}}',
+      ]);
+      fakePlatform.asyncResponseBatches.add(['Calendar event created.']);
+
+      final reply = await service.generateChat(
+        systemText: 'system',
+        userText: 'in two hours',
+      );
+      await service.extractUserMemoryFromChat('{}');
+
+      expect(reply, 'Calendar event created.');
+      expect(temporalSource.captureCount, 1);
+      expect(
+        fakePlatform.acceptedQueries.first,
+        startsWith('<runtime_context>'),
+      );
+      expect(fakePlatform.acceptedQueries.first, endsWith('\nin two hours'));
+      expect(calendarGateway.requests.single.timeZoneId, 'Asia/Bangkok');
+      expect(
+        calendarGateway.requests.single.startTime,
+        DateTime(2026, 7, 2, 16),
+      );
+      expect(fakePlatform.acceptedQueries.last, contains('User: in two hours'));
+      expect(
+        fakePlatform.acceptedQueries.last,
+        isNot(contains('<runtime_context>')),
+      );
+      expect(fakePlatform.createChatCount, 1);
+    },
+  );
+
+  test('date-only calendar call creates an exclusive all-day event', () async {
+    final calendarGateway = _FakeCalendarGateway();
+    service = LlmService(
+      platform: fakePlatform,
+      unityBridge: UnityBridge(),
+      memoryService: MemoryService(),
+      calendarEventGateway: calendarGateway,
+      temporalContextSource: _FakeTemporalContextSource(),
+      modelType: ModelType.qwen,
+      supportsFunctionCalls: true,
+    );
+    fakePlatform.asyncResponseBatches.add([
+      '{"name":"create_calendar_event","parameters":{"title":"Holiday",'
+          '"start":{"year":2026,"month":7,"day":3}}}',
+    ]);
+    fakePlatform.asyncResponseBatches.add(['All-day event created.']);
+
+    final reply = await service.generateChat(
+      systemText: 'system',
+      userText: 'tomorrow',
+    );
+
+    final request = calendarGateway.requests.single;
+    expect(reply, 'All-day event created.');
+    expect(request.isAllDay, isTrue);
+    expect(request.startTime, DateTime(2026, 7, 3));
+    expect(request.endTime, DateTime(2026, 7, 4));
+  });
+
+  test('invalid calendar components are corrected before execution', () async {
+    final calendarGateway = _FakeCalendarGateway();
+    service = LlmService(
+      platform: fakePlatform,
+      unityBridge: UnityBridge(),
+      memoryService: MemoryService(),
+      calendarEventGateway: calendarGateway,
+      temporalContextSource: _FakeTemporalContextSource(),
+      modelType: ModelType.qwen,
+      supportsFunctionCalls: true,
+    );
+    fakePlatform.asyncResponseBatches.add([
+      '{"name":"create_calendar_event","parameters":{"title":"Review",'
+          '"start":{"year":2026,"month":13,"day":3,"hour":16}}}',
+    ]);
+    fakePlatform.asyncResponseBatches.add([
+      '{"name":"create_calendar_event","parameters":{"title":"Review",'
+          '"start":{"year":2026,"month":7,"day":3,"hour":16}}}',
+    ]);
+    fakePlatform.asyncResponseBatches.add(['Corrected event created.']);
+
+    final reply = await service.generateChat(
+      systemText: 'system',
+      userText: 'create review event',
+    );
+
+    expect(reply, 'Corrected event created.');
+    expect(calendarGateway.requests, hasLength(1));
+    expect(calendarGateway.requests.single.startTime, DateTime(2026, 7, 3, 16));
+  });
+}
+
+final class _FakeTemporalContextSource implements TemporalContextSource {
+  int captureCount = 0;
+
+  @override
+  Future<TemporalContext> capture() async {
+    captureCount++;
+    return TemporalContext(
+      localNow: DateTime(2026, 7, 2, 14),
+      timeZoneId: 'Asia/Bangkok',
+      utcOffset: const Duration(hours: 7),
+    );
+  }
+}
+
+final class _FakeCalendarGateway implements CalendarEventGateway {
+  final List<CalendarCreateRequest> requests = <CalendarCreateRequest>[];
+
+  @override
+  bool get isAvailable => true;
+
+  @override
+  Future<CalendarCreateResult> createCalendarEvent(
+    CalendarCreateRequest request,
+  ) async {
+    requests.add(request);
+    return const CalendarCreateResult.success(eventId: 'event-1');
+  }
 }

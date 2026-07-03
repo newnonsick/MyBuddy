@@ -1,19 +1,20 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 
-import '../../shared/utils/json_extractor.dart';
-import '../google/google_auth_service.dart';
-import '../google/google_calendar_service.dart';
+import '../google/calendar_event_gateway.dart';
 import '../memory/memory_service.dart';
 import '../unity/unity_bridge.dart';
-import 'function_call_handler.dart';
 import 'llm_errors.dart';
 import 'llm_platform.dart';
-import 'llm_tools.dart';
+import 'model_turn_collector.dart';
+import 'temporal_context.dart';
+import 'tool_loop_chat.dart';
+import 'tool_orchestrator.dart';
+import 'tool_prompt_builder.dart';
+import 'tool_registry.dart';
 
 class LlmService {
   LlmService({
@@ -31,9 +32,11 @@ class LlmService {
     this.modelFileType = ModelFileType.task,
     required this.unityBridge,
     required this.memoryService,
-    this.googleAuthService,
-    this.googleCalendarService,
-  }) : platform = platform ?? const FlutterGemmaLlmPlatform();
+    this.calendarEventGateway,
+    TemporalContextSource? temporalContextSource,
+  }) : platform = platform ?? const FlutterGemmaLlmPlatform(),
+       temporalContextSource =
+           temporalContextSource ?? const DeviceTemporalContextSource();
 
   factory LlmService.dummy() =>
       LlmService(unityBridge: UnityBridge(), memoryService: MemoryService());
@@ -53,8 +56,8 @@ class LlmService {
 
   final UnityBridge unityBridge;
   final MemoryService memoryService;
-  final GoogleAuthService? googleAuthService;
-  final GoogleCalendarService? googleCalendarService;
+  final CalendarEventGateway? calendarEventGateway;
+  final TemporalContextSource temporalContextSource;
 
   InferenceModel? _model;
   InferenceChat? _chat;
@@ -65,22 +68,6 @@ class LlmService {
   Future<void>? _activationFuture;
   String? _systemFingerprint;
   final List<Message> _canonicalDialogue = <Message>[];
-
-  late final FunctionCallHandler _functionCallHandler = FunctionCallHandler(
-    unityBridge: unityBridge,
-    memoryService: memoryService,
-    googleAuthService: googleAuthService,
-    googleCalendarService: googleCalendarService,
-  );
-
-  Future<List<Tool>> _getTools() async {
-    final autoUpdateAllowed = await memoryService.isAutoUpdateAllowed();
-    return LlmTools.getAvailableTools(
-      googleAuthService: googleAuthService,
-      googleCalendarService: googleCalendarService,
-      isAutoMemoryUpdateAllowed: autoUpdateAllowed,
-    );
-  }
 
   Future<T> _runExclusive<T>(Future<T> Function() action) {
     if (Zone.current[_exclusiveZoneKey] == true) {
@@ -146,17 +133,6 @@ class LlmService {
     if (model != null) {
       try {
         await model.close();
-      } catch (_) {}
-    }
-  }
-
-  Future<void> _discardChatSession() async {
-    final chat = _chat;
-    _chat = null;
-    _systemFingerprint = null;
-    if (chat != null) {
-      try {
-        await chat.session.close();
       } catch (_) {}
     }
   }
@@ -236,45 +212,6 @@ class LlmService {
       _model = retryModel;
       return retryModel;
     }
-  }
-
-  String _buildToolsSystemInstruction(List<Tool> tools) {
-    if (tools.isEmpty) return '';
-
-    final buffer = StringBuffer();
-    buffer.writeln(
-      'You have access to functions and freely call any available function without asking for permission.',
-    );
-    buffer.writeln(
-      'When you call a function, respond with ONLY the JSON in this exact shape: {"name": "function_name", "parameters": {"argument": "value"}}',
-    );
-    buffer.writeln(
-      'You must always ensure that the JSON output is valid and follows the correct format.',
-    );
-    buffer.writeln(
-      'Use only function names listed in <tool_code>. Do not invent aliases such as function_avatar_action.',
-    );
-    buffer.writeln(
-      'When the user explicitly asks you to remember something, forget something, or change SOUL/IDENTITY/USER memory, call the appropriate memory update function with concrete updates.',
-    );
-    buffer.writeln(
-      'You must call only 1 function at a time. Do not call multiple functions in the same response. Do not respond with multiple JSON objects. If you want to call multiple functions, call them one at a time in separate responses.',
-    );
-    buffer.writeln(
-      'After a function is executed, you will receive its result as a tool response. Based on that result, you can call the same function again, call a different function, or continue the conversation without calling any function by responding to the user with normal text.',
-    );
-    buffer.writeln('<tool_code>');
-    for (final tool in tools) {
-      buffer.writeln(
-        jsonEncode(<String, Object?>{
-          'name': tool.name,
-          'description': tool.description,
-          'parameters': tool.parameters,
-        }),
-      );
-    }
-    buffer.writeln('</tool_code>');
-    return buffer.toString().trim();
   }
 
   String _composeSystemText(String systemText, String toolsInstruction) {
@@ -390,7 +327,6 @@ class LlmService {
     return cleaned;
   }
 
-  static const int _maxFunctionCallDepth = 10;
   static const int _maxCanonicalMessages = 50;
   static const Duration _chatGenerationTimeout = Duration(minutes: 5);
 
@@ -400,8 +336,18 @@ class LlmService {
   }) async {
     return _runExclusive(() async {
       final model = await _ensureModel();
-      final tools = await _getTools();
-      final toolsInstruction = _buildToolsSystemInstruction(tools);
+      final temporalContext = calendarEventGateway?.isAvailable ?? false
+          ? await temporalContextSource.capture()
+          : null;
+      final toolSnapshot = await ToolRegistry.forApp(
+        unityBridge: unityBridge,
+        memoryService: memoryService,
+        calendarEventGateway: calendarEventGateway,
+        calendarTimeZoneId: temporalContext?.timeZoneId,
+      ).snapshot();
+      final toolsInstruction = const ToolPromptBuilder().build(
+        toolSnapshot.definitions,
+      );
       final composedSystemText = _composeSystemText(
         systemText ?? '',
         toolsInstruction,
@@ -424,14 +370,20 @@ class LlmService {
           supportsFunctionCalls: supportsFunctionCalls,
           isThinking: isThinking,
           modelType: modelType,
-          tools: supportsFunctionCalls ? tools : const <Tool>[],
+          tools: supportsFunctionCalls
+              ? toolSnapshot.definitions
+              : const <Tool>[],
           systemInstruction: composedSystemText,
         );
         _systemFingerprint = composedSystemText;
         await _replayCanonicalDialogue(_chat!);
       }
 
-      final userMessage = Message.text(text: userText, isUser: true);
+      final modelUserText = temporalContext == null
+          ? userText
+          : '${temporalContext.toPromptBlock()}\n$userText';
+      final userMessage = Message.text(text: modelUserText, isUser: true);
+      final canonicalUserMessage = Message.text(text: userText, isUser: true);
       var stage = _GenerationStage.preparing;
       var attempts = 0;
 
@@ -443,14 +395,17 @@ class LlmService {
             stage = _GenerationStage.queryAccepted;
           }
 
-          final result = await _generateAndHandleFunctionCalls(
-            _chat!,
-            depth: 0,
-            message: null,
-            onStageChanged: (s) => stage = s,
-          );
+          stage = _GenerationStage.generating;
+          final result = await ToolOrchestrator(
+            chat: InferenceToolLoopChat(
+              _chat!,
+              generationTimeout: _chatGenerationTimeout,
+            ),
+            collector: ModelTurnCollector(modelType: modelType),
+            tools: toolSnapshot,
+          ).run();
 
-          _canonicalDialogue.add(userMessage);
+          _canonicalDialogue.add(canonicalUserMessage);
           _canonicalDialogue.add(Message.text(text: result, isUser: false));
           if (_canonicalDialogue.length > _maxCanonicalMessages) {
             _canonicalDialogue.removeRange(
@@ -477,7 +432,9 @@ class LlmService {
               supportsFunctionCalls: supportsFunctionCalls,
               isThinking: isThinking,
               modelType: modelType,
-              tools: supportsFunctionCalls ? tools : const <Tool>[],
+              tools: supportsFunctionCalls
+                  ? toolSnapshot.definitions
+                  : const <Tool>[],
               systemInstruction: composedSystemText,
             );
             _systemFingerprint = composedSystemText;
@@ -489,6 +446,7 @@ class LlmService {
             'LlmService: Post-acceptance failure, closing session and propagating error.',
           );
           await _resetNativeState();
+          if (e is LlmRuntimeException) rethrow;
           throw LlmRuntimeException(
             LlmErrorCode.generationInterrupted,
             'Generation was interrupted and could not complete.',
@@ -497,191 +455,6 @@ class LlmService {
         }
       }
     });
-  }
-
-  Future<String> _generateAndHandleFunctionCalls(
-    InferenceChat chat, {
-    required int depth,
-    required Message? message,
-    void Function(_GenerationStage)? onStageChanged,
-  }) async {
-    if (depth >= _maxFunctionCallDepth) {
-      return 'Maximum function call depth reached.';
-    }
-
-    final buffer = StringBuffer();
-    FunctionCallResponse? pendingFunctionCall;
-    try {
-      if (message != null) {
-        debugPrint(
-          'in _generateAndHandleFunctionCalls Adding query chunk to chat: ${message.text}',
-        );
-        await chat.addQueryChunk(message);
-      }
-
-      debugPrint(
-        'in _generateAndHandleFunctionCalls Starting to listen for response chunks...',
-      );
-
-      onStageChanged?.call(_GenerationStage.generating);
-
-      await for (final response in chat.generateChatResponseAsync().timeout(
-        _chatGenerationTimeout,
-      )) {
-        debugPrint(
-          'Received response chunk: $response type: ${response.runtimeType}',
-        );
-        if (response is TextResponse) {
-          buffer.write(response.token);
-        } else if (response is FunctionCallResponse) {
-          pendingFunctionCall = response;
-        } else if (response is ParallelFunctionCallResponse) {
-          for (final funcCall in response.calls) {
-            pendingFunctionCall = funcCall;
-            break;
-          }
-        }
-      }
-    } catch (e) {
-      rethrow;
-    }
-
-    if (pendingFunctionCall != null) {
-      return _executeFunctionCallAndContinue(
-        chat,
-        pendingFunctionCall,
-        depth: depth,
-        onStageChanged: onStageChanged,
-      );
-    }
-
-    final text = buffer.toString();
-    final cleanedResponse = _cleanResponse(text);
-
-    return _processTextFunctionCalls(
-      chat,
-      cleanedResponse,
-      depth: depth,
-      onStageChanged: onStageChanged,
-    );
-  }
-
-  Future<String> _executeFunctionCallAndContinue(
-    InferenceChat chat,
-    FunctionCallResponse functionCall, {
-    required int depth,
-    void Function(_GenerationStage)? onStageChanged,
-  }) async {
-    final toolResponse = await _handleToolCall(functionCall);
-
-    final responseText = toolResponse['response_text'] as String?;
-    if (responseText != null && responseText.trim().isNotEmpty) {
-      await _discardChatSession();
-      return responseText.trim();
-    }
-
-    final toolMessage = Message.toolResponse(
-      toolName: functionCall.name,
-      response: toolResponse,
-    );
-
-    return _generateAndHandleFunctionCalls(
-          chat,
-          depth: depth + 1,
-          message: toolMessage,
-          onStageChanged: onStageChanged,
-        )
-        .onError((error, stackTrace) {
-          debugPrint(
-            'Error during function call execution: $error\nStackTrace: $stackTrace',
-          );
-          return 'All done! How can I assist you today?';
-        })
-        .timeout(
-          const Duration(minutes: 1),
-          onTimeout: () {
-            return 'All done! How can I assist you today?';
-          },
-        );
-  }
-
-  Future<Map<String, dynamic>> _handleToolCall(
-    FunctionCallResponse functionCall,
-  ) async {
-    final responseText = functionCall.args['response_text'] as String?;
-    switch (functionCall.name) {
-      case 'update_assistant_soul':
-        final result = await memoryService.updateMemoryFromToolCall(
-          toolName: functionCall.name,
-          args: functionCall.args,
-        );
-        return {
-          'status': result.success ? 'success' : 'error',
-          'message': result.message ?? 'Assistant soul memory updated.',
-          if (responseText != null) 'response_text': responseText,
-        };
-      case 'update_assistant_identity':
-        final result = await memoryService.updateMemoryFromToolCall(
-          toolName: functionCall.name,
-          args: functionCall.args,
-        );
-        return {
-          'status': result.success ? 'success' : 'error',
-          'message': result.message ?? 'Assistant identity memory updated.',
-          if (responseText != null) 'response_text': responseText,
-        };
-      case 'update_user_memory':
-        final result = await memoryService.updateMemoryFromToolCall(
-          toolName: functionCall.name,
-          args: functionCall.args,
-        );
-        return {
-          'status': result.success ? 'success' : 'error',
-          'message': result.message ?? 'User memory updated.',
-          if (responseText != null) 'response_text': responseText,
-        };
-      default:
-        return _functionCallHandler.handle(functionCall);
-    }
-  }
-
-  Future<String> _processTextFunctionCalls(
-    InferenceChat chat,
-    String response, {
-    required int depth,
-    void Function(_GenerationStage)? onStageChanged,
-  }) async {
-    final calls = FunctionCallParser.parseAll(response, modelType: modelType);
-    if (calls.isNotEmpty) {
-      return _executeFunctionCallAndContinue(
-        chat,
-        calls.first,
-        depth: depth,
-        onStageChanged: onStageChanged,
-      );
-    }
-
-    final blocks = extractJsonBlocks(response);
-    if (blocks.isEmpty) {
-      return response;
-    }
-
-    for (final block in blocks) {
-      final functionCall = FunctionCallParser.parse(
-        block,
-        modelType: modelType,
-      );
-      if (functionCall == null) continue;
-
-      return _executeFunctionCallAndContinue(
-        chat,
-        functionCall,
-        depth: depth,
-        onStageChanged: onStageChanged,
-      );
-    }
-
-    return response;
   }
 
   /// Runs memory extraction in a temporary one-shot session WITHOUT closing
@@ -706,7 +479,6 @@ class LlmService {
         await for (final chunk in session.getResponseAsync().timeout(
           const Duration(seconds: 60),
         )) {
-          debugPrint('Memory extraction chunk: $chunk');
           responseBuffer.write(chunk);
         }
         return _cleanResponse(responseBuffer.toString());

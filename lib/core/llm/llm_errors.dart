@@ -5,6 +5,8 @@ enum LlmErrorCode {
   generationInterrupted,
   toolFailed,
   memoryFailed,
+  toolProtocolFailed,
+  toolLoopLimitReached,
   closed,
 }
 

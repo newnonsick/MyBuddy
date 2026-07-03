@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_gemma/core/model_response.dart';
 
 import 'function_call_format.dart';
@@ -45,7 +44,9 @@ class PhiFunctionCallFormat extends FunctionCallFormat {
     final clean = buffer.trim();
     if (clean.isEmpty) return false;
 
-    if (clean.contains('<|tool_calls|>') && clean.contains('<|/tool_calls|>')) return true;
+    if (clean.contains('<|tool_calls|>') && clean.contains('<|/tool_calls|>')) {
+      return true;
+    }
     return _jsonFallback.isFunctionCallComplete(buffer);
   }
 
@@ -85,8 +86,6 @@ class PhiFunctionCallFormat extends FunctionCallFormat {
     if (match == null) return [];
 
     final jsonStr = match.group(1)!.trim();
-    debugPrint('PhiFormat: Found tool_calls block: $jsonStr');
-
     // Phi-4 always outputs a JSON array
     final results = JsonParsingUtils.parseJsonArray(jsonStr);
     if (results.isNotEmpty) return results;

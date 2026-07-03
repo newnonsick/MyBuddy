@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../../../../app/assistant_runtime_controller.dart';
 import '../../../../app/stt_model_controller.dart';
 import '../../../../core/audio/audio_recorder_service.dart';
+import '../../../../core/llm/llm_errors.dart';
 import '../../../../core/stt/stt_service.dart';
 import '../../domain/chat_line.dart';
 
@@ -278,8 +279,15 @@ class ChatSessionController extends ChangeNotifier {
           }
         }
       }
-    } catch (e) {
-      _chat.add(ChatLine.assistant('Error: $e'));
+    } on LlmRuntimeException catch (error) {
+      _chat.add(ChatLine.assistant(error.userMessage));
+      _onError?.call(error.userMessage);
+      notifyListeners();
+    } catch (_) {
+      const message =
+          'The assistant could not complete the request. Please try again.';
+      _chat.add(ChatLine.assistant(message));
+      _onError?.call(message);
       notifyListeners();
     } finally {
       _pendingUserText = null;

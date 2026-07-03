@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_gemma/core/message.dart';
 import 'package:flutter_gemma/core/model.dart';
@@ -5,7 +7,8 @@ import 'package:flutter_gemma/core/model_response.dart';
 
 const userPrefix = "user";
 const modelPrefix = "model";
-const developerPrefix = "developer"; // FunctionGemma uses developer role for tools
+const developerPrefix =
+    "developer"; // FunctionGemma uses developer role for tools
 const startTurn = "<start_of_turn>";
 const endTurn = "<end_of_turn>";
 
@@ -36,9 +39,11 @@ const functionGemmaEscape = '<escape>';
 
 extension MessageExtension on Message {
   String transformToChatPrompt(
-      {ModelType type = ModelType.general, ModelFileType fileType = ModelFileType.binary}) {
+      {ModelType type = ModelType.general,
+      ModelFileType fileType = ModelFileType.binary}) {
     // DEBUG LOG
-    debugPrint('[transformToChatPrompt] modelType=$type, fileType=$fileType, messageType=${this.type}, isUser=$isUser');
+    debugPrint(
+        '[transformToChatPrompt] modelType=$type, fileType=$fileType, messageType=${this.type}, isUser=$isUser');
 
     // System messages should not be sent to the model
     if (this.type == MessageType.systemInfo) {
@@ -49,7 +54,8 @@ extension MessageExtension on Message {
     // EXCEPT FunctionGemma which needs manual formatting (no prefix/suffix in .task)
     if (fileType == ModelFileType.task && type != ModelType.functionGemma) {
       final result = _formatToolResponseContent();
-      debugPrint('[transformToChatPrompt] Using _formatToolResponseContent, result length=${result.length}');
+      debugPrint(
+          '[transformToChatPrompt] Using _formatToolResponseContent, result length=${result.length}');
       return result;
     }
 
@@ -61,7 +67,8 @@ extension MessageExtension on Message {
         // Fall through to manual formatting below
       } else {
         final result = _formatToolResponseContent();
-        debugPrint('[transformToChatPrompt] litertlm non-iOS, using raw text, result length=${result.length}');
+        debugPrint(
+            '[transformToChatPrompt] litertlm non-iOS, using raw text, result length=${result.length}');
         return result;
       }
     }
@@ -83,10 +90,9 @@ extension MessageExtension on Message {
   // Helper method to format tool response content
   String _formatToolResponseContent() {
     if (type == MessageType.toolResponse) {
-      return '<tool_response>\n'
-          'Tool Name: $toolName\n'
-          'Tool Response:\n$text\n'
-          '</tool_response>';
+      return '<tool_responses>\n'
+          '${jsonEncode(toolResponses.map((item) => item.toJson()).toList())}\n'
+          '</tool_responses>';
     }
     return text;
   }
@@ -179,10 +185,13 @@ extension MessageExtension on Message {
 
   String _formatFunctionGemmaContent() {
     // Format tool response in FunctionGemma format
-    if (type == MessageType.toolResponse && toolName != null) {
-      return '$functionGemmaStartResp'
-             'response:$toolName{result:$functionGemmaEscape$text$functionGemmaEscape}'
-             '$functionGemmaEndResp';
+    if (type == MessageType.toolResponse && toolResponses.isNotEmpty) {
+      return toolResponses.map((item) {
+        final result = jsonEncode(item.toJson());
+        return '$functionGemmaStartResp'
+            'response:${item.toolName}{result:$functionGemmaEscape$result$functionGemmaEscape}'
+            '$functionGemmaEndResp';
+      }).join();
     }
     return text;
   }
@@ -192,7 +201,8 @@ extension MessageExtension on Message {
 class ModelThinkingFilter {
   /// Filters ModelResponse stream for models with thinking support.
   /// Supports DeepSeek (`<think>...</think>`) and Gemma 4 (`<|channel>thought\n...<channel|>`) models.
-  static Stream<ModelResponse> filterThinkingStream(Stream<ModelResponse> originalStream,
+  static Stream<ModelResponse> filterThinkingStream(
+      Stream<ModelResponse> originalStream,
       {required ModelType modelType}) async* {
     switch (modelType) {
       case ModelType.deepSeek:
@@ -223,7 +233,8 @@ class ModelThinkingFilter {
                 insideThinking = false;
 
                 // Process text after </think> - pass as regular text for function call parsing
-                final afterEnd = token.split('</think>').skip(1).join('</think>');
+                final afterEnd =
+                    token.split('</think>').skip(1).join('</think>');
                 if (afterEnd.isNotEmpty) {
                   yield TextResponse(afterEnd);
                 }
@@ -263,16 +274,19 @@ class ModelThinkingFilter {
                   if (thinkingContent.isNotEmpty) {
                     yield ThinkingResponse(thinkingContent);
                   }
-                  gemmaBuffer = gemmaBuffer.substring(endIdx + endMarker.length);
+                  gemmaBuffer =
+                      gemmaBuffer.substring(endIdx + endMarker.length);
                   gemmaInsideThinking = false;
                 } else {
                   // Check for partial end marker at tail
                   final partial = _findPartialSuffix(gemmaBuffer, endMarker);
-                  final safe = gemmaBuffer.substring(0, gemmaBuffer.length - partial);
+                  final safe =
+                      gemmaBuffer.substring(0, gemmaBuffer.length - partial);
                   if (safe.isNotEmpty) {
                     yield ThinkingResponse(safe);
                   }
-                  gemmaBuffer = gemmaBuffer.substring(gemmaBuffer.length - partial);
+                  gemmaBuffer =
+                      gemmaBuffer.substring(gemmaBuffer.length - partial);
                   break;
                 }
               } else {
@@ -282,16 +296,19 @@ class ModelThinkingFilter {
                   if (textBefore.isNotEmpty) {
                     yield TextResponse(textBefore);
                   }
-                  gemmaBuffer = gemmaBuffer.substring(startIdx + startMarker.length);
+                  gemmaBuffer =
+                      gemmaBuffer.substring(startIdx + startMarker.length);
                   gemmaInsideThinking = true;
                 } else {
                   // Check for partial start marker at tail
                   final partial = _findPartialSuffix(gemmaBuffer, startMarker);
-                  final safe = gemmaBuffer.substring(0, gemmaBuffer.length - partial);
+                  final safe =
+                      gemmaBuffer.substring(0, gemmaBuffer.length - partial);
                   if (safe.isNotEmpty) {
                     yield TextResponse(safe);
                   }
-                  gemmaBuffer = gemmaBuffer.substring(gemmaBuffer.length - partial);
+                  gemmaBuffer =
+                      gemmaBuffer.substring(gemmaBuffer.length - partial);
                   break;
                 }
               }
@@ -302,7 +319,9 @@ class ModelThinkingFilter {
         }
         // Flush remaining buffer
         if (gemmaBuffer.isNotEmpty) {
-          yield gemmaInsideThinking ? ThinkingResponse(gemmaBuffer) : TextResponse(gemmaBuffer);
+          yield gemmaInsideThinking
+              ? ThinkingResponse(gemmaBuffer)
+              : TextResponse(gemmaBuffer);
         }
         break;
 
@@ -322,7 +341,8 @@ class ModelThinkingFilter {
   /// Removes thinking blocks from final text.
   /// Supports DeepSeek (`<think>...</think>`) and Gemma 4 (`<|channel>thought\n...<channel|>`) models.
   /// Note: For streaming thinking output, use [filterThinkingStream] with generateChatResponseAsync() instead.
-  static String removeThinkingFromText(String text, {required ModelType modelType}) {
+  static String removeThinkingFromText(String text,
+      {required ModelType modelType}) {
     switch (modelType) {
       case ModelType.deepSeek:
         // Remove all <think>...</think> blocks (DeepSeek specific)
@@ -331,8 +351,10 @@ class ModelThinkingFilter {
 
       case ModelType.gemmaIt:
         // Remove all <|channel>thought\n...<channel|> blocks (Gemma 4 E2B/E4B)
-        return text.replaceAll(
-          RegExp(r'<\|channel>thought\n.*?<channel\|>', dotAll: true), '').trim();
+        return text
+            .replaceAll(
+                RegExp(r'<\|channel>thought\n.*?<channel\|>', dotAll: true), '')
+            .trim();
 
       case ModelType.general:
       case ModelType.qwen:
@@ -348,7 +370,9 @@ class ModelThinkingFilter {
 
   /// Cleans model response from service tags and thinking blocks
   static String cleanResponse(String response,
-      {required bool isThinking, required ModelType modelType, required ModelFileType fileType}) {
+      {required bool isThinking,
+      required ModelType modelType,
+      required ModelFileType fileType}) {
     String cleaned = response;
 
     // Remove <think> blocks if model supports thinking

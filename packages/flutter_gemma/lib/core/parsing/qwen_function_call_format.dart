@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_gemma/core/model_response.dart';
 
 import 'function_call_format.dart';
@@ -95,7 +94,6 @@ class QwenFunctionCallFormat extends FunctionCallFormat {
 
     if (match != null) {
       final jsonStr = match.group(1)!.trim();
-      debugPrint('QwenFormat: Found tool_call block: $jsonStr');
       return JsonParsingUtils.parseJsonString(jsonStr);
     }
     return null;
@@ -201,11 +199,7 @@ class QwenFunctionCallFormat extends FunctionCallFormat {
   }
 
   String _normalizeArgName(String name) {
-    return switch (name.trim()) {
-      'response_text_text' => 'response_text',
-      'response' => 'response_text',
-      _ => name.trim(),
-    };
+    return name.trim();
   }
 
   dynamic _normalizeArgValue(String value) {

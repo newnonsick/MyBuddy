@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_gemma/core/model_response.dart';
 
 import 'function_call_format.dart';
@@ -101,7 +100,6 @@ class LlamaFunctionCallFormat extends FunctionCallFormat {
       final argsStr = match.group(2)!;
 
       final args = _parsePythonArgs(argsStr);
-      debugPrint('LlamaFormat: Parsed function: $name($args)');
       results.add(FunctionCallResponse(name: name, args: args));
     }
 

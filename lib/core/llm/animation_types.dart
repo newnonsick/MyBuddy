@@ -44,7 +44,7 @@ enum CharacterAnimation {
       case 'think':
         return CharacterAnimation.think;
       default:
-        return CharacterAnimation.thankful; // Default fallback
+        return null;
     }
   }
 }

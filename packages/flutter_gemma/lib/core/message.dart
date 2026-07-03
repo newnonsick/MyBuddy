@@ -17,6 +17,7 @@ class Message {
     this.audioBytes,
     this.type = MessageType.text,
     this.toolName,
+    this.toolResponses = const <ToolResponseMessage>[],
   });
 
   final String text;
@@ -25,6 +26,7 @@ class Message {
   final Uint8List? audioBytes;
   final MessageType type;
   final String? toolName;
+  final List<ToolResponseMessage> toolResponses;
 
   bool get hasImage => imageBytes != null;
   bool get hasAudio => audioBytes != null;
@@ -36,6 +38,7 @@ class Message {
     Uint8List? audioBytes,
     MessageType? type,
     String? toolName,
+    List<ToolResponseMessage>? toolResponses,
   }) {
     return Message(
       text: text ?? this.text,
@@ -44,6 +47,7 @@ class Message {
       audioBytes: audioBytes ?? this.audioBytes,
       type: type ?? this.type,
       toolName: toolName ?? this.toolName,
+      toolResponses: toolResponses ?? this.toolResponses,
     );
   }
 
@@ -108,13 +112,27 @@ class Message {
   factory Message.toolResponse({
     required String toolName,
     required Map<String, dynamic> response,
+    String? callId,
   }) {
-    // Tool responses are sent from the user's side.
+    final resolvedCallId = callId ?? 'legacy-$toolName-${response.hashCode}';
+    return Message.toolResponses(
+      <ToolResponseMessage>[
+        ToolResponseMessage(
+          toolName: toolName,
+          callId: resolvedCallId,
+          response: response,
+        ),
+      ],
+    );
+  }
+
+  factory Message.toolResponses(List<ToolResponseMessage> responses) {
+    final immutable = List<ToolResponseMessage>.unmodifiable(responses);
     return Message(
-      text: jsonEncode(response),
-      toolName: toolName,
+      text: jsonEncode(immutable.map((item) => item.toJson()).toList()),
       type: MessageType.toolResponse,
       isUser: true,
+      toolResponses: immutable,
     );
   }
 
@@ -165,7 +183,8 @@ class Message {
         _listEquals(other.imageBytes, imageBytes) &&
         _listEquals(other.audioBytes, audioBytes) &&
         other.type == type &&
-        other.toolName == toolName;
+        other.toolName == toolName &&
+        _listEquals(other.toolResponses, toolResponses);
   }
 
   @override
@@ -175,7 +194,8 @@ class Message {
       imageBytes.hashCode ^
       audioBytes.hashCode ^
       type.hashCode ^
-      toolName.hashCode;
+      toolName.hashCode ^
+      Object.hashAll(toolResponses);
 
   bool _listEquals<T>(List<T>? a, List<T>? b) {
     if (a == null) return b == null;
@@ -184,5 +204,38 @@ class Message {
       if (a[index] != b[index]) return false;
     }
     return true;
+  }
+}
+
+final class ToolResponseMessage {
+  ToolResponseMessage({
+    required this.toolName,
+    required this.callId,
+    required Map<String, Object?> response,
+  }) : response = Map<String, Object?>.unmodifiable(response);
+
+  final String toolName;
+  final String callId;
+  final Map<String, Object?> response;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        ...response,
+        'call_id': callId,
+        'name': toolName,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      other is ToolResponseMessage &&
+      other.toolName == toolName &&
+      other.callId == callId &&
+      _mapsEqual(other.response, response);
+
+  @override
+  int get hashCode => Object.hash(toolName, callId, jsonEncode(response));
+
+  static bool _mapsEqual(
+      Map<String, Object?> first, Map<String, Object?> second) {
+    return jsonEncode(first) == jsonEncode(second);
   }
 }

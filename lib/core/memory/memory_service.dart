@@ -748,7 +748,6 @@ class MemoryService {
       }
 
       await saveMemoryData(updated);
-      debugPrint('MemoryService: Memory patch applied → $candidateJson');
       return MemoryUpdateResult(
         success: true,
         message: 'Memory updated successfully',
@@ -897,7 +896,7 @@ class MemoryService {
     final patches = <MemoryPatch>[];
     for (final entry in args.entries) {
       final key = _normalizePatchToken(entry.key);
-      if (key == null || key == 'response_text' || key == 'updates') continue;
+      if (key == null || key == 'updates') continue;
 
       final parsed = _parsePatchFieldKey(key);
       if (parsed == null) continue;
@@ -1149,7 +1148,6 @@ class MemoryService {
         currentJson,
         lockedFields: lockedFields,
       );
-      debugPrint('MemoryService: Raw extracted memory response: $rawResponse');
       if (rawResponse.trim().isEmpty) return;
 
       final patches = _parseExtractedMemoryPatches(rawResponse);

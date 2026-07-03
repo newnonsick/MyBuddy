@@ -34,14 +34,13 @@ class JsonParsingUtils {
 
         // Use empty map for zero-argument functions (get_time, refresh, etc.)
         final resolvedArgs = args ?? <String, dynamic>{};
-        debugPrint('JsonParsingUtils: Parsed function: $name($resolvedArgs)');
         return FunctionCallResponse(name: name, args: resolvedArgs);
       }
 
       debugPrint('JsonParsingUtils: JSON missing "name" field or not a Map');
       return null;
-    } catch (e) {
-      debugPrint('JsonParsingUtils: Failed to decode JSON: $e');
+    } catch (_) {
+      debugPrint('JsonParsingUtils: Failed to decode JSON');
       return null;
     }
   }
@@ -61,8 +60,8 @@ class JsonParsingUtils {
         }
         return results;
       }
-    } catch (e) {
-      debugPrint('JsonParsingUtils: Failed to decode JSON array: $e');
+    } catch (_) {
+      debugPrint('JsonParsingUtils: Failed to decode JSON array');
     }
     return [];
   }
@@ -161,7 +160,8 @@ class JsonParsingUtils {
 
   /// Check if text is definitely plain text (not a function call).
   /// Shared heuristic for JSON-based formats.
-  static bool isDefinitelyText(String buffer, {List<String> extraIndicators = const []}) {
+  static bool isDefinitelyText(String buffer,
+      {List<String> extraIndicators = const []}) {
     final clean = buffer.trim();
     if (clean.length < 5) return false;
 

@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_gemma/core/model_response.dart';
 
 import 'function_call_format.dart';
@@ -57,7 +56,9 @@ class DeepSeekFunctionCallFormat extends FunctionCallFormat {
     final clean = buffer.trim();
     if (clean.isEmpty) return false;
 
-    if (clean.contains(_toolCallBegin) && clean.contains(_toolCallEnd)) return true;
+    if (clean.contains(_toolCallBegin) && clean.contains(_toolCallEnd)) {
+      return true;
+    }
     return _jsonFallback.isFunctionCallComplete(buffer);
   }
 
@@ -103,12 +104,9 @@ class DeepSeekFunctionCallFormat extends FunctionCallFormat {
       try {
         final args = jsonDecode(argsStr);
         if (args is Map<String, dynamic>) {
-          debugPrint('DeepSeekFormat: Parsed function: $functionName($args)');
           results.add(FunctionCallResponse(name: functionName, args: args));
         }
-      } catch (e) {
-        debugPrint('DeepSeekFormat: Failed to parse args for $functionName: $e');
-      }
+      } catch (_) {}
     }
 
     return results;
