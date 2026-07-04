@@ -36,7 +36,7 @@ class LlmModelConfig {
     return LlmModelConfig(
       type: (json['type'] ?? '').toString(),
       maxTokens: (json['maxTokens'] as num?)?.toInt() ?? 4096,
-      tokenBuffer: (json['tokenBuffer'] as num?)?.toInt() ?? 3584,
+      tokenBuffer: (json['tokenBuffer'] as num?)?.toInt() ?? 512,
       randomSeed: (json['randomSeed'] as num?)?.toInt() ?? 1,
       temperature: (json['temperature'] as num?)?.toDouble() ?? 0.8,
       topK: (json['topK'] as num?)?.toInt() ?? 1,

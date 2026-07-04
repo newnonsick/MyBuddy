@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../llm/llm_service.dart';
+import '../llm/memory_tool_semantics.dart';
 
 abstract final class MemoryStorageKeys {
   static const String memory = 'mybuddy.companion_memory.v3';
@@ -84,18 +85,22 @@ class MemoryPatch {
     Map<String, dynamic> json, {
     String? defaultSection,
   }) {
-    final value = _normalizeText(json['value'] as String?);
+    final rawValue = json['value'];
+    final value = _normalizeText(rawValue is String ? rawValue : null);
     final values = json['value'] is List
         ? _normalizeStringList(json['value'])
         : _normalizeStringList(json['values']);
+    final rawSection = json['section'];
+    final rawField = json['field'];
+    final rawAction = json['action'];
 
     return MemoryPatch(
       section:
-          _normalizePatchToken(json['section'] as String?) ??
+          _normalizePatchToken(rawSection is String ? rawSection : null) ??
           defaultSection ??
           '',
-      field: _normalizePatchToken(json['field'] as String?) ?? '',
-      action: _normalizePatchAction(json['action'] as String?),
+      field: _normalizePatchToken(rawField is String ? rawField : null) ?? '',
+      action: _normalizePatchAction(rawAction is String ? rawAction : null),
       value: value,
       values: values,
     );
@@ -126,11 +131,8 @@ String _normalizePatchAction(String? value) {
     'replace' || 'update' => MemoryPatchActions.set,
     'delete' => MemoryPatchActions.remove,
     'reset' => MemoryPatchActions.clear,
-    MemoryPatchActions.add ||
-    MemoryPatchActions.remove ||
-    MemoryPatchActions.clear ||
-    MemoryPatchActions.set => normalized!,
-    _ => MemoryPatchActions.set,
+    null => '',
+    _ => normalized,
   };
 }
 
@@ -701,7 +703,7 @@ class MemoryService {
     };
     if (section == null) {
       return MemoryUpdateResult(
-        success: false,
+        status: MemoryUpdateStatus.failure,
         message: 'Unknown memory tool: $toolName',
       );
     }
@@ -715,51 +717,124 @@ class MemoryService {
     Set<String>? allowedSections,
   }) async {
     try {
-      final scopedPatches = allowedSections == null
-          ? patches
-          : patches.where((p) => allowedSections.contains(p.section)).toList();
-      if (scopedPatches.isEmpty) {
-        return MemoryUpdateResult(success: true, message: 'No memory updates');
+      if (patches.isEmpty) {
+        return const MemoryUpdateResult(
+          status: MemoryUpdateStatus.noEffect,
+          message: 'No memory updates',
+        );
       }
 
       final current = await loadMemoryData();
       final lockedFields = await loadLockedFields();
       var updated = current;
       var appliedCount = 0;
+      final rejections = <MemoryPatchRejection>[];
 
-      for (final patch in scopedPatches) {
+      for (var index = 0; index < patches.length; index++) {
+        final patch = patches[index];
+        final validationError = _validatePatch(
+          patch,
+          allowedSections: allowedSections,
+          lockedFields: lockedFields,
+        );
+        if (validationError != null) {
+          rejections.add(
+            MemoryPatchRejection(
+              index: index,
+              section: patch.section,
+              field: patch.field,
+              code: validationError,
+            ),
+          );
+          continue;
+        }
         final next = _applyMemoryPatch(
           current: updated,
           patch: patch,
           lockedFields: lockedFields,
         );
-        if (next.toJsonString() == updated.toJsonString()) continue;
+        if (next.toJsonString() == updated.toJsonString()) {
+          rejections.add(
+            MemoryPatchRejection(
+              index: index,
+              section: patch.section,
+              field: patch.field,
+              code: MemoryPatchErrorCode.noEffect,
+            ),
+          );
+          continue;
+        }
         updated = next;
         appliedCount += 1;
       }
 
       final candidateJson = updated.toJsonString();
-      if (appliedCount == 0 || candidateJson == current.toJsonString()) {
-        return MemoryUpdateResult(
-          success: true,
-          message: 'No memory changes',
-          candidateJson: candidateJson,
-        );
+      if (appliedCount > 0 && candidateJson != current.toJsonString()) {
+        await saveMemoryData(updated);
       }
 
-      await saveMemoryData(updated);
+      final status = appliedCount == 0
+          ? MemoryUpdateStatus.noEffect
+          : rejections.isEmpty
+          ? MemoryUpdateStatus.success
+          : MemoryUpdateStatus.partial;
       return MemoryUpdateResult(
-        success: true,
-        message: 'Memory updated successfully',
+        status: status,
+        appliedCount: appliedCount,
+        rejections: List<MemoryPatchRejection>.unmodifiable(rejections),
+        message: appliedCount == 0
+            ? 'No memory changes'
+            : 'Memory update processed',
         candidateJson: candidateJson,
       );
     } catch (e) {
-      debugPrint('MemoryService: Failed to apply memory patches: $e');
-      return MemoryUpdateResult(
-        success: false,
-        message: 'Failed to apply memory patches: $e',
+      debugPrint(
+        'MemoryService: Failed to apply memory patches (${e.runtimeType})',
+      );
+      return const MemoryUpdateResult(
+        status: MemoryUpdateStatus.failure,
+        rejections: <MemoryPatchRejection>[
+          MemoryPatchRejection(
+            index: -1,
+            section: '',
+            field: '',
+            code: MemoryPatchErrorCode.persistenceFailed,
+          ),
+        ],
+        message: 'Memory persistence failed',
       );
     }
+  }
+
+  MemoryPatchErrorCode? _validatePatch(
+    MemoryPatch patch, {
+    required Set<String>? allowedSections,
+    required Set<String> lockedFields,
+  }) {
+    if (!const <String>{'soul', 'identity', 'user'}.contains(patch.section) ||
+        (allowedSections != null && !allowedSections.contains(patch.section))) {
+      return MemoryPatchErrorCode.unknownSection;
+    }
+    if (!_isValidPatchField(patch.section, patch.field)) {
+      return MemoryPatchErrorCode.unknownField;
+    }
+    if (!const <String>{
+      MemoryPatchActions.set,
+      MemoryPatchActions.add,
+      MemoryPatchActions.remove,
+      MemoryPatchActions.clear,
+    }.contains(patch.action)) {
+      return MemoryPatchErrorCode.invalidAction;
+    }
+    final fieldPath = _fieldPathForPatch(patch);
+    if (fieldPath != null && lockedFields.contains(fieldPath)) {
+      return MemoryPatchErrorCode.lockedField;
+    }
+    if (patch.action != MemoryPatchActions.clear &&
+        patch.resolvedValues.isEmpty) {
+      return MemoryPatchErrorCode.invalidArguments;
+    }
+    return null;
   }
 
   Future<Set<String>> loadLockedFields({
@@ -1177,8 +1252,8 @@ class MemoryService {
         lockedFields: lockedFields,
       );
       if (rawResponse.trim().isEmpty) {
-        return MemoryUpdateResult(
-          success: true,
+        return const MemoryUpdateResult(
+          status: MemoryUpdateStatus.noEffect,
           message: 'No changes needed (empty response)',
         );
       }
@@ -1190,9 +1265,9 @@ class MemoryService {
       );
     } catch (e) {
       debugPrint('MemoryService: Failed to update soul memory: $e');
-      return MemoryUpdateResult(
-        success: false,
-        message: 'Failed to update soul memory: $e',
+      return const MemoryUpdateResult(
+        status: MemoryUpdateStatus.failure,
+        message: 'Failed to update soul memory',
       );
     }
   }
@@ -1212,8 +1287,8 @@ class MemoryService {
         lockedFields: lockedFields,
       );
       if (rawResponse.trim().isEmpty) {
-        return MemoryUpdateResult(
-          success: true,
+        return const MemoryUpdateResult(
+          status: MemoryUpdateStatus.noEffect,
           message: 'No changes needed (empty response)',
         );
       }
@@ -1225,9 +1300,9 @@ class MemoryService {
       );
     } catch (e) {
       debugPrint('MemoryService: Failed to update identity memory: $e');
-      return MemoryUpdateResult(
-        success: false,
-        message: 'Failed to update identity memory: $e',
+      return const MemoryUpdateResult(
+        status: MemoryUpdateStatus.failure,
+        message: 'Failed to update identity memory',
       );
     }
   }
@@ -1245,8 +1320,8 @@ class MemoryService {
         lockedFields: lockedFields,
       );
       if (rawResponse.trim().isEmpty) {
-        return MemoryUpdateResult(
-          success: true,
+        return const MemoryUpdateResult(
+          status: MemoryUpdateStatus.noEffect,
           message: 'No changes needed (empty response)',
         );
       }
@@ -1258,9 +1333,9 @@ class MemoryService {
       );
     } catch (e) {
       debugPrint('MemoryService: Failed to update user memory: $e');
-      return MemoryUpdateResult(
-        success: false,
-        message: 'Failed to update user memory: $e',
+      return const MemoryUpdateResult(
+        status: MemoryUpdateStatus.failure,
+        message: 'Failed to update user memory',
       );
     }
   }
@@ -1466,11 +1541,15 @@ ${_asBulletList(behaviorRules)}
 USER (Long-term User Profile) represents user preferences, goals, and interaction style.
 $userBlock
 
+${MemoryToolSemantics.selfReference}
+
 SOUL, IDENTITY and USER Protocol:
-You must use the information in the SOUL, IDENTITY, and USER sections to best support the user.
-You must always keep the SOUL, IDENTITY, and USER sections up to date, consistent, and relevant throughout the conversation.
-If memory update functions are listed in the separate tool instructions, call the appropriate function when the user explicitly asks you to remember, forget, or change stable SOUL, IDENTITY, or USER memory.
-Do not invent memory. Only update memory from explicit user statements or explicit user instructions.
+- Use the SOUL, IDENTITY, and USER sections to support the human user.
+- Information about the human belongs in USER memory. Information about yourself belongs in SOUL or IDENTITY memory.
+- ${MemoryToolSemantics.persistenceRules}
+- If the appropriate memory tool is available, you must call it for an explicit durable change before answering.
+- Do not invent memory or infer a durable change from an ambiguous statement.
+- You must not claim that memory changed before a successful tool result.
 
 Avatar & Function Protocol:
 - You have an avatar with a body and a voice.
@@ -1486,10 +1565,48 @@ Remember today is $now. (yyyy-MM-dd format)
   }
 }
 
-class MemoryUpdateResult {
-  MemoryUpdateResult({required this.success, this.message, this.candidateJson});
+enum MemoryUpdateStatus { success, partial, noEffect, failure }
 
-  final bool success;
+enum MemoryPatchErrorCode {
+  invalidArguments,
+  unknownSection,
+  unknownField,
+  invalidAction,
+  lockedField,
+  noEffect,
+  persistenceFailed,
+  malformedExtraction,
+}
+
+class MemoryPatchRejection {
+  const MemoryPatchRejection({
+    required this.index,
+    required this.section,
+    required this.field,
+    required this.code,
+  });
+
+  final int index;
+  final String section;
+  final String field;
+  final MemoryPatchErrorCode code;
+}
+
+class MemoryUpdateResult {
+  const MemoryUpdateResult({
+    required this.status,
+    this.appliedCount = 0,
+    this.rejections = const <MemoryPatchRejection>[],
+    this.message,
+    this.candidateJson,
+  });
+
+  final MemoryUpdateStatus status;
+  final int appliedCount;
+  final List<MemoryPatchRejection> rejections;
   final String? message;
   final String? candidateJson;
+
+  bool get success => status != MemoryUpdateStatus.failure;
+  int get rejectedCount => rejections.length;
 }

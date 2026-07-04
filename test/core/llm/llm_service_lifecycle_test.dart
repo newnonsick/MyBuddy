@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mybuddy/core/google/calendar_event_gateway.dart';
+import 'package:mybuddy/core/llm/llm_errors.dart';
 import 'package:mybuddy/core/llm/llm_service.dart';
 import 'package:mybuddy/core/llm/temporal_context.dart';
 import 'package:mybuddy/core/memory/memory_service.dart';
@@ -66,6 +67,33 @@ void main() {
 
     expect(fakePlatform.createChatCount, 1);
     expect(fakePlatform.createSessionCount, 1);
+  });
+
+  test('rejects oversized first turn before native generation', () async {
+    service = LlmService(
+      platform: fakePlatform,
+      unityBridge: UnityBridge(),
+      memoryService: MemoryService(),
+      maxTokens: 100,
+      tokenBuffer: 20,
+    );
+
+    await expectLater(
+      service.generateChat(
+        systemText: List<String>.filled(90, 'system').join(' '),
+        userText: 'hello',
+      ),
+      throwsA(
+        isA<LlmRuntimeException>().having(
+          (error) => error.code,
+          'code',
+          LlmErrorCode.inputTooLong,
+        ),
+      ),
+    );
+
+    expect(fakePlatform.acceptedQueries, isEmpty);
+    expect(fakePlatform.getResponseAsyncCount, 0);
   });
 
   test('pre-acceptance failure retries once', () async {
@@ -305,7 +333,7 @@ void main() {
         platform: fakePlatform,
         unityBridge: UnityBridge(),
         memoryService: MemoryService(),
-        calendarEventGateway: calendarGateway,
+        calendarEventGateway: () => calendarGateway,
         temporalContextSource: temporalSource,
         modelType: ModelType.qwen,
         supportsFunctionCalls: true,
@@ -349,7 +377,7 @@ void main() {
       platform: fakePlatform,
       unityBridge: UnityBridge(),
       memoryService: MemoryService(),
-      calendarEventGateway: calendarGateway,
+      calendarEventGateway: () => calendarGateway,
       temporalContextSource: _FakeTemporalContextSource(),
       modelType: ModelType.qwen,
       supportsFunctionCalls: true,
@@ -378,7 +406,7 @@ void main() {
       platform: fakePlatform,
       unityBridge: UnityBridge(),
       memoryService: MemoryService(),
-      calendarEventGateway: calendarGateway,
+      calendarEventGateway: () => calendarGateway,
       temporalContextSource: _FakeTemporalContextSource(),
       modelType: ModelType.qwen,
       supportsFunctionCalls: true,

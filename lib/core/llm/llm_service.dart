@@ -9,12 +9,16 @@ import '../memory/memory_service.dart';
 import '../unity/unity_bridge.dart';
 import 'llm_errors.dart';
 import 'llm_platform.dart';
+import 'memory_extraction_prompt_builder.dart';
 import 'model_turn_collector.dart';
+import 'prompt_budgeter.dart';
 import 'temporal_context.dart';
 import 'tool_loop_chat.dart';
 import 'tool_orchestrator.dart';
 import 'tool_prompt_builder.dart';
 import 'tool_registry.dart';
+
+typedef CalendarEventGatewayProvider = CalendarEventGateway? Function();
 
 class LlmService {
   LlmService({
@@ -22,7 +26,7 @@ class LlmService {
     this.modelType = ModelType.qwen,
     this.preferredBackend = PreferredBackend.gpu,
     this.maxTokens = 4096,
-    this.tokenBuffer = 3584,
+    this.tokenBuffer = 512,
     this.temperature = 0.8,
     this.randomSeed = 1,
     this.topK = 1,
@@ -32,14 +36,23 @@ class LlmService {
     this.modelFileType = ModelFileType.task,
     required this.unityBridge,
     required this.memoryService,
-    this.calendarEventGateway,
+    CalendarEventGatewayProvider? calendarEventGateway,
     TemporalContextSource? temporalContextSource,
-  }) : platform = platform ?? const FlutterGemmaLlmPlatform(),
+  }) : _calendarEventGatewayProvider = calendarEventGateway,
+       platform = platform ?? const FlutterGemmaLlmPlatform(),
        temporalContextSource =
            temporalContextSource ?? const DeviceTemporalContextSource();
 
   factory LlmService.dummy() =>
       LlmService(unityBridge: UnityBridge(), memoryService: MemoryService());
+
+  static const _memoryExtractionPromptBuilder = MemoryExtractionPromptBuilder();
+  static const _promptBudgeter = PromptBudgeter();
+
+  int get _effectiveTokenBuffer => _promptBudgeter.effectiveTokenBuffer(
+    maxTokens: maxTokens,
+    configuredTokenBuffer: tokenBuffer,
+  );
 
   final LlmPlatform platform;
   ModelType modelType;
@@ -56,8 +69,11 @@ class LlmService {
 
   final UnityBridge unityBridge;
   final MemoryService memoryService;
-  final CalendarEventGateway? calendarEventGateway;
+  final CalendarEventGatewayProvider? _calendarEventGatewayProvider;
   final TemporalContextSource temporalContextSource;
+
+  CalendarEventGateway? get calendarEventGateway =>
+      _calendarEventGatewayProvider?.call();
 
   InferenceModel? _model;
   InferenceChat? _chat;
@@ -366,7 +382,7 @@ class LlmService {
           randomSeed: randomSeed,
           topK: topK,
           topP: topP,
-          tokenBuffer: tokenBuffer,
+          tokenBuffer: _effectiveTokenBuffer,
           supportsFunctionCalls: supportsFunctionCalls,
           isThinking: isThinking,
           modelType: modelType,
@@ -391,6 +407,25 @@ class LlmService {
         attempts++;
         try {
           if (stage == _GenerationStage.preparing) {
+            final budget = await _promptBudgeter.assess(
+              session: _chat!.session,
+              maxTokens: maxTokens,
+              configuredTokenBuffer: tokenBuffer,
+              systemText: composedSystemText,
+              history: _canonicalDialogue,
+              userText: modelUserText,
+            );
+            debugPrint(
+              'LlmService: prompt tokens=${budget.inputTokens} '
+              'limit=${budget.inputLimit} buffer=${budget.effectiveTokenBuffer}',
+            );
+            if (!budget.fits) {
+              throw const LlmRuntimeException(
+                LlmErrorCode.inputTooLong,
+                'The conversation context is too long for this model. '
+                'Please shorten the message or start a new conversation.',
+              );
+            }
             await _chat!.addQueryChunk(userMessage);
             stage = _GenerationStage.queryAccepted;
           }
@@ -417,6 +452,10 @@ class LlmService {
         } catch (e) {
           debugPrint('LlmService: generateChat error at stage $stage: $e');
 
+          if (e is LlmRuntimeException && e.code == LlmErrorCode.inputTooLong) {
+            rethrow;
+          }
+
           if (stage == _GenerationStage.preparing && attempts == 1) {
             debugPrint(
               'LlmService: Recovery attempt 1 for pre-acceptance failure...',
@@ -428,7 +467,7 @@ class LlmService {
               randomSeed: randomSeed,
               topK: topK,
               topP: topP,
-              tokenBuffer: tokenBuffer,
+              tokenBuffer: _effectiveTokenBuffer,
               supportsFunctionCalls: supportsFunctionCalls,
               isThinking: isThinking,
               modelType: modelType,
@@ -597,151 +636,45 @@ class LlmService {
     String conversation,
     String currentMemory,
     Set<String> lockedFields,
-  ) {
-    final locked = lockedFields.toList()..sort();
-    final lockedText = locked.isEmpty ? '(none)' : locked.join(', ');
-
-    return '<conversation>\n'
-        '$conversation\n'
-        '</conversation>\n'
-        '\n'
-        '<current_memory>\n'
-        '$currentMemory\n'
-        '</current_memory>\n'
-        '\n'
-        '<locked_fields>\n'
-        '$lockedText\n'
-        '</locked_fields>\n'
-        '\n'
-        'TASK: Extract only stable memory changes from the <conversation> as patches.\n'
-        '- soul: represent assistant core personality, values, behavior rules, and boundaries.\n'
-        '- identity: represents assistant name, tone, style, and presentation.\n'
-        '- user: represents user profile, preferences, goals, and interaction style, and context.\n'
-        '\n'
-        'Output ONLY valid JSON, no explanation, no markdown:\n'
-        '{"updates":[{"section":"soul|identity|user","field":"field_name","action":"set|add|remove|clear","value":"single value","values":["optional","list"]}]}\n'
-        '\n'
-        'RULES:\n'
-        '- Return {"updates":[]} when there are no durable memory changes.\n'
-        '- Use action add for new list items, remove for contradicted old items, set for text fields or replacing a whole list, and clear only when explicitly requested.\n'
-        '- Valid soul fields: mission, principles, boundaries, response_style.\n'
-        '- Valid identity fields: assistant_name, role, voice, behavior_rules.\n'
-        '- Valid user fields: name, traits, preferences, goals, facts.\n'
-        '- Keep each value concise and stable.\n'
-        '- Ignore one-off requests, greetings, and transient details.\n'
-        '- Do not mutate soul/identity unless user explicitly asks to change assistant behavior/persona.\n'
-        '- Fields listed in <locked_fields> are immutable: do not include updates for them.\n'
-        '- Important: You Must NOT infer or guess missing information\n'
-        '- Important: Do not make assumptions, random guesses, or fabricated information. Any predictions or inferences about the user\'s actions or behavior should be strictly based on the information given by the user.\n';
-  }
+  ) => _memoryExtractionPromptBuilder.build(
+    section: MemoryExtractionSection.all,
+    conversation: conversation,
+    currentMemory: currentMemory,
+    lockedFields: lockedFields,
+  );
 
   static String _buildSoulMemoryPrompt(
     String conversation,
     String currentMemory,
     Set<String> lockedFields,
-  ) {
-    final locked = lockedFields.where((f) => f.startsWith('soul.')).toList()
-      ..sort();
-    final lockedText = locked.isEmpty ? '(none)' : locked.join(', ');
-
-    return '<conversation>\n'
-        '$conversation\n'
-        '</conversation>\n'
-        '\n'
-        '<current_memory>\n'
-        '$currentMemory\n'
-        '</current_memory>\n'
-        '\n'
-        '<locked_fields>\n'
-        '$lockedText\n'
-        '</locked_fields>\n'
-        '\n'
-        'TASK: Extract only soul memory changes using explicit user intent from the conversation.\n'
-        '- Soul memory: represent assistant core personality, values, behavior rules, and boundaries.\n'
-        '\n'
-        'Output ONLY valid JSON, no explanation, no markdown:\n'
-        '{"updates":[{"section":"soul","field":"mission|principles|boundaries|response_style","action":"set|add|remove|clear","value":"single value","values":["optional","list"]}]}\n'
-        '\n'
-        'RULES:\n'
-        '- Return {"updates":[]} when there are no soul changes.\n'
-        '- Use set for mission, add/remove/clear/set for list fields.\n'
-        '- Do not include identity or user updates.\n'
-        '- Fields listed in <locked_fields> are immutable: do not include updates for them.\n'
-        '- Important: You Must NOT infer or guess missing information\n'
-        '- Important: Do not make assumptions, random guesses, or fabricated information.\n';
-  }
+  ) => _memoryExtractionPromptBuilder.build(
+    section: MemoryExtractionSection.soul,
+    conversation: conversation,
+    currentMemory: currentMemory,
+    lockedFields: lockedFields,
+  );
 
   static String _buildIdentityMemoryPrompt(
     String conversation,
     String currentMemory,
     Set<String> lockedFields,
-  ) {
-    final locked = lockedFields.where((f) => f.startsWith('identity.')).toList()
-      ..sort();
-    final lockedText = locked.isEmpty ? '(none)' : locked.join(', ');
-
-    return '<conversation>\n'
-        '$conversation\n'
-        '</conversation>\n'
-        '\n'
-        '<current_memory>\n'
-        '$currentMemory\n'
-        '</current_memory>\n'
-        '\n'
-        '<locked_fields>\n'
-        '$lockedText\n'
-        '</locked_fields>\n'
-        '\n'
-        'TASK: Extract only identity memory changes using explicit user intent from the conversation.\n'
-        '- Identity memory: represents assistant name, tone, style, and presentation.\n'
-        '\n'
-        'Output ONLY valid JSON, no explanation, no markdown:\n'
-        '{"updates":[{"section":"identity","field":"assistant_name|role|voice|behavior_rules","action":"set|add|remove|clear","value":"single value","values":["optional","list"]}]}\n'
-        '\n'
-        'RULES:\n'
-        '- Return {"updates":[]} when there are no identity changes.\n'
-        '- Use set for assistant_name/role, add/remove/clear/set for list fields.\n'
-        '- Do not include soul or user updates.\n'
-        '- Fields listed in <locked_fields> are immutable: do not include updates for them.\n'
-        '- Important: You Must NOT infer or guess missing information\n'
-        '- Important: Do not make assumptions, random guesses, or fabricated information.\n';
-  }
+  ) => _memoryExtractionPromptBuilder.build(
+    section: MemoryExtractionSection.identity,
+    conversation: conversation,
+    currentMemory: currentMemory,
+    lockedFields: lockedFields,
+  );
 
   static String _buildUserMemoryPrompt(
     String conversation,
     String currentMemory,
     Set<String> lockedFields,
-  ) {
-    final locked = lockedFields.where((f) => f.startsWith('user.')).toList()
-      ..sort();
-    final lockedText = locked.isEmpty ? '(none)' : locked.join(', ');
-
-    return '<conversation>\n'
-        '$conversation\n'
-        '</conversation>\n'
-        '\n'
-        '<current_memory>\n'
-        '$currentMemory\n'
-        '</current_memory>\n'
-        '\n'
-        '<locked_fields>\n'
-        '$lockedText\n'
-        '</locked_fields>\n'
-        '\n'
-        'TASK: Extract only user profile memory changes using explicit user intent from the conversation.\n'
-        '- User profile memory: represents user profile, preferences, goals, and interaction style, and context.\n'
-        '\n'
-        'Output ONLY valid JSON, no explanation, no markdown:\n'
-        '{"updates":[{"section":"user","field":"name|traits|preferences|goals|facts","action":"set|add|remove|clear","value":"single value","values":["optional","list"]}]}\n'
-        '\n'
-        'RULES:\n'
-        '- Return {"updates":[]} when there are no user memory changes.\n'
-        '- Use set for name, add/remove/clear/set for list fields.\n'
-        '- Ignore one-off requests and transient details.\n'
-        '- Do not include soul or identity updates.\n'
-        '- Important: You Must NOT infer or guess missing information\n'
-        '- Important: Do not make assumptions, random guesses, or fabricated information.\n';
-  }
+  ) => _memoryExtractionPromptBuilder.build(
+    section: MemoryExtractionSection.user,
+    conversation: conversation,
+    currentMemory: currentMemory,
+    lockedFields: lockedFields,
+  );
 
   Future<void> close() async {
     return _runExclusive(() async {

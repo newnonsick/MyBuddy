@@ -8,70 +8,81 @@ final class ToolPromptBuilder {
   String build(List<Tool> tools) {
     if (tools.isEmpty) return '';
 
-    final buffer = StringBuffer()
+    final availableNames = tools.map((tool) => tool.name).toSet();
+    final hasMemoryTool = availableNames.any(
+      (name) =>
+          name.startsWith('update_assistant_') || name == 'update_user_memory',
+    );
+
+    final buffer = StringBuffer()..writeln('<tool_rules>');
+
+    if (hasMemoryTool) {
+      buffer
+        ..writeln(
+          '- You are the assistant. "you", "yourself", and your avatar refer '
+          'to you, not the human user.',
+        )
+        ..writeln(
+          '- MUST call the matching memory tool for explicit durable changes '
+          '(from now on/always/never/remember). one-turn requests: no memory tool.',
+        )
+        ..writeln(
+          '- About you: update_assistant_identity or update_assistant_soul. '
+          'About the human: update_user_memory.',
+        )
+        ..writeln(
+          '- Example: "From now on roast me when I slip up" => '
+          '{"name":"update_assistant_identity","parameters":{"updates":'
+          '[{"field":"behavior_rules","action":"add","value":"Roast the '
+          'user when they slip up"}]}}. "Answer this one sarcastically" => '
+          'no memory tool.',
+        );
+    }
+
+    buffer
       ..writeln(
-        'You may call zero, one, or multiple available functions without '
-        'asking permission.',
+        '- Correct tool selection is critical; otherwise the requested change '
+        'or action is not applied.',
       )
       ..writeln(
-        'For one function, output only: '
+        '- Clear action with required arguments: call without confirmation. '
+        'Infer reliable values/defaults; never invent required values.',
+      )
+      ..writeln(
+        '- Tool call output only: '
         '{"name":"function_name","parameters":{"argument":"value"}}',
       )
       ..writeln(
-        'For multiple independent functions, output only a JSON array of '
-        'those objects.',
+        '- Multiple independent calls: output a JSON array. Dependent calls: '
+        'wait for the earlier result.',
       )
       ..writeln(
-        'Calls in one array must be independent. If a function is dependent '
-        'on an earlier result, wait for the tool results and call it in a '
-        'later response.',
+        '- Use only listed names/parameters. No conversational text in call '
+        'JSON. Never claim success before a successful tool result.',
       )
-      ..writeln(
-        'After tool results, call more functions only when needed; otherwise '
-        'answer the user in plain text.',
-      )
-      ..writeln(
-        'Infer arguments from the user request, conversation, runtime context, '
-        'and documented defaults whenever they are reliable.',
-      )
-      ..writeln(
-        'Do not ask for permission or confirmation when intent and required '
-        'arguments are clear. Do not ask for optional values with defaults.',
-      )
-      ..writeln(
-        'Ask one concise question only when a required value remains materially '
-        'ambiguous and choosing could perform the wrong action.',
-      )
-      ..writeln(
-        'Never invent a required value when context and documented defaults do '
-        'not resolve it.',
-      )
-      ..writeln(
-        'Use only listed function names and parameters. Never include '
-        'conversational reply text inside function parameters. Never claim '
-        'success before a successful tool result.',
-      );
+      ..writeln('</tool_rules>');
 
-    if (tools.length >= 2) {
-      buffer.writeln(
-        'Multiple-call format example: ${jsonEncode(<Object?>[
-          <String, Object?>{'name': tools[0].name, 'parameters': <String, Object?>{}},
-          <String, Object?>{'name': tools[1].name, 'parameters': <String, Object?>{}},
-        ])}',
-      );
-    }
-
-    buffer.writeln('<tool_code>');
+    buffer.writeln('<tools>');
     for (final tool in tools) {
       buffer.writeln(
         jsonEncode(<String, Object?>{
           'name': tool.name,
           'description': tool.description,
-          'parameters': tool.parameters,
+          'parameters': _compactSchema(tool.parameters),
         }),
       );
     }
-    buffer.writeln('</tool_code>');
+    buffer.writeln('</tools>');
     return buffer.toString().trim();
+  }
+
+  Object? _compactSchema(Object? value) {
+    if (value is List) return value.map(_compactSchema).toList(growable: false);
+    if (value is! Map) return value;
+    return <String, Object?>{
+      for (final entry in value.entries)
+        if (entry.key.toString() != 'description')
+          entry.key.toString(): _compactSchema(entry.value),
+    };
   }
 }

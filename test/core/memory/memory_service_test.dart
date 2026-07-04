@@ -137,4 +137,95 @@ void main() {
     expect(memory.soul.mission, 'Original mission');
     expect(memory.soul.principles, contains('Be practical'));
   });
+
+  test('reports applied locked invalid and no-effect patches', () async {
+    await service.saveMemoryData(
+      const UserMemory(identity: IdentityMemory(voice: <String>['Direct'])),
+    );
+    await service.saveIdentityLockedFields(<String>{
+      MemoryFieldPaths.identityAssistantName,
+    });
+
+    final result = await service.applyMemoryPatches(const <MemoryPatch>[
+      MemoryPatch(
+        section: 'identity',
+        field: 'voice',
+        action: 'add',
+        value: 'Playful',
+      ),
+      MemoryPatch(
+        section: 'identity',
+        field: 'assistant_name',
+        action: 'set',
+        value: 'Nova',
+      ),
+      MemoryPatch(
+        section: 'identity',
+        field: 'unknown',
+        action: 'add',
+        value: 'x',
+      ),
+      MemoryPatch(
+        section: 'identity',
+        field: 'voice',
+        action: 'add',
+        value: 'Direct',
+      ),
+    ]);
+
+    expect(result.status, MemoryUpdateStatus.partial);
+    expect(result.appliedCount, 1);
+    expect(
+      result.rejections.map((item) => item.code),
+      containsAll(<MemoryPatchErrorCode>{
+        MemoryPatchErrorCode.lockedField,
+        MemoryPatchErrorCode.unknownField,
+        MemoryPatchErrorCode.noEffect,
+      }),
+    );
+  });
+
+  test('does not coerce an unknown action to set', () {
+    final parsed = MemoryPatch.fromJson(<String, dynamic>{
+      'section': 'user',
+      'field': 'preferences',
+      'action': 'invent',
+      'value': 'concise',
+    });
+
+    expect(parsed.action, 'invent');
+  });
+
+  test('wrong patch value types are rejected without throwing', () async {
+    final patch = MemoryPatch.fromJson(<String, dynamic>{
+      'section': 'user',
+      'field': 'preferences',
+      'action': 'add',
+      'value': 42,
+    });
+
+    final result = await service.applyMemoryPatches(<MemoryPatch>[patch]);
+
+    expect(result.status, MemoryUpdateStatus.noEffect);
+    expect(
+      result.rejections.single.code,
+      MemoryPatchErrorCode.invalidArguments,
+    );
+  });
+
+  test(
+    'system prompt links self-reference to mandatory memory tools',
+    () async {
+      final prompt = await service.buildSystemPrompt(
+        memory: const UserMemory(),
+      );
+
+      expect(prompt, contains('currently speaking'));
+      expect(prompt, contains('yourself'));
+      expect(prompt, contains('from now on'));
+      expect(prompt, contains('must call'));
+      expect(prompt, contains('one-turn'));
+      expect(prompt, contains('must not claim'));
+    },
+  );
 }

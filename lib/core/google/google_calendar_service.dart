@@ -101,6 +101,7 @@ class GoogleCalendarService extends ChangeNotifier
     implements CalendarEventGateway {
   GoogleCalendarService({required this.authService}) {
     authService.addListener(_onAuthChanged);
+    _onAuthChanged();
   }
 
   final GoogleAuthService authService;

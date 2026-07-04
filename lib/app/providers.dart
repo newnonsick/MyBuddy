@@ -63,14 +63,13 @@ final llmPlatformProvider = Provider<LlmPlatform>((ref) {
 final llmServiceProvider = Provider<LlmService>((ref) {
   final unityBridge = ref.read(unityBridgeProvider);
   final memoryService = ref.read(memoryServiceProvider);
-  final googleCalendarService = ref.read(googleCalendarServiceProvider);
   final platform = ref.read(llmPlatformProvider);
 
   return LlmService(
     platform: platform,
     unityBridge: unityBridge,
     memoryService: memoryService,
-    calendarEventGateway: googleCalendarService,
+    calendarEventGateway: () => ref.read(googleCalendarServiceProvider),
   );
 });
 

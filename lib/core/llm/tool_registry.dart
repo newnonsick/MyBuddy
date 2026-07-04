@@ -7,6 +7,7 @@ import '../memory/memory_service.dart';
 import '../unity/unity_bridge.dart';
 import 'animation_types.dart';
 import 'calendar_event_tool.dart';
+import 'memory_tool_semantics.dart';
 import 'tool_protocol.dart';
 
 typedef ToolAvailability = FutureOr<bool> Function();
@@ -216,11 +217,19 @@ final class ToolRegistry {
       args: arguments,
     );
     if (!result.success) {
-      throw const ToolExecutionException('Memory update failed.');
+      throw const ToolExecutionException('Memory persistence failed.');
     }
     return <String, Object?>{
-      'updated': true,
-      'message': result.message ?? 'Memory updated.',
+      'status': result.status.name,
+      'applied_count': result.appliedCount,
+      'rejected_count': result.rejectedCount,
+      'rejections': <Map<String, Object?>>[
+        for (final rejection in result.rejections)
+          <String, Object?>{
+            'field': rejection.field,
+            'code': rejection.code.name,
+          },
+      ],
     };
   }
 }
@@ -228,7 +237,7 @@ final class ToolRegistry {
 abstract final class _AppTools {
   static const animateCharacter = Tool(
     name: 'perform_avatar_action',
-    description: 'Perform an avatar animation.',
+    description: MemoryToolSemantics.performAvatarActionDescription,
     parameters: <String, dynamic>{
       'type': 'object',
       'properties': <String, dynamic>{
@@ -254,20 +263,19 @@ abstract final class _AppTools {
 
   static const updateAssistantSoul = Tool(
     name: 'update_assistant_soul',
-    description: 'Update assistant mission, principles, boundaries, or style.',
+    description: MemoryToolSemantics.updateAssistantSoulDescription,
     parameters: _soulMemoryParameters,
   );
 
   static const updateAssistantIdentity = Tool(
     name: 'update_assistant_identity',
-    description: 'Update assistant name, role, voice, or behavior rules.',
+    description: MemoryToolSemantics.updateAssistantIdentityDescription,
     parameters: _identityMemoryParameters,
   );
 
   static const updateUserMemory = Tool(
     name: 'update_user_memory',
-    description:
-        'Update stable user information, preferences, goals, or facts.',
+    description: MemoryToolSemantics.updateUserMemoryDescription,
     parameters: _userMemoryParameters,
   );
 
@@ -281,6 +289,10 @@ abstract final class _AppTools {
           'properties': <String, dynamic>{
             'field': <String, dynamic>{
               'type': 'string',
+              'description':
+                  'Field routing: mission=purpose; principles=values; '
+                  'boundaries=durable limits; response_style=general response '
+                  'format or presentation.',
               'enum': <String>[
                 'mission',
                 'principles',
@@ -290,11 +302,19 @@ abstract final class _AppTools {
             },
             'action': <String, dynamic>{
               'type': 'string',
+              'description':
+                  'Use set to replace, add/remove for list items, and clear '
+                  'only when the user explicitly removes all values.',
               'enum': <String>['set', 'add', 'remove', 'clear'],
             },
-            'value': <String, dynamic>{'type': 'string'},
+            'value': <String, dynamic>{
+              'type': 'string',
+              'description': 'One concise value for set, add, or remove.',
+            },
             'values': <String, dynamic>{
               'type': 'array',
+              'description':
+                  'Multiple concise values; omit when value is sufficient.',
               'items': <String, dynamic>{'type': 'string'},
             },
           },
@@ -317,6 +337,10 @@ abstract final class _AppTools {
           'properties': <String, dynamic>{
             'field': <String, dynamic>{
               'type': 'string',
+              'description':
+                  'Field routing: assistant_name=your name; role=your persona; '
+                  'voice=durable tone; behavior_rules=persistent or '
+                  'conditional conduct.',
               'enum': <String>[
                 'assistant_name',
                 'role',
@@ -326,11 +350,19 @@ abstract final class _AppTools {
             },
             'action': <String, dynamic>{
               'type': 'string',
+              'description':
+                  'Use set to replace, add/remove for list items, and clear '
+                  'only when the user explicitly removes all values.',
               'enum': <String>['set', 'add', 'remove', 'clear'],
             },
-            'value': <String, dynamic>{'type': 'string'},
+            'value': <String, dynamic>{
+              'type': 'string',
+              'description': 'One concise value for set, add, or remove.',
+            },
             'values': <String, dynamic>{
               'type': 'array',
+              'description':
+                  'Multiple concise values; omit when value is sufficient.',
               'items': <String, dynamic>{'type': 'string'},
             },
           },
@@ -353,6 +385,9 @@ abstract final class _AppTools {
           'properties': <String, dynamic>{
             'field': <String, dynamic>{
               'type': 'string',
+              'description':
+                  'Field routing for the human user only: name, traits, '
+                  'preferences, goals, or stable facts.',
               'enum': <String>[
                 'name',
                 'traits',
@@ -363,11 +398,19 @@ abstract final class _AppTools {
             },
             'action': <String, dynamic>{
               'type': 'string',
+              'description':
+                  'Use set to replace, add/remove for list items, and clear '
+                  'only when the user explicitly removes all values.',
               'enum': <String>['set', 'add', 'remove', 'clear'],
             },
-            'value': <String, dynamic>{'type': 'string'},
+            'value': <String, dynamic>{
+              'type': 'string',
+              'description': 'One concise value for set, add, or remove.',
+            },
             'values': <String, dynamic>{
               'type': 'array',
+              'description':
+                  'Multiple concise values; omit when value is sufficient.',
               'items': <String, dynamic>{'type': 'string'},
             },
           },

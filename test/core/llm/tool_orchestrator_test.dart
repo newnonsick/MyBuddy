@@ -321,6 +321,45 @@ void main() {
       ),
     );
   });
+
+  test('emits privacy-safe tool diagnostics', () async {
+    final diagnostics = <({String stage, String? tool, String? error})>[];
+    final chat = FakeToolLoopChat(<List<ModelResponse>>[
+      <ModelResponse>[
+        const FunctionCallResponse(
+          name: 'remember',
+          args: <String, dynamic>{'private_value': 'must not be logged'},
+        ),
+      ],
+      <ModelResponse>[const TextResponse('Done.')],
+    ]);
+
+    await ToolOrchestrator(
+      chat: chat,
+      collector: collector,
+      tools: await _snapshot(<ToolBinding>[_binding('remember')]),
+      runIdFactory: () => 'run',
+      diagnosticSink:
+          ({
+            required runId,
+            required round,
+            required stage,
+            toolName,
+            errorCode,
+          }) {
+            diagnostics.add((stage: stage, tool: toolName, error: errorCode));
+          },
+    ).run();
+
+    expect(diagnostics.map((item) => item.stage), <String>[
+      'tool_requested',
+      'tool_completed',
+      'final_text',
+    ]);
+    expect(diagnostics[0].tool, 'remember');
+    expect(diagnostics[1].error, isNull);
+    expect(diagnostics.toString(), isNot(contains('must not be logged')));
+  });
 }
 
 ToolBinding _binding(String name) => ToolBinding(

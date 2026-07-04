@@ -3,6 +3,7 @@ enum LlmErrorCode {
   activationFailed,
   generationTimedOut,
   generationInterrupted,
+  inputTooLong,
   toolFailed,
   memoryFailed,
   toolProtocolFailed,

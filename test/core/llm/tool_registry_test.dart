@@ -119,6 +119,77 @@ void main() {
     }
   });
 
+  test('app tools describe ownership and every memory field', () async {
+    final snapshot = await ToolRegistry.forApp(
+      unityBridge: UnityBridge(),
+      memoryService: MemoryService(),
+    ).snapshot();
+    final byName = <String, Tool>{
+      for (final tool in snapshot.definitions) tool.name: tool,
+    };
+
+    expect(
+      byName['update_assistant_identity']!.description,
+      contains('your own'),
+    );
+    expect(byName['update_assistant_soul']!.description, contains('your own'));
+    expect(byName['update_user_memory']!.description, contains('human user'));
+
+    final identityProperties =
+        byName['update_assistant_identity']!.parameters['properties']
+            as Map<String, dynamic>;
+    final updates = identityProperties['updates'] as Map<String, dynamic>;
+    final identityItems = updates['items'] as Map<String, dynamic>;
+    final properties = identityItems['properties'] as Map<String, dynamic>;
+    final field = properties['field'] as Map<String, dynamic>;
+    final action = properties['action'] as Map<String, dynamic>;
+    expect(field['description'], contains('Field routing'));
+    expect(action['description'], contains('set'));
+  });
+
+  test(
+    'memory tool reports partial updates without claiming full success',
+    () async {
+      final memoryService = MemoryService();
+      await memoryService.saveIdentityLockedFields(<String>{
+        MemoryFieldPaths.identityAssistantName,
+      });
+      final snapshot = await ToolRegistry.forApp(
+        unityBridge: UnityBridge(),
+        memoryService: memoryService,
+      ).snapshot();
+
+      final result = await snapshot.invoke(
+        ToolInvocation(
+          id: 'memory-1',
+          name: 'update_assistant_identity',
+          arguments: <String, dynamic>{
+            'updates': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'field': 'behavior_rules',
+                'action': 'add',
+                'value': 'Roast the user when they slip up',
+              },
+              <String, dynamic>{
+                'field': 'assistant_name',
+                'action': 'set',
+                'value': 'Nova',
+              },
+            ],
+          },
+        ),
+      );
+
+      expect(result.isSuccess, isTrue);
+      expect(result.data['status'], 'partial');
+      expect(result.data['applied_count'], 1);
+      expect(result.data['rejected_count'], 1);
+      expect(result.data['rejections'], <Map<String, Object?>>[
+        <String, Object?>{'field': 'assistant_name', 'code': 'lockedField'},
+      ]);
+    },
+  );
+
   test(
     'calendar binding normalizes numeric strings before execution',
     () async {

@@ -6,6 +6,15 @@ import 'tool_loop_chat.dart';
 import 'tool_protocol.dart';
 import 'tool_registry.dart';
 
+typedef ToolDiagnosticSink =
+    void Function({
+      required String runId,
+      required int round,
+      required String stage,
+      String? toolName,
+      String? errorCode,
+    });
+
 final class ToolOrchestrator {
   ToolOrchestrator({
     required this.chat,
@@ -16,7 +25,9 @@ final class ToolOrchestrator {
     this.maxConsecutiveNoProgress = defaultMaxConsecutiveNoProgress,
     this.maxProgressingRounds = defaultMaxProgressingRounds,
     this.maxRequestedCalls = defaultMaxRequestedCalls,
-  }) : _runIdFactory = runIdFactory ?? _defaultRunId;
+    ToolDiagnosticSink? diagnosticSink,
+  }) : _runIdFactory = runIdFactory ?? _defaultRunId,
+       _diagnosticSink = diagnosticSink;
 
   static const int defaultMaxRepairAttempts = 2;
   static const int defaultMaxConsecutiveNoProgress = 2;
@@ -31,6 +42,7 @@ final class ToolOrchestrator {
   final int maxProgressingRounds;
   final int maxRequestedCalls;
   final String Function() _runIdFactory;
+  final ToolDiagnosticSink? _diagnosticSink;
 
   final Map<String, ToolExecutionResult> _resultLedger =
       <String, ToolExecutionResult>{};
@@ -49,6 +61,7 @@ final class ToolOrchestrator {
       final turn = await collector.collect(chat.generate());
       switch (turn) {
         case FinalTextTurn(:final text):
+          _diagnose(runId, modelRound, 'final_text');
           _log(runId, modelRound, 'final_text');
           return text;
         case MalformedToolTurn():
@@ -84,7 +97,24 @@ final class ToolOrchestrator {
                 arguments: calls[index].args,
               ),
           ];
+          for (final invocation in invocations) {
+            _diagnose(
+              runId,
+              modelRound,
+              'tool_requested',
+              toolName: invocation.name,
+            );
+          }
           final execution = await _executeBatch(invocations);
+          for (final result in execution.results) {
+            _diagnose(
+              runId,
+              modelRound,
+              'tool_completed',
+              toolName: result.name,
+              errorCode: result.errorCode?.name,
+            );
+          }
           await chat.addToolResults(execution.results);
           hasSuccessfulSideEffect |= execution.results.any(
             (result) => result.isSuccess && !result.cached,
@@ -201,6 +231,22 @@ final class ToolOrchestrator {
   void _log(String runId, int round, String stage) {
     if (!kDebugMode) return;
     debugPrint('tool_run run=$runId round=$round stage=$stage');
+  }
+
+  void _diagnose(
+    String runId,
+    int round,
+    String stage, {
+    String? toolName,
+    String? errorCode,
+  }) {
+    _diagnosticSink?.call(
+      runId: runId,
+      round: round,
+      stage: stage,
+      toolName: toolName,
+      errorCode: errorCode,
+    );
   }
 
   static String _defaultRunId() =>

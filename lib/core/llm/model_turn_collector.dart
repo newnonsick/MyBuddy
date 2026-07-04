@@ -2,6 +2,7 @@ import 'package:flutter_gemma/flutter_gemma.dart';
 
 import '../../shared/utils/json_extractor.dart';
 import 'tool_protocol.dart';
+import 'package:flutter/foundation.dart';
 
 final class ModelTurnCollector {
   const ModelTurnCollector({required this.modelType});
@@ -13,6 +14,7 @@ final class ModelTurnCollector {
     final calls = <FunctionCallResponse>[];
 
     await for (final response in responses) {
+      debugPrint('ModelTurnCollector: received response: $response');
       switch (response) {
         case TextResponse(:final token):
           text.write(token);
