@@ -87,6 +87,7 @@ void main() {
     expect(valid.data['count'], 2);
     expect(invalid.errorCode, ToolResultErrorCode.invalidArguments);
     expect(invalid.message, 'Missing required argument: count');
+    expect(invalid.retryable, isTrue);
   });
 
   test('converts executor timeout to a stable result', () async {

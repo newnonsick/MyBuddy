@@ -45,6 +45,7 @@ final class ToolBinding {
         name: invocation.name,
         code: ToolResultErrorCode.invalidArguments,
         message: error.message,
+        retryable: true,
       );
     } on TimeoutException {
       return ToolExecutionResult.failure(

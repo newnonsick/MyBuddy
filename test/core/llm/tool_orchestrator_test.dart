@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mybuddy/core/llm/llm_errors.dart';
 import 'package:mybuddy/core/llm/model_turn_collector.dart';
 import 'package:mybuddy/core/llm/tool_orchestrator.dart';
+import 'package:mybuddy/core/llm/tool_protocol.dart';
 import 'package:mybuddy/core/llm/tool_registry.dart';
 
 import 'fakes/fake_tool_loop_chat.dart';
@@ -130,16 +131,50 @@ void main() {
 
     expect(response, 'Recovered.');
     expect(chat.protocolFeedback.single['code'], 'invalid_tool_format');
+    expect(chat.protocolFeedback.single['retryable'], isTrue);
+    expect(chat.protocolFeedback.single['attempt'], 1);
+    expect(chat.protocolFeedback.single['remaining_attempts'], 2);
   });
 
-  test('two malformed turns force one plain-text finalization', () async {
+  test(
+    'allows three malformed-output corrections before finalization',
+    () async {
+      final malformed = <ModelResponse>[
+        const TextResponse('{"name":"first","parameters":'),
+      ];
+      final chat = FakeToolLoopChat(<List<ModelResponse>>[
+        malformed,
+        malformed,
+        malformed,
+        malformed,
+        <ModelResponse>[const TextResponse('Could not use the tool.')],
+      ]);
+
+      final response = await ToolOrchestrator(
+        chat: chat,
+        collector: collector,
+        tools: await _snapshot(<ToolBinding>[_binding('first')]),
+      ).run();
+
+      expect(response, 'Could not use the tool.');
+      expect(chat.protocolFeedback, hasLength(4));
+      expect(chat.protocolFeedback[2]['remaining_attempts'], 0);
+      expect(chat.protocolFeedback.last['tools_disabled'], isTrue);
+    },
+  );
+
+  test('recovers on the third malformed-output correction', () async {
     final malformed = <ModelResponse>[
       const TextResponse('{"name":"first","parameters":'),
     ];
     final chat = FakeToolLoopChat(<List<ModelResponse>>[
       malformed,
       malformed,
-      <ModelResponse>[const TextResponse('Could not use the tool.')],
+      malformed,
+      <ModelResponse>[
+        const FunctionCallResponse(name: 'first', args: <String, dynamic>{}),
+      ],
+      <ModelResponse>[const TextResponse('Recovered after three retries.')],
     ]);
 
     final response = await ToolOrchestrator(
@@ -148,8 +183,9 @@ void main() {
       tools: await _snapshot(<ToolBinding>[_binding('first')]),
     ).run();
 
-    expect(response, 'Could not use the tool.');
-    expect(chat.protocolFeedback.last['tools_disabled'], isTrue);
+    expect(response, 'Recovered after three retries.');
+    expect(chat.protocolFeedback, hasLength(3));
+    expect(chat.resultBatches, hasLength(1));
   });
 
   test('rejects tool calls emitted during forced finalization', () async {
@@ -157,6 +193,8 @@ void main() {
       const TextResponse('{"name":"first","parameters":'),
     ];
     final chat = FakeToolLoopChat(<List<ModelResponse>>[
+      malformed,
+      malformed,
       malformed,
       malformed,
       <ModelResponse>[
@@ -214,17 +252,16 @@ void main() {
   });
 
   test(
-    'repeated invalid calls finalize before progressing round limit',
+    'retryable invalid arguments get three corrections before finalization',
     () async {
-      final invalidCall = <ModelResponse>[
-        const FunctionCallResponse(
-          name: 'needs_value',
-          args: <String, dynamic>{},
-        ),
-      ];
       final chat = FakeToolLoopChat(<List<ModelResponse>>[
-        invalidCall,
-        invalidCall,
+        for (var attempt = 1; attempt <= 4; attempt++)
+          <ModelResponse>[
+            FunctionCallResponse(
+              name: 'needs_value',
+              args: <String, dynamic>{'value': attempt},
+            ),
+          ],
         <ModelResponse>[const TextResponse('Please provide a value.')],
       ]);
       final snapshot = await _snapshot(<ToolBinding>[
@@ -251,7 +288,17 @@ void main() {
       ).run();
 
       expect(response, 'Please provide a value.');
-      expect(chat.resultBatches, hasLength(2));
+      expect(chat.resultBatches, hasLength(4));
+      expect(
+        chat.resultBatches
+            .expand((batch) => batch)
+            .every(
+              (result) =>
+                  result.errorCode == ToolResultErrorCode.invalidArguments &&
+                  result.retryable,
+            ),
+        isTrue,
+      );
       expect(chat.protocolFeedback.last['tools_disabled'], isTrue);
     },
   );
@@ -299,6 +346,8 @@ void main() {
       <ModelResponse>[
         const FunctionCallResponse(name: 'first', args: <String, dynamic>{}),
       ],
+      malformed,
+      malformed,
       malformed,
       malformed,
       <ModelResponse>[

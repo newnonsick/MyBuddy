@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter_gemma/flutter_gemma.dart';
 
+import 'memory_tool_semantics.dart';
+
 final class ToolPromptBuilder {
   const ToolPromptBuilder();
 
@@ -16,26 +18,39 @@ final class ToolPromptBuilder {
 
     final buffer = StringBuffer()..writeln('<tool_rules>');
 
+    buffer.writeln(
+      '- Available tools are authorized. When intent and required arguments '
+      'are clear or reliably inferable, call immediately without permission '
+      'or confirmation. Ask only if a required value cannot be inferred.',
+    );
+
     if (hasMemoryTool) {
       buffer
         ..writeln(
           '- You are the assistant. "you", "yourself", and your avatar refer '
           'to you, not the human user.',
         )
+        ..writeln('- ${MemoryToolSemantics.mutableMemoryRules}')
         ..writeln(
-          '- MUST call the matching memory tool for explicit durable changes '
-          '(from now on/always/never/remember). one-turn requests: no memory tool.',
+          '- MUST call the matching memory tool before replying for explicit '
+          'durable changes (from now on/always/never/remember). Replying '
+          'without the update leaves the request incomplete. one-turn '
+          'requests: no memory tool.',
         )
         ..writeln(
           '- About you: update_assistant_identity or update_assistant_soul. '
-          'About the human: update_user_memory.',
+          '${MemoryToolSemantics.mutableUserMemoryRules} update_user_memory '
+          'may proactively store useful, '
+          'reliably stated durable information; "remember" is not required.',
         )
         ..writeln(
           '- Example: "From now on roast me when I slip up" => '
           '{"name":"update_assistant_identity","parameters":{"updates":'
           '[{"field":"behavior_rules","action":"add","value":"Roast the '
-          'user when they slip up"}]}}. "Answer this one sarcastically" => '
-          'no memory tool.',
+          'user when they slip up"}]}}. "Always prioritize direct honesty" '
+          '=> update_assistant_soul principles add. "I prefer concise answers" '
+          '=> update_user_memory preferences add. "Answer this one '
+          'sarcastically" => no memory tool.',
         );
     }
 
@@ -45,8 +60,7 @@ final class ToolPromptBuilder {
         'or action is not applied.',
       )
       ..writeln(
-        '- Clear action with required arguments: call without confirmation. '
-        'Infer reliable values/defaults; never invent required values.',
+        '- Infer reliable values/defaults; never invent required values.',
       )
       ..writeln(
         '- Tool call output only: '
@@ -59,6 +73,10 @@ final class ToolPromptBuilder {
       ..writeln(
         '- Use only listed names/parameters. No conversational text in call '
         'JSON. Never claim success before a successful tool result.',
+      )
+      ..writeln(
+        '- If an error has retryable:true, correct the JSON or arguments and '
+        'call again. Do not repeat an unchanged invalid call.',
       )
       ..writeln('</tool_rules>');
 

@@ -8,6 +8,7 @@ import '../../../../core/model/model_descriptor.dart';
 import '../../../../core/model/model_store.dart';
 import '../../../../core/utils/format_bytes.dart';
 import '../../../../shared/widgets/glass/glass.dart';
+import 'llm_config_editor_sheet.dart';
 
 class LlmModelManagement extends ConsumerStatefulWidget {
   const LlmModelManagement({super.key});
@@ -289,6 +290,14 @@ class _LlmModelManagementState extends ConsumerState<LlmModelManagement> {
                     ],
                   ),
                 ),
+                IconButton(
+                  icon: Icon(
+                    Icons.edit_rounded,
+                    size: 20,
+                    color: Colors.white.withValues(alpha: 0.6),
+                  ),
+                  onPressed: () => _showEditConfigSheet(context, model),
+                ),
                 if (!isActive)
                   IconButton(
                     icon: Icon(
@@ -338,6 +347,18 @@ class _LlmModelManagementState extends ConsumerState<LlmModelManagement> {
       final models = ref.read(modelControllerProvider);
       await models.deleteModel(model);
     }
+  }
+
+  Future<void> _showEditConfigSheet(
+    BuildContext context,
+    InstalledModel model,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => LlmConfigEditorSheet(model: model),
+    );
   }
 
   Widget _buildModelLibrary(BuildContext context, ModelController models) {

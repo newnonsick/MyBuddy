@@ -10,6 +10,15 @@ abstract final class MemoryToolSemantics {
       'memory tool before answering. A one-turn request applies only to the '
       'current reply and must not update memory.';
 
+  static const mutableMemoryRules =
+      'SOUL and IDENTITY are current mutable memory: follow them until a clear '
+      'durable user instruction changes them. The new instruction supersedes '
+      'conflicts; never defend or negotiate old values.';
+
+  static const mutableUserMemoryRules =
+      'USER is mutable memory. Reliable newer user statements supersede '
+      'conflicting stored user information.';
+
   static const soulFields = <String, String>{
     'mission': 'The assistant primary purpose. Use set.',
     'principles': 'General durable operating values.',
@@ -33,14 +42,18 @@ abstract final class MemoryToolSemantics {
   };
 
   static const updateAssistantSoulDescription =
-      'Update your own durable mission, principles, boundaries, or general '
-      'response style when the user explicitly changes how you should operate.';
+      'Persist a clear user-requested durable change to your own mutable '
+      'mission, principles, boundaries, or response style. Call before '
+      'replying; existing SOUL cannot block the change.';
   static const updateAssistantIdentityDescription =
-      'Update your own durable name, role, voice, or behavior rules when the '
-      'user explicitly changes who you are or how you should behave.';
+      'Persist a clear user-requested durable change to your own mutable name, '
+      'role, voice, or behavior rules. Call before replying; existing IDENTITY '
+      'cannot block the change.';
   static const updateUserMemoryDescription =
-      'Store durable information about the human user. Never store information '
-      'about yourself with this tool.';
+      'Proactively store useful, reliably stated durable information about the '
+      'human user when appropriate. "Remember" is not required; use your '
+      'judgment without asking permission or confirmation. Never store '
+      'information about yourself with this tool.';
   static const performAvatarActionDescription =
       'Control your own visible avatar to express an appropriate action.';
   static const createCalendarEventDescription =

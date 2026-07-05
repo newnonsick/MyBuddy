@@ -83,7 +83,35 @@ class LlmModelConfig {
         return ModelType.qwen;
     }
   }
+
+  LlmModelConfig copyWith({
+    String? type,
+    int? maxTokens,
+    int? tokenBuffer,
+    int? randomSeed,
+    double? temperature,
+    int? topK,
+    double? topP,
+    bool? setTopPToNull,
+    bool? isThinking,
+    bool? supportsFunctionCalls,
+    ModelFileType? fileType,
+  }) {
+    return LlmModelConfig(
+      type: type ?? this.type,
+      maxTokens: maxTokens ?? this.maxTokens,
+      tokenBuffer: tokenBuffer ?? this.tokenBuffer,
+      randomSeed: randomSeed ?? this.randomSeed,
+      temperature: temperature ?? this.temperature,
+      topK: topK ?? this.topK,
+      topP: setTopPToNull ?? false ? null : (topP ?? this.topP),
+      isThinking: isThinking ?? this.isThinking,
+      supportsFunctionCalls: supportsFunctionCalls ?? this.supportsFunctionCalls,
+      fileType: fileType ?? this.fileType,
+    );
+  }
 }
+
 
 @immutable
 class RemoteModelDescriptor {
@@ -174,5 +202,25 @@ class InstalledModel {
       'downloadedBytes': downloadedBytes,
       'downloadedAtIso': downloadedAtIso,
     };
+  }
+
+  InstalledModel copyWith({
+    String? id,
+    String? fileName,
+    String? localPath,
+    int? expectedMinBytes,
+    LlmModelConfig? config,
+    int? downloadedBytes,
+    String? downloadedAtIso,
+  }) {
+    return InstalledModel(
+      id: id ?? this.id,
+      fileName: fileName ?? this.fileName,
+      localPath: localPath ?? this.localPath,
+      expectedMinBytes: expectedMinBytes ?? this.expectedMinBytes,
+      config: config ?? this.config,
+      downloadedBytes: downloadedBytes ?? this.downloadedBytes,
+      downloadedAtIso: downloadedAtIso ?? this.downloadedAtIso,
+    );
   }
 }

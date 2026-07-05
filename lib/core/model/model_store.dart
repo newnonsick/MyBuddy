@@ -167,14 +167,19 @@ class ModelStore {
     final installed = await listInstalled();
     final nowIso = DateTime.now().toUtc().toIso8601String();
 
+    final existing = installed.cast<InstalledModel?>().firstWhere(
+      (m) => m?.id == remote.id,
+      orElse: () => null,
+    );
+
     final next = InstalledModel(
       id: remote.id,
       fileName: remote.fileName,
       localPath: localPath,
       expectedMinBytes: remote.expectedMinBytes,
-      config: remote.config,
+      config: existing?.config ?? remote.config,
       downloadedBytes: stat.size,
-      downloadedAtIso: nowIso,
+      downloadedAtIso: existing?.downloadedAtIso ?? nowIso,
     );
 
     final updated = <InstalledModel>[
@@ -401,6 +406,17 @@ class ModelStore {
 
     final current = await listInstalled();
     final updated = current.where((m) => m.id != model.id).toList();
+    await _writeInstalled(updated);
+  }
+
+  Future<void> updateModelConfig(String id, LlmModelConfig config) async {
+    final installed = await listInstalled();
+    final updated = installed.map((m) {
+      if (m.id == id) {
+        return m.copyWith(config: config);
+      }
+      return m;
+    }).toList();
     await _writeInstalled(updated);
   }
 }

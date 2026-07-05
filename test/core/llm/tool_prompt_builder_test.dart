@@ -27,6 +27,9 @@ void main() {
 
     expect(prompt, contains('dependent'));
     expect(prompt, contains('wait for the earlier result'));
+    expect(prompt, contains('retryable:true'));
+    expect(prompt, contains('correct the JSON or arguments'));
+    expect(prompt, contains('Do not repeat an unchanged invalid call'));
   });
 
   test('returns empty instruction when no tools are available', () {
@@ -37,7 +40,8 @@ void main() {
     final prompt = builder.build(<Tool>[CalendarEventTool.definition]);
 
     expect(prompt, contains('Infer reliable values/defaults'));
-    expect(prompt, contains('call without confirmation'));
+    expect(prompt, contains('call immediately without permission'));
+    expect(prompt, contains('Ask only if a required value cannot be inferred'));
     expect(prompt, contains('never invent required values'));
     expect(prompt, contains('Timed example parameters'));
     expect(prompt, contains('all-day'));
@@ -55,6 +59,11 @@ void main() {
     expect(prompt, contains('MUST call'));
     expect(prompt, contains('from now on'));
     expect(prompt, contains('one-turn'));
+    expect(prompt, contains('current mutable memory'));
+    expect(prompt, contains('supersedes'));
+    expect(prompt, contains('never defend or negotiate old values'));
+    expect(prompt, contains('before replying'));
+    expect(prompt, contains('leaves the request incomplete'));
     expect(prompt, contains('Never claim success'));
   });
 
@@ -64,7 +73,22 @@ void main() {
     ]);
 
     expect(prompt, contains('roast me when I slip up'));
+    expect(prompt, contains('Always prioritize direct honesty'));
+    expect(prompt, contains('I prefer concise answers'));
     expect(prompt, contains('no memory tool'));
+  });
+
+  test('allows proactive user memory without a remember command', () {
+    final prompt = builder.build(const <Tool>[
+      Tool(name: 'update_user_memory', description: 'user'),
+    ]);
+
+    expect(prompt, contains('may proactively store'));
+    expect(prompt, contains('USER is mutable memory'));
+    expect(prompt, contains('newer user statements supersede'));
+    expect(prompt, contains('reliably stated durable information'));
+    expect(prompt, contains('"remember" is not required'));
+    expect(prompt, contains('without permission or confirmation'));
   });
 
   test('does not advertise unavailable memory tools', () {

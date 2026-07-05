@@ -181,6 +181,37 @@ class AppController extends AssistantRuntimeController {
         return;
       }
 
+      final isSameModel = _llmInstalled &&
+          _activeModelFingerprint != null &&
+          _activeModelFingerprint!.split('|')[0] == selected.id &&
+          _activeModelFingerprint!.split('|')[1] == selected.localPath;
+
+      if (isSameModel) {
+        try {
+          await llm.applyConfig(
+            modelType: selected.config.toGemmaModelType(),
+            maxTokens: selected.config.maxTokens,
+            tokenBuffer: selected.config.tokenBuffer,
+            temperature: selected.config.temperature,
+            randomSeed: selected.config.randomSeed,
+            topK: selected.config.topK,
+            topP: selected.config.topP,
+            isThinking: selected.config.isThinking,
+            supportsFunctionCalls: selected.config.supportsFunctionCalls,
+            modelFileType: selected.config.fileType,
+            resetNative: false,
+          );
+          _activeModelFingerprint = fingerprint;
+          notifyListeners();
+        } catch (e) {
+          _llmError = 'Model configuration update failed: $e';
+          _llmInstalled = false;
+          _activeModelFingerprint = null;
+          notifyListeners();
+        }
+        return;
+      }
+
       _clearLlmState();
       notifyListeners();
 

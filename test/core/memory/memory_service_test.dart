@@ -222,10 +222,21 @@ void main() {
 
       expect(prompt, contains('currently speaking'));
       expect(prompt, contains('yourself'));
+      expect(prompt, contains('Follow the RUNTIME POLICY strictly'));
+      expect(prompt, contains('CURRENT MUTABLE MEMORY'));
+      expect(prompt, contains('supersedes'));
+      expect(prompt, contains('never defend or negotiate old values'));
+      expect(prompt, contains('USER is mutable memory'));
+      expect(prompt, contains('newer user statements supersede'));
+      expect(prompt, contains('do not ask permission or confirmation'));
       expect(prompt, contains('from now on'));
-      expect(prompt, contains('must call'));
+      expect(prompt, contains('MUST call'));
       expect(prompt, contains('one-turn'));
-      expect(prompt, contains('must not claim'));
+      expect(
+        prompt,
+        contains('claim an update before a successful tool result'),
+      );
+      expect(prompt, isNot(contains('You must follow it strictly')));
     },
   );
 }

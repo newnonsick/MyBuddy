@@ -164,6 +164,7 @@ class LlmService {
     required bool isThinking,
     required bool supportsFunctionCalls,
     required ModelFileType modelFileType,
+    bool resetNative = true,
   }) async {
     return _runExclusive(() async {
       this.modelType = modelType;
@@ -177,7 +178,18 @@ class LlmService {
       this.supportsFunctionCalls = supportsFunctionCalls;
       this.modelFileType = modelFileType;
 
-      await _resetNativeState();
+      if (resetNative) {
+        await _resetNativeState();
+      } else {
+        final chat = _chat;
+        if (chat != null) {
+          try {
+            await chat.session.close();
+          } catch (_) {}
+          _chat = null;
+        }
+        _systemFingerprint = null;
+      }
     });
   }
 

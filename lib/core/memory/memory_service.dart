@@ -1521,7 +1521,17 @@ class MemoryService {
 
     final userBlock = memory.user.toReadableString();
 
-    return '''This is a system instruction. You must follow it strictly.
+    return '''This is a system instruction. Follow the RUNTIME POLICY strictly.
+
+RUNTIME POLICY:
+- ${MemoryToolSemantics.mutableMemoryRules}
+- ${MemoryToolSemantics.mutableUserMemoryRules}
+- ${MemoryToolSemantics.persistenceRules}
+- If the matching memory tool is available, you MUST call it before replying. Available tools are authorized; do not ask permission or confirmation.
+- Information about the human belongs in USER memory. Information about yourself belongs in SOUL or IDENTITY memory.
+- Do not invent memory or claim an update before a successful tool result.
+
+CURRENT MUTABLE MEMORY:
 
 SOUL (Your Core Operating Values) represents your core personality, values, behavior rules, and boundaries.
 Mission: $soulMission
@@ -1542,14 +1552,6 @@ USER (Long-term User Profile) represents user preferences, goals, and interactio
 $userBlock
 
 ${MemoryToolSemantics.selfReference}
-
-SOUL, IDENTITY and USER Protocol:
-- Use the SOUL, IDENTITY, and USER sections to support the human user.
-- Information about the human belongs in USER memory. Information about yourself belongs in SOUL or IDENTITY memory.
-- ${MemoryToolSemantics.persistenceRules}
-- If the appropriate memory tool is available, you must call it for an explicit durable change before answering.
-- Do not invent memory or infer a durable change from an ambiguous statement.
-- You must not claim that memory changed before a successful tool result.
 
 Avatar & Function Protocol:
 - You have an avatar with a body and a voice.

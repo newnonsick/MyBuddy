@@ -185,4 +185,9 @@ class ModelController extends ChangeNotifier {
 
     await refreshInstalled();
   }
+
+  Future<void> updateModelConfig(String id, LlmModelConfig config) async {
+    await _store.updateModelConfig(id, config);
+    await refreshInstalled();
+  }
 }

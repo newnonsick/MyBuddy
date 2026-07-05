@@ -7,6 +7,15 @@ void main() {
     expect(MemoryToolSemantics.selfReference, contains('yourself'));
     expect(MemoryToolSemantics.persistenceRules, contains('from now on'));
     expect(MemoryToolSemantics.persistenceRules, contains('one-turn'));
+    expect(MemoryToolSemantics.mutableMemoryRules, contains('mutable memory'));
+    expect(MemoryToolSemantics.mutableMemoryRules, contains('supersedes'));
+    expect(MemoryToolSemantics.mutableMemoryRules, contains('never defend'));
+    expect(MemoryToolSemantics.mutableUserMemoryRules, contains('USER'));
+    expect(MemoryToolSemantics.mutableUserMemoryRules, contains('mutable'));
+    expect(
+      MemoryToolSemantics.mutableUserMemoryRules,
+      contains('newer user statements supersede'),
+    );
   });
 
   test('routes every existing memory field exactly once', () {
@@ -41,5 +50,20 @@ void main() {
     expect(examples, contains('update_assistant_identity'));
     expect(examples, contains('Answer only this message sarcastically'));
     expect(examples, contains('no memory tool'));
+  });
+
+  test('allows proactive user memory without confirmation', () {
+    expect(
+      MemoryToolSemantics.updateUserMemoryDescription,
+      contains('Proactively store'),
+    );
+    expect(
+      MemoryToolSemantics.updateUserMemoryDescription,
+      contains('"Remember" is not required'),
+    );
+    expect(
+      MemoryToolSemantics.updateUserMemoryDescription,
+      contains('without asking permission or confirmation'),
+    );
   });
 }

@@ -29,7 +29,7 @@ final class ToolOrchestrator {
   }) : _runIdFactory = runIdFactory ?? _defaultRunId,
        _diagnosticSink = diagnosticSink;
 
-  static const int defaultMaxRepairAttempts = 2;
+  static const int defaultMaxRepairAttempts = 3;
   static const int defaultMaxConsecutiveNoProgress = 2;
   static const int defaultMaxProgressingRounds = 8;
   static const int defaultMaxRequestedCalls = 20;
@@ -66,10 +66,8 @@ final class ToolOrchestrator {
           return text;
         case MalformedToolTurn():
         case EmptyTurn():
-          repairAttempts++;
           consecutiveNoProgress++;
-          if (repairAttempts >= maxRepairAttempts ||
-              consecutiveNoProgress >= maxConsecutiveNoProgress) {
+          if (repairAttempts >= maxRepairAttempts) {
             return _finalize(
               runId: runId,
               modelRound: modelRound,
@@ -77,7 +75,14 @@ final class ToolOrchestrator {
               code: LlmErrorCode.toolProtocolFailed,
             );
           }
-          await chat.addProtocolFeedback(_repairFeedback(turn));
+          repairAttempts++;
+          await chat.addProtocolFeedback(
+            _repairFeedback(
+              turn,
+              attempt: repairAttempts,
+              remainingAttempts: maxRepairAttempts - repairAttempts,
+            ),
+          );
         case ToolCallTurn(:final calls):
           if (progressingRounds >= maxProgressingRounds ||
               requestedCalls + calls.length > maxRequestedCalls) {
@@ -119,6 +124,19 @@ final class ToolOrchestrator {
           hasSuccessfulSideEffect |= execution.results.any(
             (result) => result.isSuccess && !result.cached,
           );
+          if (execution.hasRetryableValidationFailure) {
+            if (repairAttempts >= maxRepairAttempts) {
+              return _finalize(
+                runId: runId,
+                modelRound: modelRound,
+                hasSuccessfulSideEffect: hasSuccessfulSideEffect,
+                code: LlmErrorCode.toolProtocolFailed,
+              );
+            }
+            repairAttempts++;
+            consecutiveNoProgress = 0;
+            continue;
+          }
           if (execution.hasProgress) {
             progressingRounds++;
             consecutiveNoProgress = 0;
@@ -137,9 +155,14 @@ final class ToolOrchestrator {
     }
   }
 
-  Future<({List<ToolExecutionResult> results, bool hasProgress})> _executeBatch(
-    List<ToolInvocation> invocations,
-  ) async {
+  Future<
+    ({
+      List<ToolExecutionResult> results,
+      bool hasProgress,
+      bool hasRetryableValidationFailure,
+    })
+  >
+  _executeBatch(List<ToolInvocation> invocations) async {
     final pending = <String, Future<ToolExecutionResult>>{};
     final newSignatures = <String>{};
     final futures = <Future<ToolExecutionResult>>[];
@@ -179,7 +202,15 @@ final class ToolOrchestrator {
         if (newSignatures.contains(invocations[index].canonicalSignature))
           results[index],
     ];
-    return (results: results, hasProgress: newResults.any(_isProgress));
+    return (
+      results: results,
+      hasProgress: newResults.any(_isProgress),
+      hasRetryableValidationFailure: newResults.any(
+        (result) =>
+            result.errorCode == ToolResultErrorCode.invalidArguments &&
+            result.retryable,
+      ),
+    );
   }
 
   bool _isProgress(ToolExecutionResult result) {
@@ -191,11 +222,19 @@ final class ToolOrchestrator {
     };
   }
 
-  Map<String, Object?> _repairFeedback(ModelTurn turn) => <String, Object?>{
+  Map<String, Object?> _repairFeedback(
+    ModelTurn turn, {
+    required int attempt,
+    required int remainingAttempts,
+  }) => <String, Object?>{
     'status': 'error',
     'code': turn is EmptyTurn ? 'empty_model_turn' : 'invalid_tool_format',
+    'retryable': true,
+    'attempt': attempt,
+    'remaining_attempts': remainingAttempts,
     'message':
-        'Return either plain text or valid tool JSON using name and parameters.',
+        'Correct the malformed output. Return either plain text or valid tool '
+        'JSON using name and parameters.',
     'single_call_example': <String, Object?>{
       'name': 'function_name',
       'parameters': <String, Object?>{},
